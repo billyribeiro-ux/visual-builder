@@ -17,14 +17,11 @@
     "@app-viz/engine": "workspace:*",
     "@app-viz/codegen": "workspace:*",
     "@app-viz/components": "workspace:*",
-    "@tailwindcss/vite": "^4.3.0",
     "bits-ui": "^2.20.0",
     "clsx": "^2.1.1",
     "lucide-svelte": "^1.0.1",
     "moveable": "^0.53.0",
-    "svelte": "^5.57.2",
-    "tailwind-merge": "^3.0.2",
-    "tailwindcss": "^4.3.0"
+    "svelte": "^5.57.2"
   },
   "devDependencies": {
     "@sveltejs/adapter-auto": "^8.0.0",

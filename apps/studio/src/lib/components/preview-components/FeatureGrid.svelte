@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Container from './Container.svelte';
+
   interface FeatureItem {
     icon?: string;
     title: string;
@@ -9,55 +11,45 @@
     sectionEyebrow?: string;
     sectionTitle?: string;
     sectionDescription?: string;
-    columns?: number;
+    columns?: 2 | 3 | 4;
     features?: FeatureItem[];
     style?: string;
   }
 
   let {
-    sectionEyebrow = 'Capabilities',
-    sectionTitle = 'Engineered for Performance',
-    sectionDescription = 'Built using modern web standards.',
+    sectionEyebrow = 'Core Capabilities',
+    sectionTitle = 'Engineered for Performance and Developer Ergonomics',
+    sectionDescription = 'Everything you need to craft scalable, accessible, reactive web applications with Svelte 5 runes.',
     columns = 3,
     features = [],
     style = ''
   }: Props = $props();
-
-  let colClass = $derived(columns === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3');
 </script>
 
-<section class="py-16 bg-[var(--color-muted)]/40" {style}>
-  <div class="mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8">
-    <div class="text-center max-w-3xl mx-auto mb-12">
+<section class="md-feature-grid" {style}>
+  <Container maxWidth="xl">
+    <div class="md-feature-grid__header">
       {#if sectionEyebrow}
-        <span class="text-xs font-bold uppercase tracking-wider text-[var(--color-primary)] mb-2 block">
+        <div style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--md-sys-color-primary); margin-bottom: 0.5rem;">
           {sectionEyebrow}
-        </span>
+        </div>
       {/if}
-      <h2 class="text-3xl font-bold tracking-tight text-[var(--color-foreground)] sm:text-4xl">
-        {sectionTitle}
-      </h2>
+      <h2 style="font-size: 2.25rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 1rem;">{sectionTitle}</h2>
       {#if sectionDescription}
-        <p class="mt-4 text-base text-[var(--color-muted-foreground)]">
-          {sectionDescription}
-        </p>
+        <p style="color: var(--md-sys-color-on-surface-variant); font-size: 1rem;">{sectionDescription}</p>
       {/if}
     </div>
 
-    <div class="grid grid-cols-1 gap-8 {colClass}">
-      {#each features as feature}
-        <div class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-card)] p-6 shadow-sm hover:shadow-md transition-shadow">
-          <div class="flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-bold mb-4">
-            ⚡
+    <div class="md-feature-grid__cols md-feature-grid__cols--{columns}">
+      {#each features as item, idx (idx)}
+        <div class="md-card md-card--outlined">
+          <div style="font-size: 1.5rem; margin-bottom: 1rem; width: 44px; height: 44px; border-radius: var(--md-sys-shape-corner-small, 8px); background-color: var(--md-sys-color-secondary-container); display: flex; align-items: center; justify-content: center;">
+            {item.icon || '⚡'}
           </div>
-          <h3 class="text-lg font-semibold text-[var(--color-foreground)] mb-2">
-            {feature.title}
-          </h3>
-          <p class="text-sm text-[var(--color-muted-foreground)] leading-relaxed">
-            {feature.description}
-          </p>
+          <h3 style="font-size: 1.125rem; font-weight: 700; margin-bottom: 0.5rem;">{item.title}</h3>
+          <p style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant); line-height: 1.5;">{item.description}</p>
         </div>
       {/each}
     </div>
-  </div>
+  </Container>
 </section>

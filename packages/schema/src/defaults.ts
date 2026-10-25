@@ -16,7 +16,7 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
       sveltekitVersion: '3.1.0',
       viteVersion: '8.0.12',
       nodeVersion: '24.22.0',
-      styling: 'tailwindcss-v4'
+      styling: 'vanilla-md3'
     },
     meta: {
       id: projectId,
@@ -81,6 +81,9 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
         '3xl': '4rem'
       },
       breakpoints: {
+        compact: '600px',
+        medium: '840px',
+        expanded: '1200px',
         mobile: '640px',
         tablet: '768px',
         desktop: '1024px',
@@ -306,13 +309,13 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
               props: {
                 sectionEyebrow: 'Architectural Excellence',
                 sectionTitle: 'Built on the SvelteKit 3 & Vite 8 standard',
-                sectionDescription: 'Every component complies with modern TypeScript, Tailwind CSS v4, and WCAG AA accessibility standards.',
+                sectionDescription: 'Every component complies with modern TypeScript, Google Material Design 3 (MD3) Pure Vanilla CSS, and WCAG AA accessibility standards.',
                 columns: 2,
                 features: [
                   {
-                    icon: 'Box',
-                    title: 'Tailwind CSS v4 Pure CSS',
-                    description: 'No legacy tailwind.config.js. Zero-runtime CSS variable injection with native @theme directives.'
+                    icon: 'Palette',
+                    title: 'Google MD3 Pure Vanilla CSS',
+                    description: 'Zero external CSS runtime. Built on Google Material Design 3 design system tokens with native CSS custom properties.'
                   },
                   {
                     icon: 'Code',

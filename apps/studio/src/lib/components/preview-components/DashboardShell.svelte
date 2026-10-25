@@ -1,93 +1,78 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import Button from './Button.svelte';
 
   interface Props {
     title?: string;
     activeNav?: string;
-    children?: Snippet;
+    style?: string;
     onNavigate?: (path: string) => void;
+    children?: Snippet;
   }
 
   let {
-    title = 'Dashboard',
-    activeNav = 'dashboard',
-    children,
-    onNavigate
+    title = 'Analytics Overview',
+    activeNav = 'overview',
+    style = '',
+    onNavigate,
+    children
   }: Props = $props();
 
-  function handleNav(e: MouseEvent, path: string) {
-    if (onNavigate) {
+  const navItems = [
+    { key: 'overview', label: 'Overview', href: '/dashboard' },
+    { key: 'performance', label: 'Performance', href: '/dashboard' },
+    { key: 'settings', label: 'Settings', href: '/dashboard' }
+  ];
+
+  function handleLink(e: MouseEvent, href: string) {
+    if (onNavigate && href.startsWith('/')) {
       e.preventDefault();
-      onNavigate(path);
+      onNavigate(href);
     }
   }
 </script>
 
-<div class="flex min-h-screen bg-[var(--color-background)]">
-  <!-- Sidebar -->
-  <aside class="w-64 border-r border-[var(--color-border)] bg-[var(--color-card)] p-4 flex flex-col justify-between hidden md:flex">
+<div class="md-dashboard" {style}>
+  <aside class="md-dashboard__sidebar">
     <div>
-      <div class="flex items-center gap-2 font-bold text-lg text-[var(--color-foreground)] px-2 py-3 mb-6">
-        <div class="h-8 w-8 rounded-[var(--radius-md)] bg-[var(--color-primary)] text-white flex items-center justify-center font-bold">A</div>
-        <span>Acme SaaS</span>
+      <div style="font-weight: 800; font-size: 1.125rem; margin-bottom: 2rem; display: flex; align-items: center; gap: 0.5rem;">
+        <span style="color: var(--md-sys-color-primary);">⚡</span> Acme SaaS
       </div>
 
-      <nav class="space-y-1">
-        <a
-          href="/dashboard"
-          onclick={(e) => handleNav(e, '/dashboard')}
-          class="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-[var(--radius-md)] transition-colors {activeNav === 'dashboard' ? 'bg-[var(--color-accent)] text-[var(--color-primary)] font-bold' : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]'}"
-        >
-          <span>📊</span>
-          <span>Analytics</span>
-        </a>
-        <a
-          href="/dashboard/settings"
-          onclick={(e) => handleNav(e, '/dashboard/settings')}
-          class="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-[var(--radius-md)] transition-colors {activeNav === 'settings' ? 'bg-[var(--color-accent)] text-[var(--color-primary)] font-bold' : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]'}"
-        >
-          <span>⚙️</span>
-          <span>Settings</span>
-        </a>
-        <a
-          href="/"
-          onclick={(e) => handleNav(e, '/')}
-          class="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-[var(--radius-md)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
-        >
-          <span>🌐</span>
-          <span>Public Site</span>
-        </a>
+      <nav style="display: flex; flex-direction: column; gap: 0.375rem;">
+        {#each navItems as item (item.key)}
+          <a
+            href={item.href}
+            onclick={(e) => handleLink(e, item.href)}
+            style="padding: 0.625rem 1rem; border-radius: var(--md-sys-shape-corner-small, 8px); font-size: 0.875rem; font-weight: 600; text-decoration: none; color: {activeNav === item.key ? 'var(--md-sys-color-on-primary-container)' : 'var(--md-sys-color-on-surface-variant)'}; background-color: {activeNav === item.key ? 'var(--md-sys-color-primary-container)' : 'transparent'};"
+          >
+            {item.label}
+          </a>
+        {/each}
       </nav>
     </div>
 
-    <div class="border-t border-[var(--color-border)] pt-4 px-2">
-      <div class="flex items-center gap-3">
-        <div class="h-8 w-8 rounded-full bg-[var(--color-muted)] flex items-center justify-center font-semibold text-xs">AI</div>
-        <div>
-          <div class="text-xs font-semibold text-[var(--color-foreground)]">Developer Mode</div>
-          <div class="text-[10px] text-[var(--color-muted-foreground)]">SvelteKit 3.1.0</div>
-        </div>
-      </div>
+    <div>
+      <a
+        href="/"
+        onclick={(e) => handleLink(e, '/')}
+        style="font-size: 0.8125rem; color: var(--md-sys-color-primary); text-decoration: none;"
+      >
+        ← Back to Landing
+      </a>
     </div>
   </aside>
 
-  <!-- Main Content -->
-  <main class="flex-1 flex flex-col min-w-0 overflow-y-auto">
-    <header class="h-16 border-b border-[var(--color-border)] bg-[var(--color-card)] flex items-center justify-between px-6">
-      <h1 class="text-xl font-bold text-[var(--color-foreground)]">{title}</h1>
-      <div class="flex items-center gap-3">
-        <a
-          href="/dashboard/settings"
-          onclick={(e) => handleNav(e, '/dashboard/settings')}
-          class="text-sm font-medium text-[var(--color-primary)] hover:underline"
-        >
-          Workspace
-        </a>
+  <div class="md-dashboard__main">
+    <header class="md-dashboard__header">
+      <h1 style="font-size: 1.25rem; font-weight: 700;">{title}</h1>
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <Button size="sm" variant="tonal">Download Report</Button>
       </div>
     </header>
 
-    <div class="p-6">
+    <div class="md-dashboard__content">
       {@render children?.()}
     </div>
-  </main>
+  </div>
 </div>

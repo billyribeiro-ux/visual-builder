@@ -16,12 +16,9 @@ export function generatePackageJson(blueprint: ProjectBlueprint): string {
       '#lib/*': './src/lib/*'
     },
     dependencies: {
-      '@tailwindcss/vite': '^4.3.0',
       'bits-ui': '^2.20.0',
       'clsx': '^2.1.1',
-      'lucide-svelte': '^1.0.1',
-      'tailwind-merge': '^3.0.2',
-      'tailwindcss': '^4.3.0'
+      'lucide-svelte': '^1.0.1'
     },
     devDependencies: {
       '@sveltejs/adapter-auto': '^8.0.0',
@@ -44,13 +41,11 @@ export function generatePackageJson(blueprint: ProjectBlueprint): string {
 export function generateViteConfig(): string {
   return `import { sveltekit } from '@sveltejs/kit/vite';
 import adapter from '@sveltejs/adapter-auto';
-import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
-// SvelteKit 3 configuration is declared directly in vite.config.ts via the sveltekit() plugin.
+// SvelteKit 3 configuration with pure Vanilla CSS (Google MD3 Design System)
 export default defineConfig({
   plugins: [
-    tailwindcss(),
     sveltekit({
       adapter: adapter()
     })

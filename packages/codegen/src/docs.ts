@@ -7,7 +7,7 @@ export function generateAgentsMarkdown(blueprint: ProjectBlueprint): string {
 
   return `# AGENTS.md — Canonical AI Coding Agent Instructions
 
-> **Project Target**: Svelte 5.57.2 + SvelteKit 3.1.0 + Vite 8.0.12 + Tailwind CSS v4  
+> **Project Target**: Svelte 5.57.2 + SvelteKit 3.1.0 + Vite 8.0.12 + Google Material Design 3 (MD3)  
 > **Schema Version**: ${blueprint.schemaVersion}  
 > **Project Name**: ${blueprint.meta.name}  
 > **Generation Date**: 2026-10-25T12:00:00Z  
@@ -19,7 +19,7 @@ You are an autonomous AI coding agent tasked with implementing, verifying, or ex
   - Svelte 5 runes (\`$state\`, \`$derived\`, \`$props\`, \`$effect\`) MUST be used exclusively.
   - SvelteKit 3 configuration is located in \`vite.config.ts\` via the \`sveltekit()\` plugin. Do NOT add a legacy \`svelte.config.js\`.
   - Subpath imports map: Use \`#lib/...\` for library imports. Legacy \`$lib\` is superseded.
-  - Tailwind CSS v4 is used with native CSS directives in \`src/app.css\`.
+  - Pure Vanilla CSS with Google MD3 Design System is used in \`src/app.css\`. No Tailwind CSS.
 
 ## 2. Quickstart & Verification Commands
 Inside \`generated-app/\`:
@@ -57,7 +57,7 @@ exported-project/
     ├── vite.config.ts
     ├── tsconfig.json
     └── src/
-        ├── app.css                    # Tailwind v4 @theme and tokens
+        ├── app.css                    # Google MD3 pure Vanilla CSS tokens & components
         ├── routes/                    # File-based routes
         └── lib/components/            # Pure Svelte 5 rune components
 \`\`\`
@@ -109,7 +109,7 @@ export function generateImplementationSpec(blueprint: ProjectBlueprint): string 
 ## 1. Specification Overview
 - **Project Name**: ${blueprint.meta.name}
 - **Target Platform**: Svelte 5.57.2, SvelteKit 3.1.0, Vite 8.0.12, Node >=22.17.0
-- **Styling**: Tailwind CSS v4 pure CSS engine with CSS Custom Properties
+- **Styling**: Google Material Design 3 (MD3) pure Vanilla CSS with CSS Custom Properties
 
 ## 2. State & Reactivity Architecture
 All components use Svelte 5 signals:

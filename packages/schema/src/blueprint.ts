@@ -62,14 +62,14 @@ export const ProjectTargetSchema = z.object({
   sveltekitVersion: z.string().default('3.1.0'),
   viteVersion: z.string().default('8.0.12'),
   nodeVersion: z.string().default('24.22.0'),
-  styling: z.literal('tailwindcss-v4').default('tailwindcss-v4')
+  styling: z.literal('vanilla-md3').default('vanilla-md3')
 }).default({
   framework: 'sveltekit',
   svelteVersion: '5.57.2',
   sveltekitVersion: '3.1.0',
   viteVersion: '8.0.12',
   nodeVersion: '24.22.0',
-  styling: 'tailwindcss-v4'
+  styling: 'vanilla-md3'
 });
 export type ProjectTarget = z.infer<typeof ProjectTargetSchema>;
 

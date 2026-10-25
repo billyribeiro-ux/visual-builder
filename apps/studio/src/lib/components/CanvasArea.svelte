@@ -54,26 +54,61 @@
   });
 </script>
 
-<main class="flex-1 bg-slate-950 flex flex-col items-center justify-start p-6 overflow-auto relative">
+<main class="studio-canvas-area">
   <!-- Viewport Rulers & Dimensions Badge -->
-  <div class="mb-3 flex items-center gap-3 text-xs text-slate-400 select-none">
-    <span class="font-mono bg-slate-900 border border-slate-800 px-2 py-0.5 rounded text-[11px]">
+  <div class="canvas-badge-bar">
+    <span class="viewport-badge">
       Viewport: {canvasWidth} × 100%
     </span>
-    <span class="text-slate-600">•</span>
-    <span>{editor.isInteractiveMode ? 'Interactions Active (Real Click & Scroll)' : 'Edit Mode (Click to Select Elements)'}</span>
+    <span class="dot-separator">•</span>
+    <span class="mode-text">{editor.isInteractiveMode ? 'Interactions Active (Real Click & Scroll)' : 'Edit Mode (Click to Select Elements)'}</span>
   </div>
 
   <!-- Resizable Responsive Frame -->
   <div
-    class="bg-white rounded-lg shadow-2xl transition-all duration-200 overflow-hidden border border-slate-800 relative"
+    class="studio-canvas-frame"
     style="width: {canvasWidth}; min-height: 85vh; transform: scale({editor.zoom / 100}); transform-origin: top center;"
   >
     <iframe
       bind:this={iframeElement}
       src="/preview"
       title="Live Svelte 5 Preview Canvas"
-      class="w-full h-full min-h-[85vh] border-0 bg-white"
+      class="canvas-iframe"
     ></iframe>
   </div>
 </main>
+
+<style>
+  .canvas-badge-bar {
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+    color: var(--md-sys-color-on-surface-variant);
+    user-select: none;
+  }
+  .viewport-badge {
+    font-family: var(--md-sys-font-mono);
+    background-color: var(--md-sys-color-surface-container);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--md-sys-shape-corner-extra-small, 4px);
+    font-size: 0.6875rem;
+    color: var(--md-sys-color-on-surface);
+  }
+  .dot-separator {
+    color: var(--md-sys-color-outline);
+  }
+  .mode-text {
+    font-weight: 500;
+  }
+  .canvas-iframe {
+    width: 100%;
+    height: 100%;
+    min-height: 85vh;
+    border: none;
+    background-color: #FFFFFF;
+    display: block;
+  }
+</style>

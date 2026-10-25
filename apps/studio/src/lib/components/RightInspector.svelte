@@ -28,28 +28,28 @@
   }
 </script>
 
-<aside class="w-80 border-l border-[var(--color-studio-border)] bg-[var(--color-studio-panel)] flex flex-col h-[calc(100vh-3.5rem)] select-none">
+<aside class="studio-inspector">
   {#if selectedNode}
     <!-- Node Header -->
-    <div class="p-4 border-b border-[var(--color-studio-border)] flex items-center justify-between">
+    <div class="inspector-header">
       <div>
-        <div class="flex items-center gap-2">
-          <span class="text-xs font-bold text-white">{selectedNode.name}</span>
-          <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-950 text-blue-400 border border-blue-800">
+        <div class="header-row">
+          <span class="node-name">{selectedNode.name}</span>
+          <span class="node-type-badge">
             {selectedNode.componentType.split('/')[1] || selectedNode.componentType}
           </span>
         </div>
-        <div class="text-[10px] text-slate-500 font-mono mt-0.5 truncate max-w-[180px]">
+        <div class="node-id truncate">
           {selectedNode.id}
         </div>
       </div>
 
-      <div class="flex items-center gap-1">
+      <div class="header-actions">
         <button
           type="button"
           title="Duplicate"
           onclick={() => editor.dispatch({ type: 'DUPLICATE_NODE', nodeId: selectedNode.id })}
-          class="p-1 text-slate-400 hover:text-white text-xs rounded hover:bg-slate-800"
+          class="action-btn"
         >
           ⧉
         </button>
@@ -60,7 +60,7 @@
             editor.dispatch({ type: 'DELETE_NODE', nodeId: selectedNode.id });
             editor.selectNode(null);
           }}
-          class="p-1 text-slate-400 hover:text-red-400 text-xs rounded hover:bg-slate-800"
+          class="action-btn action-btn--danger"
         >
           ✕
         </button>
@@ -68,25 +68,25 @@
     </div>
 
     <!-- Inspector Tabs -->
-    <div class="flex border-b border-[var(--color-studio-border)] bg-slate-900/60 text-xs">
+    <div class="studio-tabs">
       <button
         type="button"
         onclick={() => (activeTab = 'props')}
-        class="flex-1 py-2 font-medium border-b-2 transition-colors {activeTab === 'props' ? 'border-blue-500 text-blue-400 bg-slate-800/40' : 'border-transparent text-slate-400 hover:text-slate-200'}"
+        class="studio-tab {activeTab === 'props' ? 'studio-tab--active' : ''}"
       >
         Content
       </button>
       <button
         type="button"
         onclick={() => (activeTab = 'style')}
-        class="flex-1 py-2 font-medium border-b-2 transition-colors {activeTab === 'style' ? 'border-blue-500 text-blue-400 bg-slate-800/40' : 'border-transparent text-slate-400 hover:text-slate-200'}"
+        class="studio-tab {activeTab === 'style' ? 'studio-tab--active' : ''}"
       >
         Styles
       </button>
       <button
         type="button"
         onclick={() => (activeTab = 'interactions')}
-        class="flex-1 py-2 font-medium border-b-2 transition-colors {activeTab === 'interactions' ? 'border-blue-500 text-blue-400 bg-slate-800/40' : 'border-transparent text-slate-400 hover:text-slate-200'}"
+        class="studio-tab {activeTab === 'interactions' ? 'studio-tab--active' : ''}"
       >
         Events
       </button>
@@ -94,186 +94,304 @@
 
     <!-- Tab 1: Content & Props -->
     {#if activeTab === 'props'}
-      <div class="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
-        {#each Object.entries(selectedNode.props || {}) as [propKey, propVal]}
-          <div>
-            <label for="prop-{propKey}" class="block text-slate-400 capitalize font-medium mb-1">
-              {propKey.replace(/([A-Z])/g, ' $1')}
-            </label>
-
-            {#if typeof propVal === 'string'}
-              {#if propVal.length > 50}
-                <textarea
-                  id="prop-{propKey}"
-                  rows="3"
-                  value={propVal}
-                  oninput={(e) => updateProp(propKey, (e.target as HTMLTextAreaElement).value)}
-                  class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
-                ></textarea>
-              {:else}
+      <div class="studio-panel-content flow-v">
+        {#each Object.entries(selectedNode.props || {}) as [propKey, propVal] (propKey)}
+          <div class="field-item">
+            <label for="prop-{propKey}" class="field-label">{propKey}</label>
+            {#if typeof propVal === 'boolean'}
+              <label class="checkbox-row">
                 <input
                   id="prop-{propKey}"
-                  type="text"
-                  value={propVal}
-                  oninput={(e) => updateProp(propKey, (e.target as HTMLInputElement).value)}
-                  class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
+                  type="checkbox"
+                  checked={propVal}
+                  onchange={(e) => updateProp(propKey, (e.target as HTMLInputElement).checked)}
+                  class="studio-checkbox"
                 />
-              {/if}
+                <span class="checkbox-text">Enable {propKey}</span>
+              </label>
             {:else if typeof propVal === 'number'}
               <input
                 id="prop-{propKey}"
                 type="number"
                 value={propVal}
-                oninput={(e) => updateProp(propKey, Number((e.target as HTMLInputElement).value))}
-                class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+                oninput={(e) => updateProp(propKey, parseFloat((e.target as HTMLInputElement).value) || 0)}
+                class="studio-input"
               />
-            {:else if typeof propVal === 'boolean'}
-              <label class="flex items-center gap-2 cursor-pointer mt-1">
-                <input
-                  type="checkbox"
-                  checked={propVal}
-                  onchange={(e) => updateProp(propKey, (e.target as HTMLInputElement).checked)}
-                  class="rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0"
-                />
-                <span class="text-slate-300">Enabled</span>
-              </label>
+            {:else if Array.isArray(propVal) || typeof propVal === 'object'}
+              <textarea
+                id="prop-{propKey}"
+                rows="4"
+                value={JSON.stringify(propVal, null, 2)}
+                onchange={(e) => {
+                  try {
+                    const parsed = JSON.parse((e.target as HTMLTextAreaElement).value);
+                    updateProp(propKey, parsed);
+                  } catch (err) {
+                    console.error('Invalid JSON', err);
+                  }
+                }}
+                class="studio-textarea font-mono"
+              ></textarea>
             {:else}
-              <div class="text-[11px] text-slate-500 font-mono bg-slate-900 p-2 rounded border border-slate-800 truncate">
-                {JSON.stringify(propVal)}
-              </div>
+              <input
+                id="prop-{propKey}"
+                type="text"
+                value={propVal}
+                oninput={(e) => updateProp(propKey, (e.target as HTMLInputElement).value)}
+                class="studio-input"
+              />
             {/if}
           </div>
         {/each}
       </div>
-    {/if}
 
-    <!-- Tab 2: Style & Responsive Overrides -->
-    {#if activeTab === 'style'}
-      <div class="flex-1 overflow-y-auto p-4 space-y-5 text-xs">
-        <!-- Active Breakpoint Context Indicator -->
-        <div class="flex items-center justify-between p-2 rounded bg-slate-800/80 border border-slate-700">
-          <span class="text-slate-400">Target Breakpoint:</span>
-          <span class="font-bold text-blue-400 uppercase tracking-wider">{editor.activeBreakpoint}</span>
+    <!-- Tab 2: Visual Styles -->
+    {:else if activeTab === 'style'}
+      <div class="studio-panel-content flow-v">
+        <div class="section-title">Breakpoint: {editor.activeBreakpoint}</div>
+
+        <div class="field-item">
+          <label for="style-padding" class="field-label">Padding</label>
+          <input
+            id="style-padding"
+            type="text"
+            placeholder="e.g. 1rem or 16px"
+            value={selectedNode.styles?.[editor.activeBreakpoint]?.padding || selectedNode.styles?.base?.padding || ''}
+            onchange={(e) => updateStyle('padding', (e.target as HTMLInputElement).value, editor.activeBreakpoint)}
+            class="studio-input"
+          />
         </div>
 
-        <!-- Spacing Controls -->
-        <div>
-          <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-2">Padding & Margin</span>
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label for="style-padding-top" class="text-slate-400 text-[11px] block mb-0.5">Top Padding</label>
-              <input
-                id="style-padding-top"
-                type="text"
-                placeholder="4rem"
-                value={selectedNode.styles?.base?.paddingTop || ''}
-                oninput={(e) => updateStyle('paddingTop', (e.target as HTMLInputElement).value, editor.activeBreakpoint)}
-                class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white font-mono text-[11px]"
-              />
-            </div>
-            <div>
-              <label for="style-padding-bottom" class="text-slate-400 text-[11px] block mb-0.5">Bottom Padding</label>
-              <input
-                id="style-padding-bottom"
-                type="text"
-                placeholder="4rem"
-                value={selectedNode.styles?.base?.paddingBottom || ''}
-                oninput={(e) => updateStyle('paddingBottom', (e.target as HTMLInputElement).value, editor.activeBreakpoint)}
-                class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white font-mono text-[11px]"
-              />
-            </div>
-          </div>
+        <div class="field-item">
+          <label for="style-margin" class="field-label">Margin</label>
+          <input
+            id="style-margin"
+            type="text"
+            placeholder="e.g. 0 auto or 2rem"
+            value={selectedNode.styles?.[editor.activeBreakpoint]?.margin || selectedNode.styles?.base?.margin || ''}
+            onchange={(e) => updateStyle('margin', (e.target as HTMLInputElement).value, editor.activeBreakpoint)}
+            class="studio-input"
+          />
         </div>
 
-        <!-- Colors & Background -->
-        <div class="border-t border-slate-800 pt-4">
-          <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-2">Background & Fill</span>
-          <div class="space-y-2">
-            <div>
-              <label for="style-background" class="text-slate-400 text-[11px] block mb-0.5">Background CSS</label>
-              <input
-                id="style-background"
-                type="text"
-                placeholder="transparent or var(--color-muted)"
-                value={selectedNode.styles?.base?.background || ''}
-                oninput={(e) => updateStyle('background', (e.target as HTMLInputElement).value, editor.activeBreakpoint)}
-                class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white font-mono text-[11px]"
-              />
-            </div>
-          </div>
+        <div class="field-item">
+          <label for="style-bg" class="field-label">Background Color</label>
+          <input
+            id="style-bg"
+            type="text"
+            placeholder="e.g. #ffffff or var(--md-sys-color-surface)"
+            value={selectedNode.styles?.[editor.activeBreakpoint]?.backgroundColor || selectedNode.styles?.base?.backgroundColor || ''}
+            onchange={(e) => updateStyle('backgroundColor', (e.target as HTMLInputElement).value, editor.activeBreakpoint)}
+            class="studio-input"
+          />
         </div>
 
-        <!-- Border Radius & Shadows -->
-        <div class="border-t border-slate-800 pt-4">
-          <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-2">Border & Radius</span>
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label for="style-border-radius" class="text-slate-400 text-[11px] block mb-0.5">Border Radius</label>
-              <input
-                id="style-border-radius"
-                type="text"
-                placeholder="0.5rem"
-                value={selectedNode.styles?.base?.borderRadius || ''}
-                oninput={(e) => updateStyle('borderRadius', (e.target as HTMLInputElement).value, editor.activeBreakpoint)}
-                class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white font-mono text-[11px]"
-              />
-            </div>
-          </div>
+        <div class="field-item">
+          <label for="style-color" class="field-label">Text Color</label>
+          <input
+            id="style-color"
+            type="text"
+            placeholder="e.g. var(--md-sys-color-on-surface)"
+            value={selectedNode.styles?.[editor.activeBreakpoint]?.color || selectedNode.styles?.base?.color || ''}
+            onchange={(e) => updateStyle('color', (e.target as HTMLInputElement).value, editor.activeBreakpoint)}
+            class="studio-input"
+          />
+        </div>
+
+        <div class="field-item">
+          <label for="style-radius" class="field-label">Border Radius</label>
+          <input
+            id="style-radius"
+            type="text"
+            placeholder="e.g. 12px or var(--md-sys-shape-corner-medium)"
+            value={selectedNode.styles?.[editor.activeBreakpoint]?.borderRadius || selectedNode.styles?.base?.borderRadius || ''}
+            onchange={(e) => updateStyle('borderRadius', (e.target as HTMLInputElement).value, editor.activeBreakpoint)}
+            class="studio-input"
+          />
+        </div>
+
+        <div class="field-item">
+          <label for="style-display" class="field-label">Display</label>
+          <select
+            id="style-display"
+            value={selectedNode.styles?.[editor.activeBreakpoint]?.display || selectedNode.styles?.base?.display || ''}
+            onchange={(e) => updateStyle('display', (e.target as HTMLSelectElement).value, editor.activeBreakpoint)}
+            class="studio-select"
+          >
+            <option value="">(Default)</option>
+            <option value="flex">flex</option>
+            <option value="grid">grid</option>
+            <option value="block">block</option>
+            <option value="inline-block">inline-block</option>
+            <option value="none">none</option>
+          </select>
         </div>
       </div>
-    {/if}
 
-    <!-- Tab 3: Declarative Interactions -->
-    {#if activeTab === 'interactions'}
-      <div class="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
-        <div>
-          <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-2">Interactions</span>
-          <p class="text-slate-400 text-[11px] leading-relaxed mb-3">
-            Wire visual user actions (e.g. click to navigate, open modal, submit form) without writing custom code.
-          </p>
+    <!-- Tab 3: Interactions & Events -->
+    {:else if activeTab === 'interactions'}
+      <div class="studio-panel-content flow-v">
+        <div class="section-title">Interactions & Routing</div>
+        <p class="panel-sub">Configure live navigation, modal dialog triggers, and form submit handlers.</p>
 
-          <div class="rounded border border-slate-800 bg-slate-900 p-3 space-y-2">
-            <div class="font-semibold text-white">Add Navigation Trigger</div>
-            <div class="flex gap-2">
-              <input
-                type="text"
-                placeholder="/dashboard"
-                value="/dashboard"
-                id="nav-dest-input"
-                class="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white text-xs"
-              />
-              <button
-                type="button"
-                onclick={() => {
-                  const dest = (document.getElementById('nav-dest-input') as HTMLInputElement)?.value || '/dashboard';
-                  editor.dispatch({
-                    type: 'ADD_INTERACTION',
-                    interaction: {
-                      id: crypto.randomUUID(),
-                      name: `Navigate to ${dest}`,
-                      sourceNodeId: selectedNode.id,
-                      trigger: 'click',
-                      action: { type: 'navigate', payload: { targetPath: dest } }
-                    }
-                  });
-                }}
-                class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs font-semibold"
-              >
-                Wire Link
-              </button>
-            </div>
-          </div>
+        <div class="field-item">
+          <label for="click-action" class="field-label">Click Action Target</label>
+          <select id="click-action" class="studio-select">
+            <option value="none">None (Static Element)</option>
+            <option value="navigate">Navigate to Page</option>
+            <option value="modal">Open Modal Dialog</option>
+            <option value="submit">Submit Form</option>
+          </select>
+        </div>
+
+        <div class="field-item">
+          <label for="target-route" class="field-label">Target Page Route</label>
+          <select id="target-route" class="studio-select">
+            {#each editor.blueprint.pages as p (p.id)}
+              <option value={p.path}>{p.path} ({p.title})</option>
+            {/each}
+          </select>
         </div>
       </div>
     {/if}
   {:else}
     <!-- Empty State -->
-    <div class="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500">
-      <div class="text-3xl mb-2">🎯</div>
-      <div class="font-medium text-xs text-slate-400">No Component Selected</div>
-      <p class="text-[11px] text-slate-500 mt-1 max-w-[180px]">
-        Click any section or element on the canvas to inspect and edit its properties.
-      </p>
+    <div class="empty-state">
+      <div class="empty-icon">👆</div>
+      <div class="empty-title">No Element Selected</div>
+      <p class="empty-desc">Click any component on the visual canvas to inspect and edit its content, responsive styles, and interactions.</p>
     </div>
   {/if}
 </aside>
+
+<style>
+  .inspector-header {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--md-sys-color-outline-variant);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .node-name {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--md-sys-color-on-surface);
+  }
+  .node-type-badge {
+    font-size: 0.625rem;
+    font-family: var(--md-sys-font-mono);
+    padding: 0.125rem 0.375rem;
+    border-radius: var(--md-sys-shape-corner-extra-small, 4px);
+    background-color: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
+  }
+  .node-id {
+    font-size: 0.625rem;
+    font-family: var(--md-sys-font-mono);
+    color: var(--md-sys-color-outline);
+    margin-top: 0.125rem;
+    max-width: 180px;
+  }
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .action-btn {
+    padding: 0.25rem 0.375rem;
+    font-size: 0.75rem;
+    color: var(--md-sys-color-on-surface-variant);
+    border-radius: var(--md-sys-shape-corner-extra-small, 4px);
+    transition: all var(--md-sys-motion-duration-short);
+  }
+  .action-btn:hover {
+    color: var(--md-sys-color-on-surface);
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+  .action-btn--danger:hover {
+    color: var(--md-sys-color-error);
+  }
+  .flow-v {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .field-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .field-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: capitalize;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--md-sys-color-on-surface);
+    cursor: pointer;
+  }
+  .studio-checkbox {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--md-sys-color-primary);
+  }
+  .checkbox-text {
+    user-select: none;
+  }
+  .font-mono {
+    font-family: var(--md-sys-font-mono);
+    font-size: 0.6875rem;
+  }
+  .section-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+  .panel-sub {
+    font-size: 0.75rem;
+    color: var(--md-sys-color-on-surface-variant);
+    line-height: 1.4;
+  }
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    text-align: center;
+  }
+  .empty-icon {
+    font-size: 2rem;
+    margin-bottom: 0.75rem;
+    opacity: 0.6;
+  }
+  .empty-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--md-sys-color-on-surface);
+    margin-bottom: 0.5rem;
+  }
+  .empty-desc {
+    font-size: 0.75rem;
+    color: var(--md-sys-color-on-surface-variant);
+    line-height: 1.5;
+  }
+  .truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+</style>

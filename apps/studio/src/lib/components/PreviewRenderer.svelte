@@ -42,26 +42,35 @@
       onSelectNode?.(node.id);
     }
   }
+  function handleKeyDown(e: KeyboardEvent) {
+    if (!isInteractiveMode && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      e.stopPropagation();
+      onSelectNode?.(node.id);
+    }
+  }
 </script>
 
 <div
   data-node-id={node.id}
   data-node-type={node.componentType}
   onclick={handleClick}
-  role="region"
+  onkeydown={handleKeyDown}
+  role="button"
+  tabindex="0"
   aria-label={node.name}
-  class="relative transition-all duration-150 {!isInteractiveMode ? 'hover:outline hover:outline-1 hover:outline-blue-400' : ''} {isSelected && !isInteractiveMode ? 'outline outline-2 outline-blue-600 shadow-lg z-10' : ''}"
+  class="preview-node {!isInteractiveMode ? 'preview-node--editable' : ''} {isSelected && !isInteractiveMode ? 'preview-node--selected' : ''}"
   style={inlineStyle}
 >
   {#if isSelected && !isInteractiveMode}
-    <div class="absolute -top-5 left-0 bg-blue-600 text-white text-[10px] font-mono px-1.5 py-0.5 rounded-t font-semibold z-20 pointer-events-none">
+    <div class="preview-node__badge">
       {node.name}
     </div>
   {/if}
 
   {#if node.componentType === 'structure/container'}
     <Container maxWidth={node.props.maxWidth || 'xl'}>
-      {#each node.children || [] as child}
+      {#each node.children || [] as child (child.id)}
         <PreviewRenderer
           node={child}
           {selectedNodeId}
@@ -133,7 +142,7 @@
       activeNav={node.props.activeNav}
       {onNavigate}
     >
-      {#each node.children || [] as child}
+      {#each node.children || [] as child (child.id)}
         <PreviewRenderer
           node={child}
           {selectedNodeId}
@@ -168,7 +177,7 @@
     </Button>
   {:else}
     <div>
-      {#each node.children || [] as child}
+      {#each node.children || [] as child (child.id)}
         <PreviewRenderer
           node={child}
           {selectedNodeId}
@@ -180,3 +189,33 @@
     </div>
   {/if}
 </div>
+
+<style>
+  .preview-node {
+    position: relative;
+    transition: outline var(--md-sys-motion-duration-short);
+  }
+  .preview-node--editable:hover {
+    outline: 1px dashed var(--md-sys-color-primary, #A8C7FA);
+  }
+  .preview-node--selected {
+    outline: 2px solid var(--md-sys-color-primary, #A8C7FA) !important;
+    box-shadow: var(--md-sys-elevation-level2);
+    z-index: 10;
+  }
+  .preview-node__badge {
+    position: absolute;
+    top: -20px;
+    left: 0;
+    background-color: var(--md-sys-color-primary, #A8C7FA);
+    color: var(--md-sys-color-on-primary, #003063);
+    font-size: 0.625rem;
+    font-family: var(--md-sys-font-mono);
+    padding: 2px 6px;
+    border-radius: var(--md-sys-shape-corner-extra-small) var(--md-sys-shape-corner-extra-small) 0 0;
+    font-weight: 700;
+    z-index: 20;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+</style>

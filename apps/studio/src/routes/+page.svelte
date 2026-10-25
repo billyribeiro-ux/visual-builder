@@ -29,12 +29,12 @@
   <title>Svelte Visual Studio — {editor.blueprint.meta.name}</title>
 </svelte:head>
 
-<div class="flex flex-col h-screen w-screen overflow-hidden bg-slate-950 font-sans">
+<div class="studio-app">
   <!-- Top Control Bar -->
   <TopToolbar />
 
   <!-- Main Studio Workspace Grid -->
-  <div class="flex flex-1 overflow-hidden relative">
+  <div class="studio-workspace">
     <!-- Left Navigation & Library Drawer -->
     <LeftSidebar />
 

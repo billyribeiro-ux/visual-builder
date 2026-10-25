@@ -16,8 +16,9 @@ describe('Codegen Engine', () => {
 
     // Verify SvelteKit 3 project files
     expect(result.files['generated-app/package.json']).toContain('"@sveltejs/kit": "^3.1.0"');
-    expect(result.files['generated-app/vite.config.ts']).toContain('sveltekit()');
-    expect(result.files['generated-app/src/app.css']).toContain('@import "tailwindcss";');
+    expect(result.files['generated-app/vite.config.ts']).toContain('sveltekit(');
+    expect(result.files['generated-app/src/app.css']).toContain('--md-sys-color-primary');
+    expect(result.files['generated-app/src/app.css']).not.toContain('tailwindcss');
     expect(result.files['generated-app/src/routes/+layout.svelte']).toContain('{@render children?.()}');
 
     // Verify all 5 routes

@@ -10,9 +10,11 @@
     "test:unit": "vitest run",
     "test:parity": "tsx tests/e2e-parity-check.ts",
     "test:e2e": "playwright test",
-    "typecheck": "pnpm -r run typecheck"
+    "typecheck": "pnpm -r run typecheck",
+    "audit:svelte": "tsx scripts/audit-svelte.ts"
   },
   "devDependencies": {
+    "@sveltejs/mcp": "^0.1.27",
     "@types/node": "^24.10.0",
     "tsx": "^4.19.3",
     "typescript": "^5.8.0",

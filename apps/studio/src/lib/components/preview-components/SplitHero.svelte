@@ -1,5 +1,6 @@
 <script lang="ts">
   import Button from './Button.svelte';
+  import Container from './Container.svelte';
 
   interface Props {
     eyebrow?: string;
@@ -15,66 +16,52 @@
   }
 
   let {
-    eyebrow = 'Introducing Platform 2.0',
-    title = 'Design Visually. Export Pure SvelteKit 3.',
-    subtitle = 'The first visual development platform that creates verifiable, versioned blueprints and runnable Svelte 5 code for AI coding agents.',
+    eyebrow = 'Next-Gen Platform',
+    title = 'Build Faster Svelte Applications with Visual Clarity',
+    subtitle = 'The modern visual development studio designed for Svelte 5 and SvelteKit 3 with Google Material Design 3.',
     primaryCtaText = 'Get Started Free',
     primaryCtaHref = '/dashboard',
-    secondaryCtaText = 'View Pricing',
-    secondaryCtaHref = '/pricing',
-    badgeText = 'Svelte 5 Runes Native',
+    secondaryCtaText = 'Explore Features',
+    secondaryCtaHref = '#features',
+    badgeText = 'v3.1 Stable Cutoff',
     style = '',
     onNavigate
   }: Props = $props();
 </script>
 
-<section class="relative overflow-hidden py-16 md:py-24" {style}>
-  <div class="mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8">
-    <div class="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:items-center">
+<section class="md-hero" {style}>
+  <Container maxWidth="xl">
+    <div class="md-hero__grid">
       <div>
         {#if badgeText}
-          <div class="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-muted)] px-3 py-1 text-xs font-semibold text-[var(--color-primary)] mb-6">
-            <span class="flex h-2 w-2 rounded-full bg-[var(--color-primary)]"></span>
-            {badgeText}
+          <div class="md-hero__badge">
+            <span>✨</span>
+            <span>{badgeText}</span>
           </div>
         {/if}
-        <h1 class="text-4xl font-extrabold tracking-tight text-[var(--color-foreground)] sm:text-5xl lg:text-6xl">
-          {title}
-        </h1>
-        <p class="mt-6 text-lg text-[var(--color-muted-foreground)] leading-relaxed">
-          {subtitle}
-        </p>
-        <div class="mt-8 flex flex-wrap gap-4">
+        {#if eyebrow}
+          <div style="font-size: 0.875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--md-sys-color-primary); margin-bottom: 0.75rem;">
+            {eyebrow}
+          </div>
+        {/if}
+        <h1 class="md-hero__title">{title}</h1>
+        <p class="md-hero__subtitle">{subtitle}</p>
+        <div class="md-hero__actions">
           <Button href={primaryCtaHref} size="lg" {onNavigate}>{primaryCtaText}</Button>
           {#if secondaryCtaText}
-            <Button href={secondaryCtaHref} variant="outline" size="lg" {onNavigate}>{secondaryCtaText}</Button>
+            <Button href={secondaryCtaHref} size="lg" variant="outlined" {onNavigate}>{secondaryCtaText}</Button>
           {/if}
         </div>
       </div>
-
-      <div class="relative">
-        <div class="relative mx-auto max-w-md lg:max-w-none rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-card)] p-4 shadow-xl">
-          <div class="flex items-center justify-between border-b border-[var(--color-border)] pb-3 px-2">
-            <div class="flex gap-2">
-              <div class="h-3 w-3 rounded-full bg-red-400"></div>
-              <div class="h-3 w-3 rounded-full bg-amber-400"></div>
-              <div class="h-3 w-3 rounded-full bg-emerald-400"></div>
-            </div>
-            <span class="text-xs font-mono text-[var(--color-muted-foreground)]">Acme SaaS Studio</span>
-          </div>
-          <div class="p-6 space-y-4">
-            <div class="h-8 w-3/4 rounded bg-[var(--color-muted)] animate-pulse"></div>
-            <div class="h-24 w-full rounded bg-[var(--color-accent)] border border-[var(--color-border)] p-4 text-xs font-mono text-[var(--color-primary)]">
-              $state(&#123; mode: 'ai-handoff', target: 'sveltekit-3' &#125;)
-            </div>
-            <div class="grid grid-cols-3 gap-3">
-              <div class="h-16 rounded bg-[var(--color-muted)]"></div>
-              <div class="h-16 rounded bg-[var(--color-muted)]"></div>
-              <div class="h-16 rounded bg-[var(--color-muted)]"></div>
-            </div>
+      <div>
+        <div class="md-card md-card--elevated" style="aspect-ratio: 16/10; display: flex; align-items: center; justify-content: center; background: var(--md-sys-color-surface-container);">
+          <div style="text-align: center; color: var(--md-sys-color-on-surface-variant);">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">🚀</div>
+            <div style="font-weight: 600; font-size: 1.125rem; color: var(--md-sys-color-on-surface);">Modern Interactive Web App</div>
+            <div style="font-size: 0.875rem; margin-top: 0.5rem;">Svelte 5 + Google MD3 Design System</div>
           </div>
         </div>
       </div>
     </div>
-  </div>
+  </Container>
 </section>

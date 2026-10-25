@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte';
 
   interface Props {
-    variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
+    variant?: 'filled' | 'outlined' | 'text' | 'tonal' | 'elevated' | 'primary' | 'secondary' | 'outline' | 'ghost';
     size?: 'sm' | 'md' | 'lg';
     href?: string;
     type?: 'button' | 'submit' | 'reset';
@@ -15,7 +15,7 @@
   }
 
   let {
-    variant = 'primary',
+    variant = 'filled',
     size = 'md',
     href,
     type = 'button',
@@ -27,18 +27,13 @@
     children
   }: Props = $props();
 
-  const variantStyles = {
-    primary: 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)] hover:bg-[var(--color-primary-hover)] shadow-sm',
-    secondary: 'bg-[var(--color-secondary)] text-[var(--color-secondary-foreground)] hover:bg-[var(--color-secondary-hover)]',
-    outline: 'border border-[var(--color-border)] bg-transparent hover:bg-[var(--color-muted)] text-[var(--color-foreground)]',
-    ghost: 'bg-transparent hover:bg-[var(--color-muted)] text-[var(--color-foreground)]'
-  };
-
-  const sizeStyles = {
-    sm: 'px-3 py-1.5 text-xs rounded-[var(--radius-sm)]',
-    md: 'px-4 py-2 text-sm font-medium rounded-[var(--radius-md)]',
-    lg: 'px-6 py-3 text-base font-medium rounded-[var(--radius-lg)]'
-  };
+  const variantClass = $derived.by(() => {
+    if (variant === 'primary' || variant === 'filled') return 'md-btn--filled';
+    if (variant === 'secondary' || variant === 'tonal') return 'md-btn--tonal';
+    if (variant === 'outline' || variant === 'outlined') return 'md-btn--outlined';
+    if (variant === 'ghost' || variant === 'text') return 'md-btn--text';
+    return 'md-btn--filled';
+  });
 
   function handleClick(e: MouseEvent) {
     if (href && onNavigate && href.startsWith('/')) {
@@ -54,7 +49,7 @@
   <a
     {href}
     onclick={handleClick}
-    class="inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:pointer-events-none disabled:opacity-50 {variantStyles[variant]} {sizeStyles[size]} {customClass}"
+    class="md-btn md-btn--{size} {variantClass} {customClass}"
     {style}
   >
     {@render children?.()}
@@ -64,7 +59,7 @@
     {type}
     {disabled}
     onclick={handleClick}
-    class="inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:pointer-events-none disabled:opacity-50 {variantStyles[variant]} {sizeStyles[size]} {customClass}"
+    class="md-btn md-btn--{size} {variantClass} {customClass}"
     {style}
   >
     {@render children?.()}

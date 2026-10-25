@@ -1,14 +1,14 @@
 <script lang="ts">
   import Button from './Button.svelte';
+  import Container from './Container.svelte';
 
-  interface PlanItem {
+  interface PricingPlan {
     name: string;
     price: string;
-    period: string;
     description: string;
     features: string[];
-    ctaText: string;
-    ctaHref: string;
+    ctaText?: string;
+    ctaHref?: string;
     isPopular?: boolean;
   }
 
@@ -16,65 +16,68 @@
     sectionEyebrow?: string;
     sectionTitle?: string;
     sectionDescription?: string;
-    plans?: PlanItem[];
+    plans?: PricingPlan[];
     style?: string;
     onNavigate?: (path: string) => void;
   }
 
   let {
-    sectionEyebrow = 'Pricing',
-    sectionTitle = 'Predictable Pricing for High-Output Teams',
-    sectionDescription = 'All plans include full source-code export.',
+    sectionEyebrow = 'Transparent Plans',
+    sectionTitle = 'Simple, Predictable Pricing',
+    sectionDescription = 'Scale seamlessly from individual side-projects to enterprise-grade web applications.',
     plans = [],
     style = '',
     onNavigate
   }: Props = $props();
 </script>
 
-<section class="py-16" {style}>
-  <div class="mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8">
-    <div class="text-center max-w-3xl mx-auto mb-16">
-      <span class="text-xs font-bold uppercase tracking-wider text-[var(--color-primary)] mb-2 block">{sectionEyebrow}</span>
-      <h2 class="text-3xl font-bold tracking-tight text-[var(--color-foreground)] sm:text-4xl">{sectionTitle}</h2>
-      <p class="mt-4 text-base text-[var(--color-muted-foreground)]">{sectionDescription}</p>
+<section class="md-pricing" {style}>
+  <Container maxWidth="xl">
+    <div class="md-pricing__header">
+      {#if sectionEyebrow}
+        <div style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--md-sys-color-primary); margin-bottom: 0.5rem;">
+          {sectionEyebrow}
+        </div>
+      {/if}
+      <h2 style="font-size: 2.25rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 1rem;">{sectionTitle}</h2>
+      {#if sectionDescription}
+        <p style="color: var(--md-sys-color-on-surface-variant); font-size: 1rem;">{sectionDescription}</p>
+      {/if}
     </div>
 
-    <div class="grid grid-cols-1 gap-8 md:grid-cols-3">
-      {#each plans as plan}
-        <div class="relative flex flex-col justify-between rounded-[var(--radius-xl)] border {plan.isPopular ? 'border-[var(--color-primary)] ring-2 ring-[var(--color-primary)]' : 'border-[var(--color-border)]'} bg-[var(--color-card)] p-8 shadow-sm">
-          {#if plan.isPopular}
-            <div class="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[var(--color-primary)] px-3 py-1 text-xs font-bold text-white">
-              Most Popular
-            </div>
-          {/if}
+    <div class="md-pricing__grid">
+      {#each plans as plan (plan.name)}
+        <div class="md-card md-pricing__card {plan.isPopular ? 'md-pricing__card--popular' : 'md-card--outlined'}">
           <div>
-            <h3 class="text-xl font-bold text-[var(--color-foreground)]">{plan.name}</h3>
-            <p class="mt-2 text-sm text-[var(--color-muted-foreground)]">{plan.description}</p>
-            <div class="mt-6 flex items-baseline gap-1">
-              <span class="text-4xl font-extrabold text-[var(--color-foreground)]">{plan.price}</span>
-              <span class="text-sm text-[var(--color-muted-foreground)]">/{plan.period}</span>
+            {#if plan.isPopular}
+              <div class="md-pricing__popular-badge">Most Popular</div>
+            {/if}
+            <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem;">{plan.name}</h3>
+            <p style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">{plan.description}</p>
+            <div class="md-pricing__price">
+              {plan.price}<span style="font-size: 1rem; font-weight: 400; color: var(--md-sys-color-on-surface-variant);">/mo</span>
             </div>
-            <ul class="mt-8 space-y-3 text-sm text-[var(--color-foreground)]">
-              {#each plan.features as feat}
-                <li class="flex items-center gap-2">
-                  <span class="text-[var(--color-success)] font-bold">✓</span>
+            <ul style="list-style: none; padding: 0; margin: 1.5rem 0; display: flex; flex-direction: column; gap: 0.75rem; font-size: 0.875rem;">
+              {#each plan.features || [] as feat, fIdx (fIdx)}
+                <li style="display: flex; align-items: center; gap: 0.5rem;">
+                  <span style="color: var(--md-sys-color-primary); font-weight: 700;">✓</span>
                   <span>{feat}</span>
                 </li>
               {/each}
             </ul>
           </div>
-          <div class="mt-8">
+          <div style="margin-top: 1.5rem;">
             <Button
-              href={plan.ctaHref}
-              variant={plan.isPopular ? 'primary' : 'outline'}
-              class="w-full text-center"
+              href={plan.ctaHref || '/dashboard'}
+              variant={plan.isPopular ? 'filled' : 'outlined'}
+              style="width: 100%;"
               {onNavigate}
             >
-              {plan.ctaText}
+              {plan.ctaText || 'Select Plan'}
             </Button>
           </div>
         </div>
       {/each}
     </div>
-  </div>
+  </Container>
 </section>

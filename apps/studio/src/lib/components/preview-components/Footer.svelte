@@ -1,5 +1,7 @@
 <script lang="ts">
-  interface FooterCol {
+  import Container from './Container.svelte';
+
+  interface FooterColumn {
     title: string;
     links: { label: string; href: string }[];
   }
@@ -8,15 +10,15 @@
     brandName?: string;
     tagline?: string;
     copyright?: string;
-    columns?: FooterCol[];
+    columns?: FooterColumn[];
     style?: string;
     onNavigate?: (path: string) => void;
   }
 
   let {
     brandName = 'Acme SaaS',
-    tagline = 'Engineering velocity for high-growth tech companies.',
-    copyright = '© 2026 Acme SaaS Inc.',
+    tagline = 'Modern visual web engineering studio for Svelte 5 and SvelteKit 3.',
+    copyright = '© 2026 Acme Corp. All rights reserved.',
     columns = [],
     style = '',
     onNavigate
@@ -30,36 +32,24 @@
   }
 </script>
 
-<footer class="border-t border-[var(--color-border)] bg-[var(--color-card)] py-12" {style}>
-  <div class="mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8">
-    <div class="grid grid-cols-1 gap-8 lg:grid-cols-4">
-      <div class="lg:col-span-2">
-        <div class="flex items-center gap-2 font-bold text-lg text-[var(--color-foreground)]">
-          <div class="flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary)] text-white text-sm">
-            {brandName.charAt(0)}
-          </div>
-          <span>{brandName}</span>
-        </div>
-        <p class="mt-4 max-w-sm text-sm text-[var(--color-muted-foreground)]">
-          {tagline}
-        </p>
-        <p class="mt-6 text-xs text-[var(--color-muted-foreground)]">
-          {copyright}
-        </p>
+<footer class="md-footer" {style}>
+  <Container maxWidth="xl">
+    <div class="md-footer__grid">
+      <div>
+        <div style="font-weight: 800; font-size: 1.25rem; margin-bottom: 0.75rem;">{brandName}</div>
+        <p style="color: var(--md-sys-color-on-surface-variant); font-size: 0.875rem; max-width: 320px; line-height: 1.5;">{tagline}</p>
       </div>
 
-      {#each columns as col}
+      {#each columns as col, cIdx (cIdx)}
         <div>
-          <h4 class="text-sm font-semibold uppercase tracking-wider text-[var(--color-foreground)] mb-4">
-            {col.title}
-          </h4>
-          <ul class="space-y-2 text-sm text-[var(--color-muted-foreground)]">
-            {#each col.links as link}
+          <div style="font-weight: 700; font-size: 0.875rem; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em;">{col.title}</div>
+          <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.625rem; font-size: 0.875rem;">
+            {#each col.links as link (link.href)}
               <li>
                 <a
                   href={link.href}
                   onclick={(e) => handleLink(e, link.href)}
-                  class="hover:text-[var(--color-foreground)] transition-colors"
+                  style="color: var(--md-sys-color-on-surface-variant); text-decoration: none;"
                 >
                   {link.label}
                 </a>
@@ -69,5 +59,9 @@
         </div>
       {/each}
     </div>
-  </div>
+
+    <div style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--md-sys-color-outline-variant); font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); text-align: center;">
+      {copyright}
+    </div>
+  </Container>
 </footer>

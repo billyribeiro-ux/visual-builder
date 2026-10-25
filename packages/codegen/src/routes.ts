@@ -147,7 +147,7 @@ export function generatePageRoute(page: PageRoute): string {
   <meta name="description" content="${page.description || ''}" />
 </svelte:head>
 
-<main class="min-h-screen">
+<main style="min-height: 100vh;">
 ${content}
 </main>
 `;
@@ -165,7 +165,7 @@ export function generateRootLayout(blueprint: ProjectBlueprint): string {
   let { children }: { children?: Snippet } = $props();
 </script>
 
-<div class="min-h-screen flex flex-col bg-[var(--color-background)] text-[var(--color-foreground)]">
+<div style="min-height: 100vh; display: flex; flex-direction: column; background-color: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface);">
   {@render children?.()}
 </div>
 `;

@@ -9,8 +9,8 @@
   }
 
   let {
-    initialName = 'Acme Workspace',
-    initialEmail = 'team@acme.test',
+    initialName = 'Jane Doe',
+    initialEmail = 'jane.doe@company.internal',
     notificationsEnabled = true,
     style = ''
   }: Props = $props();
@@ -18,72 +18,56 @@
   let name = $state('');
   let email = $state('');
   let notifications = $state(true);
-  let savedMessage = $state('');
 
   $effect(() => {
     name = initialName;
     email = initialEmail;
     notifications = notificationsEnabled;
   });
+  let isSaved = $state(false);
 
   function handleSubmit(e: SubmitEvent) {
     e.preventDefault();
-    savedMessage = 'Settings saved successfully! (Simulated mock validation passing)';
+    isSaved = true;
     setTimeout(() => {
-      savedMessage = '';
-    }, 4000);
+      isSaved = false;
+    }, 3000);
   }
 </script>
 
-<div class="max-w-xl rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-card)] p-6 shadow-sm" {style}>
-  <h2 class="text-lg font-bold text-[var(--color-foreground)] mb-4">Workspace Preferences</h2>
+<div class="md-card md-card--elevated" style="max-width: 600px; {style}">
+  <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1.5rem;">Workspace Preferences</h2>
 
-  {#if savedMessage}
-    <div class="mb-4 rounded-[var(--radius-md)] bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-800 font-medium">
-      {savedMessage}
+  {#if isSaved}
+    <div style="padding: 0.75rem 1rem; border-radius: var(--md-sys-shape-corner-small, 8px); background-color: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container); font-size: 0.875rem; font-weight: 600; margin-bottom: 1.5rem;">
+      ✓ Preferences saved successfully
     </div>
   {/if}
 
-  <form onsubmit={handleSubmit} class="space-y-4">
-    <div>
-      <label for="workspace-name" class="block text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)] mb-1">
-        Workspace Name
-      </label>
-      <input
-        id="workspace-name"
-        type="text"
-        bind:value={name}
-        required
-        class="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
-      />
+  <form onsubmit={handleSubmit}>
+    <div class="md-form-group">
+      <label for="pref-name" class="md-label">User Display Name</label>
+      <input id="pref-name" type="text" bind:value={name} class="md-input" />
     </div>
 
-    <div>
-      <label for="workspace-email" class="block text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)] mb-1">
-        Notification Email
-      </label>
-      <input
-        id="workspace-email"
-        type="email"
-        bind:value={email}
-        required
-        class="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
-      />
+    <div class="md-form-group">
+      <label for="pref-email" class="md-label">Notification Email Address</label>
+      <input id="pref-email" type="email" bind:value={email} class="md-input" />
     </div>
 
-    <div class="flex items-center gap-2 pt-2">
+    <div class="md-form-group" style="display: flex; align-items: center; gap: 0.75rem; margin-top: 1.5rem;">
       <input
-        id="notifications-toggle"
+        id="pref-notif"
         type="checkbox"
         bind:checked={notifications}
-        class="h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-ring)]"
+        style="width: 18px; height: 18px; accent-color: var(--md-sys-color-primary);"
       />
-      <label for="notifications-toggle" class="text-sm font-medium text-[var(--color-foreground)]">
-        Enable deployment and build notification webhooks
+      <label for="pref-notif" style="font-size: 0.875rem; font-weight: 500; cursor: pointer;">
+        Enable email digest and alert notifications
       </label>
     </div>
 
-    <div class="pt-4 border-t border-[var(--color-border)] flex justify-end">
+    <div style="margin-top: 2rem; display: flex; justify-content: flex-end;">
       <Button type="submit">Save Changes</Button>
     </div>
   </form>

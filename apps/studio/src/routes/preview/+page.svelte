@@ -12,18 +12,18 @@
     blueprint.pages.find((p) => p.id === activePageId) || blueprint.pages[0]
   );
 
-  // Injects CSS variables for design tokens dynamically into :root
+  // Injects CSS variables for MD3 design tokens dynamically into :root
   $effect(() => {
     if (typeof document !== 'undefined') {
       const root = document.documentElement;
       for (const [key, val] of Object.entries(blueprint.tokens.colors || {})) {
-        root.style.setProperty(`--color-${key}`, val);
+        root.style.setProperty(`--md-sys-color-${key}`, val);
       }
       for (const [key, val] of Object.entries(blueprint.tokens.radii || {})) {
-        root.style.setProperty(`--radius-${key}`, val);
+        root.style.setProperty(`--md-sys-shape-corner-${key}`, val);
       }
-      root.style.setProperty('--font-heading', blueprint.tokens.fonts?.heading || 'sans-serif');
-      root.style.setProperty('--font-body', blueprint.tokens.fonts?.body || 'sans-serif');
+      root.style.setProperty('--md-sys-font-heading', blueprint.tokens.fonts?.heading || 'Roboto, sans-serif');
+      root.style.setProperty('--md-sys-font-body', blueprint.tokens.fonts?.body || 'Roboto, sans-serif');
     }
   });
 
@@ -66,7 +66,7 @@
   <title>{activePage?.title || 'Preview'}</title>
 </svelte:head>
 
-<div class="min-h-screen bg-[var(--color-background)] text-[var(--color-foreground)] select-none">
+<div class="preview-root">
   {#if activePage}
     <PreviewRenderer
       node={activePage.rootNode}
@@ -77,3 +77,13 @@
     />
   {/if}
 </div>
+
+<style>
+  .preview-root {
+    min-height: 100vh;
+    background-color: var(--md-sys-color-surface, #FFFFFF);
+    color: var(--md-sys-color-on-surface, #1C1B1F);
+    font-family: var(--md-sys-font-body, Roboto, sans-serif);
+    user-select: none;
+  }
+</style>

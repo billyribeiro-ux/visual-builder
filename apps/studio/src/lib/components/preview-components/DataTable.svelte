@@ -1,39 +1,44 @@
 <script lang="ts">
+  interface Column {
+    key: string;
+    label: string;
+  }
+
   interface Props {
     title?: string;
-    columns?: string[];
-    rows?: string[][];
+    columns?: Column[];
+    rows?: Record<string, any>[];
     style?: string;
   }
 
   let {
-    title = 'Data Table',
+    title = 'Recent Transactions',
     columns = [],
     rows = [],
     style = ''
   }: Props = $props();
 </script>
 
-<div class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm" {style}>
+<div class="md-table-container" {style}>
   {#if title}
-    <div class="p-4 border-b border-[var(--color-border)] font-bold text-[var(--color-foreground)]">
+    <div style="padding: 1.25rem 1.5rem; font-weight: 700; font-size: 1.125rem; border-bottom: 1px solid var(--md-sys-color-outline-variant);">
       {title}
     </div>
   {/if}
-  <div class="overflow-x-auto">
-    <table class="w-full text-left text-sm text-[var(--color-foreground)]">
-      <thead class="bg-[var(--color-muted)]/50 text-xs uppercase tracking-wider text-[var(--color-muted-foreground)]">
+  <div style="overflow-x: auto;">
+    <table class="md-table">
+      <thead>
         <tr>
-          {#each columns as col}
-            <th class="px-6 py-3 font-semibold">{col}</th>
+          {#each columns as col (col.key)}
+            <th>{col.label}</th>
           {/each}
         </tr>
       </thead>
-      <tbody class="divide-y divide-[var(--color-border)]">
-        {#each rows as row}
-          <tr class="hover:bg-[var(--color-muted)]/30 transition-colors">
-            {#each row as cell}
-              <td class="px-6 py-4 whitespace-nowrap">{cell}</td>
+      <tbody>
+        {#each rows as row, rIdx (rIdx)}
+          <tr>
+            {#each columns as col (col.key)}
+              <td>{row[col.key]}</td>
             {/each}
           </tr>
         {/each}

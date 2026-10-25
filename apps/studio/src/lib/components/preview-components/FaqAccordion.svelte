@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Container from './Container.svelte';
+
   interface FaqItem {
     question: string;
     answer: string;
@@ -23,33 +25,28 @@
   }
 </script>
 
-<section class="py-16" {style}>
-  <div class="mx-auto max-w-screen-md px-4 sm:px-6">
-    <h2 class="text-3xl font-bold text-center tracking-tight text-[var(--color-foreground)] mb-10">
-      {sectionTitle}
-    </h2>
-
-    <div class="space-y-4">
-      {#each items as item, idx}
-        <div class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden">
+<section class="md-accordion" {style}>
+  <Container maxWidth="lg">
+    <h2 style="font-size: 2.25rem; font-weight: 800; text-align: center; margin-bottom: 3rem;">{sectionTitle}</h2>
+    <div>
+      {#each items as item, idx (idx)}
+        <div class="md-accordion__item">
           <button
             type="button"
+            class="md-accordion__trigger"
             onclick={() => toggle(idx)}
             aria-expanded={openIndex === idx}
-            class="flex w-full items-center justify-between p-5 text-left font-semibold text-[var(--color-foreground)] hover:bg-[var(--color-muted)] transition-colors"
           >
             <span>{item.question}</span>
-            <span class="text-lg transition-transform duration-200 {openIndex === idx ? 'rotate-180' : ''}">
-              ▼
-            </span>
+            <span style="font-weight: 700; display: inline-block; transform: {openIndex === idx ? 'rotate(180deg)' : 'rotate(0)'}; transition: transform var(--md-sys-motion-duration-short);">↓</span>
           </button>
           {#if openIndex === idx}
-            <div class="px-5 pb-5 pt-1 text-sm text-[var(--color-muted-foreground)] leading-relaxed border-t border-[var(--color-border)]">
+            <div class="md-accordion__content">
               {item.answer}
             </div>
           {/if}
         </div>
       {/each}
     </div>
-  </div>
+  </Container>
 </section>

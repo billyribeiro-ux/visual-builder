@@ -1,5 +1,6 @@
 /**
- * Emits idiomatic, accessible, standalone Svelte 5 components with runes.
+ * Emits idiomatic Svelte 5 components with Google Material Design 3 (MD3) styling.
+ * Pure Vanilla CSS: No Tailwind, no external runtime.
  */
 
 export function getComponentSources(): Record<string, string> {
@@ -20,18 +21,9 @@ export function getComponentSources(): Record<string, string> {
     style = '',
     children
   }: Props = $props();
-
-  const maxMap = {
-    sm: 'max-w-screen-sm',
-    md: 'max-w-screen-md',
-    lg: 'max-w-screen-lg',
-    xl: 'max-w-screen-xl',
-    '2xl': 'max-w-screen-2xl',
-    full: 'max-w-full'
-  };
 </script>
 
-<div class="mx-auto px-4 sm:px-6 lg:px-8 {maxMap[maxWidth] || 'max-w-screen-xl'} {customClass}" {style}>
+<div class="md-container md-container--{maxWidth} {customClass}" {style}>
   {@render children?.()}
 </div>
 `,
@@ -40,7 +32,7 @@ export function getComponentSources(): Record<string, string> {
   import type { Snippet } from 'svelte';
 
   interface Props {
-    variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
+    variant?: 'filled' | 'outlined' | 'text' | 'tonal' | 'elevated' | 'primary' | 'secondary' | 'outline' | 'ghost';
     size?: 'sm' | 'md' | 'lg';
     href?: string;
     type?: 'button' | 'submit' | 'reset';
@@ -52,7 +44,7 @@ export function getComponentSources(): Record<string, string> {
   }
 
   let {
-    variant = 'primary',
+    variant = 'filled',
     size = 'md',
     href,
     type = 'button',
@@ -63,24 +55,20 @@ export function getComponentSources(): Record<string, string> {
     children
   }: Props = $props();
 
-  const variantStyles = {
-    primary: 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)] hover:bg-[var(--color-primary-hover)] shadow-sm',
-    secondary: 'bg-[var(--color-secondary)] text-[var(--color-secondary-foreground)] hover:bg-[var(--color-secondary-hover)]',
-    outline: 'border border-[var(--color-border)] bg-transparent hover:bg-[var(--color-muted)] text-[var(--color-foreground)]',
-    ghost: 'bg-transparent hover:bg-[var(--color-muted)] text-[var(--color-foreground)]'
-  };
-
-  const sizeStyles = {
-    sm: 'px-3 py-1.5 text-xs rounded-[var(--radius-sm)]',
-    md: 'px-4 py-2 text-sm font-medium rounded-[var(--radius-md)]',
-    lg: 'px-6 py-3 text-base font-medium rounded-[var(--radius-lg)]'
-  };
+  // Normalize legacy names to MD3 variant classes
+  const variantClass = $derived.by(() => {
+    if (variant === 'primary' || variant === 'filled') return 'md-btn--filled';
+    if (variant === 'secondary' || variant === 'tonal') return 'md-btn--tonal';
+    if (variant === 'outline' || variant === 'outlined') return 'md-btn--outlined';
+    if (variant === 'ghost' || variant === 'text') return 'md-btn--text';
+    return 'md-btn--filled';
+  });
 </script>
 
 {#if href}
   <a
     {href}
-    class="inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:pointer-events-none disabled:opacity-50 {variantStyles[variant]} {sizeStyles[size]} {customClass}"
+    class="md-btn md-btn--{size} {variantClass} {customClass}"
     {style}
   >
     {@render children?.()}
@@ -90,7 +78,7 @@ export function getComponentSources(): Record<string, string> {
     {type}
     {disabled}
     {onclick}
-    class="inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)] disabled:pointer-events-none disabled:opacity-50 {variantStyles[variant]} {sizeStyles[size]} {customClass}"
+    class="md-btn md-btn--{size} {variantClass} {customClass}"
     {style}
   >
     {@render children?.()}
@@ -124,69 +112,34 @@ export function getComponentSources(): Record<string, string> {
     style = ''
   }: Props = $props();
 
-  let mobileMenuOpen = $state(false);
+  let mobileOpen = $state(false);
 </script>
 
-<header class="sticky top-0 z-40 w-full border-b border-[var(--color-border)] bg-[var(--color-background)]/80 backdrop-blur-md" {style}>
-  <div class="mx-auto flex h-16 max-w-screen-xl items-center justify-between px-4 sm:px-6 lg:px-8">
-    <a href="/" class="flex items-center gap-2 font-bold text-lg text-[var(--color-foreground)] tracking-tight">
+<header class="md-navbar" {style}>
+  <div class="md-navbar__inner">
+    <a href="/" class="md-navbar__brand">
       {#if logoUrl}
-        <img src={logoUrl} alt={brandName} class="h-8 w-auto" />
+        <img src={logoUrl} alt={brandName} style="height: 32px; width: auto;" />
       {:else}
-        <div class="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary)] text-white font-bold">
+        <div style="height: 32px; width: 32px; border-radius: var(--md-sys-shape-corner-small, 8px); background-color: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); display: flex; align-items: center; justify-content: center; font-weight: 700;">
           {brandName.charAt(0)}
         </div>
       {/if}
       <span>{brandName}</span>
     </a>
 
-    <!-- Desktop navigation -->
-    <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-[var(--color-muted-foreground)]">
-      {#each links as link}
-        <a href={link.href} class="transition-colors hover:text-[var(--color-foreground)]">
+    <nav class="md-navbar__nav">
+      {#each links as link (link.href)}
+        <a href={link.href} class="md-navbar__link">
           {link.label}
         </a>
       {/each}
     </nav>
 
-    <div class="hidden md:flex items-center gap-4">
+    <div style="display: flex; align-items: center; gap: 1rem;">
       <Button href={ctaHref} size="sm">{ctaText}</Button>
     </div>
-
-    <!-- Mobile menu toggle -->
-    <button
-      type="button"
-      onclick={() => (mobileMenuOpen = !mobileMenuOpen)}
-      aria-label="Toggle Navigation Menu"
-      class="md:hidden p-2 text-[var(--color-foreground)]"
-    >
-      <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        {#if mobileMenuOpen}
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        {:else}
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-        {/if}
-      </svg>
-    </button>
   </div>
-
-  <!-- Mobile menu drawer -->
-  {#if mobileMenuOpen}
-    <div class="md:hidden border-b border-[var(--color-border)] bg-[var(--color-background)] px-4 py-4 space-y-3">
-      {#each links as link}
-        <a
-          href={link.href}
-          onclick={() => (mobileMenuOpen = false)}
-          class="block py-2 text-base font-medium text-[var(--color-foreground)]"
-        >
-          {link.label}
-        </a>
-      {/each}
-      <div class="pt-2">
-        <Button href={ctaHref} class="w-full text-center">{ctaText}</Button>
-      </div>
-    </div>
-  {/if}
 </header>
 `,
 
@@ -213,55 +166,47 @@ export function getComponentSources(): Record<string, string> {
     primaryCtaHref = '/dashboard',
     secondaryCtaText = 'View Pricing',
     secondaryCtaHref = '/pricing',
-    badgeText = 'Svelte 5 Runes Native',
+    badgeText = 'Google MD3 Native',
     style = ''
   }: Props = $props();
 </script>
 
-<section class="relative overflow-hidden py-16 md:py-24" {style}>
-  <div class="mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8">
-    <div class="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:items-center">
+<section class="md-hero" {style}>
+  <div class="md-container md-container--xl">
+    <div class="md-hero__grid">
       <div>
         {#if badgeText}
-          <div class="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-muted)] px-3 py-1 text-xs font-semibold text-[var(--color-primary)] mb-6">
-            <span class="flex h-2 w-2 rounded-full bg-[var(--color-primary)]"></span>
+          <div class="md-hero__badge">
+            <span style="height: 8px; width: 8px; border-radius: 50%; background-color: var(--md-sys-color-primary);"></span>
             {badgeText}
           </div>
         {/if}
-        <h1 class="text-4xl font-extrabold tracking-tight text-[var(--color-foreground)] sm:text-5xl lg:text-6xl">
+        <h1 class="md-hero__title">
           {title}
         </h1>
-        <p class="mt-6 text-lg text-[var(--color-muted-foreground)] leading-relaxed">
+        <p class="md-hero__subtitle">
           {subtitle}
         </p>
-        <div class="mt-8 flex flex-wrap gap-4">
+        <div class="md-hero__actions">
           <Button href={primaryCtaHref} size="lg">{primaryCtaText}</Button>
           {#if secondaryCtaText}
-            <Button href={secondaryCtaHref} variant="outline" size="lg">{secondaryCtaText}</Button>
+            <Button href={secondaryCtaHref} variant="outlined" size="lg">{secondaryCtaText}</Button>
           {/if}
         </div>
       </div>
 
-      <div class="relative">
-        <div class="relative mx-auto max-w-md lg:max-w-none rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-card)] p-4 shadow-xl">
-          <div class="flex items-center justify-between border-b border-[var(--color-border)] pb-3 px-2">
-            <div class="flex gap-2">
-              <div class="h-3 w-3 rounded-full bg-red-400"></div>
-              <div class="h-3 w-3 rounded-full bg-amber-400"></div>
-              <div class="h-3 w-3 rounded-full bg-emerald-400"></div>
+      <div>
+        <div class="md-card md-card--elevated" style="padding: 2rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--md-sys-color-outline-variant); padding-bottom: 0.75rem; margin-bottom: 1.5rem;">
+            <div style="display: flex; gap: 6px;">
+              <span style="height: 12px; width: 12px; border-radius: 50%; background-color: #EF4444;"></span>
+              <span style="height: 12px; width: 12px; border-radius: 50%; background-color: #F59E0B;"></span>
+              <span style="height: 12px; width: 12px; border-radius: 50%; background-color: #10B981;"></span>
             </div>
-            <span class="text-xs font-mono text-[var(--color-muted-foreground)]">Acme SaaS Studio</span>
+            <span style="font-size: 0.75rem; font-family: var(--md-sys-font-mono); color: var(--md-sys-color-on-surface-variant);">Acme Studio M3</span>
           </div>
-          <div class="p-6 space-y-4">
-            <div class="h-8 w-3/4 rounded bg-[var(--color-muted)] animate-pulse"></div>
-            <div class="h-24 w-full rounded bg-[var(--color-accent)] border border-[var(--color-border)] p-4 text-xs font-mono text-[var(--color-primary)]">
-              $state(&#123; mode: 'ai-handoff', target: 'sveltekit-3' &#125;)
-            </div>
-            <div class="grid grid-cols-3 gap-3">
-              <div class="h-16 rounded bg-[var(--color-muted)]"></div>
-              <div class="h-16 rounded bg-[var(--color-muted)]"></div>
-              <div class="h-16 rounded bg-[var(--color-muted)]"></div>
-            </div>
+          <div style="padding: 1.5rem; background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); border-radius: var(--md-sys-shape-corner-small, 8px); font-family: var(--md-sys-font-mono); font-size: 0.8125rem;">
+            $state(&#123; designSystem: 'google-md3', styling: 'vanilla-css' &#125;)
           </div>
         </div>
       </div>
@@ -289,43 +234,43 @@ export function getComponentSources(): Record<string, string> {
   let {
     sectionEyebrow = 'Capabilities',
     sectionTitle = 'Engineered for Performance',
-    sectionDescription = 'Built using modern web standards.',
+    sectionDescription = 'Built using Google MD3 design tokens.',
     columns = 3,
     features = [],
     style = ''
   }: Props = $props();
 
-  let colClass = $derived(columns === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3');
+  let colClass = $derived(columns === 2 ? 'md-feature-grid__cols--2' : 'md-feature-grid__cols--3');
 </script>
 
-<section class="py-16 bg-[var(--color-muted)]/40" {style}>
-  <div class="mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8">
-    <div class="text-center max-w-3xl mx-auto mb-12">
+<section class="md-feature-grid" {style}>
+  <div class="md-container md-container--xl">
+    <div class="md-feature-grid__header">
       {#if sectionEyebrow}
-        <span class="text-xs font-bold uppercase tracking-wider text-[var(--color-primary)] mb-2 block">
+        <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--md-sys-color-primary); display: block; margin-bottom: 0.5rem;">
           {sectionEyebrow}
         </span>
       {/if}
-      <h2 class="text-3xl font-bold tracking-tight text-[var(--color-foreground)] sm:text-4xl">
+      <h2 style="font-size: 2.25rem; font-weight: 700; margin-bottom: 1rem;">
         {sectionTitle}
       </h2>
       {#if sectionDescription}
-        <p class="mt-4 text-base text-[var(--color-muted-foreground)]">
+        <p style="color: var(--md-sys-color-on-surface-variant);">
           {sectionDescription}
         </p>
       {/if}
     </div>
 
-    <div class="grid grid-cols-1 gap-8 {colClass}">
-      {#each features as feature}
-        <div class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-card)] p-6 shadow-sm hover:shadow-md transition-shadow">
-          <div class="flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-bold mb-4">
+    <div class="md-feature-grid__cols {colClass}">
+      {#each features as feature, idx (idx)}
+        <div class="md-card md-card--outlined">
+          <div style="height: 40px; width: 40px; border-radius: var(--md-sys-shape-corner-small, 8px); background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); display: flex; align-items: center; justify-content: center; font-weight: 700; margin-bottom: 1rem;">
             ⚡
           </div>
-          <h3 class="text-lg font-semibold text-[var(--color-foreground)] mb-2">
+          <h3 style="font-size: 1.125rem; font-weight: 700; margin-bottom: 0.5rem;">
             {feature.title}
           </h3>
-          <p class="text-sm text-[var(--color-muted-foreground)] leading-relaxed">
+          <p style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant); line-height: 1.6;">
             {feature.description}
           </p>
         </div>
@@ -366,43 +311,43 @@ export function getComponentSources(): Record<string, string> {
   }: Props = $props();
 </script>
 
-<section class="py-16" {style}>
-  <div class="mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8">
-    <div class="text-center max-w-3xl mx-auto mb-16">
-      <span class="text-xs font-bold uppercase tracking-wider text-[var(--color-primary)] mb-2 block">{sectionEyebrow}</span>
-      <h2 class="text-3xl font-bold tracking-tight text-[var(--color-foreground)] sm:text-4xl">{sectionTitle}</h2>
-      <p class="mt-4 text-base text-[var(--color-muted-foreground)]">{sectionDescription}</p>
+<section class="md-pricing" {style}>
+  <div class="md-container md-container--xl">
+    <div class="md-pricing__header">
+      <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--md-sys-color-primary); display: block; margin-bottom: 0.5rem;">{sectionEyebrow}</span>
+      <h2 style="font-size: 2.25rem; font-weight: 700; margin-bottom: 1rem;">{sectionTitle}</h2>
+      <p style="color: var(--md-sys-color-on-surface-variant);">{sectionDescription}</p>
     </div>
 
-    <div class="grid grid-cols-1 gap-8 md:grid-cols-3">
-      {#each plans as plan}
-        <div class="relative flex flex-col justify-between rounded-[var(--radius-xl)] border {plan.isPopular ? 'border-[var(--color-primary)] ring-2 ring-[var(--color-primary)]' : 'border-[var(--color-border)]'} bg-[var(--color-card)] p-8 shadow-sm">
+    <div class="md-pricing__grid">
+      {#each plans as plan (plan.name)}
+        <div class="md-card md-pricing__card {plan.isPopular ? 'md-pricing__card--popular md-card--elevated' : 'md-card--outlined'}">
           {#if plan.isPopular}
-            <div class="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[var(--color-primary)] px-3 py-1 text-xs font-bold text-white">
+            <div class="md-pricing__popular-badge">
               Most Popular
             </div>
           {/if}
           <div>
-            <h3 class="text-xl font-bold text-[var(--color-foreground)]">{plan.name}</h3>
-            <p class="mt-2 text-sm text-[var(--color-muted-foreground)]">{plan.description}</p>
-            <div class="mt-6 flex items-baseline gap-1">
-              <span class="text-4xl font-extrabold text-[var(--color-foreground)]">{plan.price}</span>
-              <span class="text-sm text-[var(--color-muted-foreground)]">/{plan.period}</span>
+            <h3 style="font-size: 1.25rem; font-weight: 700;">{plan.name}</h3>
+            <p style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.5rem;">{plan.description}</p>
+            <div class="md-pricing__price">
+              <span>{plan.price}</span>
+              <span style="font-size: 0.875rem; font-weight: 400; color: var(--md-sys-color-on-surface-variant);">/{plan.period}</span>
             </div>
-            <ul class="mt-8 space-y-3 text-sm text-[var(--color-foreground)]">
-              {#each plan.features as feat}
-                <li class="flex items-center gap-2">
-                  <span class="text-[var(--color-success)] font-bold">✓</span>
+            <ul style="list-style: none; padding: 0; margin-top: 1.5rem; display: flex; flex-direction: column; gap: 0.75rem; font-size: 0.875rem;">
+              {#each plan.features as feat, fIdx (fIdx)}
+                <li style="display: flex; align-items: center; gap: 0.5rem;">
+                  <span style="color: var(--md-sys-color-success); font-weight: 700;">✓</span>
                   <span>{feat}</span>
                 </li>
               {/each}
             </ul>
           </div>
-          <div class="mt-8">
+          <div style="margin-top: 2rem;">
             <Button
               href={plan.ctaHref}
-              variant={plan.isPopular ? 'primary' : 'outline'}
-              class="w-full text-center"
+              variant={plan.isPopular ? 'filled' : 'outlined'}
+              style="width: 100%;"
             >
               {plan.ctaText}
             </Button>
@@ -439,28 +384,28 @@ export function getComponentSources(): Record<string, string> {
   }
 </script>
 
-<section class="py-16" {style}>
-  <div class="mx-auto max-w-screen-md px-4 sm:px-6">
-    <h2 class="text-3xl font-bold text-center tracking-tight text-[var(--color-foreground)] mb-10">
+<section class="md-accordion" {style}>
+  <div class="md-container md-container--md">
+    <h2 style="font-size: 2.25rem; font-weight: 700; text-align: center; margin-bottom: 2.5rem;">
       {sectionTitle}
     </h2>
 
-    <div class="space-y-4">
-      {#each items as item, idx}
-        <div class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden">
+    <div>
+      {#each items as item, idx (idx)}
+        <div class="md-accordion__item">
           <button
             type="button"
             onclick={() => toggle(idx)}
             aria-expanded={openIndex === idx}
-            class="flex w-full items-center justify-between p-5 text-left font-semibold text-[var(--color-foreground)] hover:bg-[var(--color-muted)] transition-colors"
+            class="md-accordion__trigger"
           >
             <span>{item.question}</span>
-            <span class="text-lg transition-transform duration-200 {openIndex === idx ? 'rotate-180' : ''}">
+            <span style="transition: transform 200ms ease; transform: {openIndex === idx ? 'rotate(180deg)' : 'rotate(0)'};">
               ▼
             </span>
           </button>
           {#if openIndex === idx}
-            <div class="px-5 pb-5 pt-1 text-sm text-[var(--color-muted-foreground)] leading-relaxed border-t border-[var(--color-border)]">
+            <div class="md-accordion__content">
               {item.answer}
             </div>
           {/if}
@@ -487,28 +432,28 @@ export function getComponentSources(): Record<string, string> {
 
   let {
     sectionEyebrow = 'Testimonials',
-    sectionTitle = 'Loved by Modern Founders and Developers',
+    sectionTitle = 'Loved by Modern Software Teams',
     testimonials = [],
     style = ''
   }: Props = $props();
 </script>
 
-<section class="py-16 bg-[var(--color-muted)]/20" {style}>
-  <div class="mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8">
-    <div class="text-center max-w-3xl mx-auto mb-12">
-      <span class="text-xs font-bold uppercase tracking-wider text-[var(--color-primary)] mb-2 block">{sectionEyebrow}</span>
-      <h2 class="text-3xl font-bold tracking-tight text-[var(--color-foreground)] sm:text-4xl">{sectionTitle}</h2>
+<section style="padding: 4rem 0; background-color: var(--md-sys-color-surface-container-low); {style}">
+  <div class="md-container md-container--xl">
+    <div style="text-align: center; max-width: 680px; margin: 0 auto 3rem auto;">
+      <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--md-sys-color-primary); display: block; margin-bottom: 0.5rem;">{sectionEyebrow}</span>
+      <h2 style="font-size: 2.25rem; font-weight: 700;">{sectionTitle}</h2>
     </div>
 
-    <div class="grid grid-cols-1 gap-8 md:grid-cols-2">
-      {#each testimonials as item}
-        <div class="rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-card)] p-8 shadow-sm">
-          <p class="text-base italic text-[var(--color-foreground)] leading-relaxed mb-6">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 2rem;">
+      {#each testimonials as item, idx (idx)}
+        <div class="md-card md-card--elevated">
+          <p style="font-size: 1rem; font-style: italic; color: var(--md-sys-color-on-surface); line-height: 1.6; margin-bottom: 1.5rem;">
             "{item.quote}"
           </p>
           <div>
-            <div class="font-bold text-[var(--color-foreground)]">{item.author}</div>
-            <div class="text-xs text-[var(--color-muted-foreground)]">{item.role}</div>
+            <div style="font-weight: 700; color: var(--md-sys-color-on-surface);">{item.author}</div>
+            <div style="font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant);">{item.role}</div>
           </div>
         </div>
       {/each}
@@ -540,33 +485,33 @@ export function getComponentSources(): Record<string, string> {
   }: Props = $props();
 </script>
 
-<footer class="border-t border-[var(--color-border)] bg-[var(--color-card)] py-12" {style}>
-  <div class="mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8">
-    <div class="grid grid-cols-1 gap-8 lg:grid-cols-4">
-      <div class="lg:col-span-2">
-        <div class="flex items-center gap-2 font-bold text-lg text-[var(--color-foreground)]">
-          <div class="flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary)] text-white text-sm">
+<footer class="md-footer" {style}>
+  <div class="md-container md-container--xl">
+    <div class="md-footer__grid">
+      <div>
+        <div style="display: flex; align-items: center; gap: 0.75rem; font-weight: 700; font-size: 1.25rem;">
+          <div style="height: 32px; width: 32px; border-radius: var(--md-sys-shape-corner-small, 8px); background-color: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); display: flex; align-items: center; justify-content: center; font-size: 0.875rem;">
             {brandName.charAt(0)}
           </div>
           <span>{brandName}</span>
         </div>
-        <p class="mt-4 max-w-sm text-sm text-[var(--color-muted-foreground)]">
+        <p style="margin-top: 1rem; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant); max-width: 360px;">
           {tagline}
         </p>
-        <p class="mt-6 text-xs text-[var(--color-muted-foreground)]">
+        <p style="margin-top: 1.5rem; font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant);">
           {copyright}
         </p>
       </div>
 
-      {#each columns as col}
+      {#each columns as col, cIdx (cIdx)}
         <div>
-          <h4 class="text-sm font-semibold uppercase tracking-wider text-[var(--color-foreground)] mb-4">
+          <h4 style="font-size: 0.875rem; font-weight: 700; text-transform: uppercase; margin-bottom: 1rem;">
             {col.title}
           </h4>
-          <ul class="space-y-2 text-sm text-[var(--color-muted-foreground)]">
-            {#each col.links as link}
+          <ul style="list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">
+            {#each col.links as link (link.href)}
               <li>
-                <a href={link.href} class="hover:text-[var(--color-foreground)] transition-colors">
+                <a href={link.href} style="transition: color 150ms ease;">
                   {link.label}
                 </a>
               </li>
@@ -595,33 +540,32 @@ export function getComponentSources(): Record<string, string> {
   }: Props = $props();
 </script>
 
-<div class="flex min-h-screen bg-[var(--color-background)]">
-  <!-- Sidebar -->
-  <aside class="w-64 border-r border-[var(--color-border)] bg-[var(--color-card)] p-4 flex flex-col justify-between hidden md:flex">
+<div class="md-dashboard">
+  <aside class="md-dashboard__sidebar">
     <div>
-      <div class="flex items-center gap-2 font-bold text-lg text-[var(--color-foreground)] px-2 py-3 mb-6">
-        <div class="h-8 w-8 rounded-[var(--radius-md)] bg-[var(--color-primary)] text-white flex items-center justify-center font-bold">A</div>
+      <div style="display: flex; align-items: center; gap: 0.75rem; font-weight: 700; font-size: 1.25rem; margin-bottom: 2rem;">
+        <div style="height: 32px; width: 32px; border-radius: var(--md-sys-shape-corner-small, 8px); background-color: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); display: flex; align-items: center; justify-content: center;">A</div>
         <span>Acme SaaS</span>
       </div>
 
-      <nav class="space-y-1">
+      <nav style="display: flex; flex-direction: column; gap: 0.25rem;">
         <a
           href="/dashboard"
-          class="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-[var(--radius-md)] transition-colors {activeNav === 'dashboard' ? 'bg-[var(--color-accent)] text-[var(--color-primary)]' : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]'}"
+          style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border-radius: var(--md-sys-shape-corner-small, 8px); font-size: 0.875rem; font-weight: 500; background-color: {activeNav === 'dashboard' ? 'var(--md-sys-color-secondary-container)' : 'transparent'}; color: {activeNav === 'dashboard' ? 'var(--md-sys-color-on-secondary-container)' : 'var(--md-sys-color-on-surface-variant)'};"
         >
           <span>📊</span>
           <span>Analytics</span>
         </a>
         <a
           href="/dashboard/settings"
-          class="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-[var(--radius-md)] transition-colors {activeNav === 'settings' ? 'bg-[var(--color-accent)] text-[var(--color-primary)]' : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]'}"
+          style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border-radius: var(--md-sys-shape-corner-small, 8px); font-size: 0.875rem; font-weight: 500; background-color: {activeNav === 'settings' ? 'var(--md-sys-color-secondary-container)' : 'transparent'}; color: {activeNav === 'settings' ? 'var(--md-sys-color-on-secondary-container)' : 'var(--md-sys-color-on-surface-variant)'};"
         >
           <span>⚙️</span>
           <span>Settings</span>
         </a>
         <a
           href="/"
-          class="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-[var(--radius-md)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+          style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border-radius: var(--md-sys-shape-corner-small, 8px); font-size: 0.875rem; font-weight: 500; color: var(--md-sys-color-on-surface-variant);"
         >
           <span>🌐</span>
           <span>Public Site</span>
@@ -629,27 +573,19 @@ export function getComponentSources(): Record<string, string> {
       </nav>
     </div>
 
-    <div class="border-t border-[var(--color-border)] pt-4 px-2">
-      <div class="flex items-center gap-3">
-        <div class="h-8 w-8 rounded-full bg-[var(--color-muted)] flex items-center justify-center font-semibold text-xs">AI</div>
-        <div>
-          <div class="text-xs font-semibold text-[var(--color-foreground)]">Developer Mode</div>
-          <div class="text-[10px] text-[var(--color-muted-foreground)]">SvelteKit 3.1.0</div>
-        </div>
-      </div>
+    <div style="border-top: 1px solid var(--md-sys-color-outline-variant); padding-top: 1rem;">
+      <div style="font-size: 0.75rem; font-weight: 600; color: var(--md-sys-color-on-surface);">Google MD3 Standard</div>
+      <div style="font-size: 0.6875rem; color: var(--md-sys-color-on-surface-variant);">SvelteKit 3.1.0</div>
     </div>
   </aside>
 
-  <!-- Main Content -->
-  <main class="flex-1 flex flex-col min-w-0 overflow-y-auto">
-    <header class="h-16 border-b border-[var(--color-border)] bg-[var(--color-card)] flex items-center justify-between px-6">
-      <h1 class="text-xl font-bold text-[var(--color-foreground)]">{title}</h1>
-      <div class="flex items-center gap-3">
-        <a href="/dashboard/settings" class="text-sm font-medium text-[var(--color-primary)] hover:underline">Workspace</a>
-      </div>
+  <main class="md-dashboard__main">
+    <header class="md-dashboard__header">
+      <h1 style="font-size: 1.25rem; font-weight: 700;">{title}</h1>
+      <a href="/dashboard/settings" style="font-size: 0.875rem; font-weight: 500; color: var(--md-sys-color-primary);">Workspace Settings</a>
     </header>
 
-    <div class="p-6">
+    <div class="md-dashboard__content">
       {@render children?.()}
     </div>
   </main>
@@ -672,13 +608,13 @@ export function getComponentSources(): Record<string, string> {
   let { cards = [], style = '' }: Props = $props();
 </script>
 
-<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" {style}>
-  {#each cards as card}
-    <div class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-card)] p-5 shadow-sm">
-      <div class="text-xs font-medium text-[var(--color-muted-foreground)] uppercase tracking-wider">{card.title}</div>
-      <div class="mt-2 flex items-baseline justify-between">
-        <div class="text-2xl font-bold text-[var(--color-foreground)]">{card.value}</div>
-        <span class="inline-flex items-center text-xs font-semibold {card.trend === 'up' ? 'text-[var(--color-success)]' : 'text-[var(--color-destructive)]'}">
+<div class="md-kpi-grid" {style}>
+  {#each cards as card, idx (idx)}
+    <div class="md-card md-card--elevated">
+      <div class="md-kpi-card__title">{card.title}</div>
+      <div style="display: flex; align-items: baseline; justify-content: space-between; margin-top: 0.5rem;">
+        <div class="md-kpi-card__val">{card.value}</div>
+        <span style="font-size: 0.75rem; font-weight: 600; color: {card.trend === 'up' ? 'var(--md-sys-color-success)' : 'var(--md-sys-color-error)'};">
           {card.change}
         </span>
       </div>
@@ -703,26 +639,26 @@ export function getComponentSources(): Record<string, string> {
   }: Props = $props();
 </script>
 
-<div class="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-card)] overflow-hidden shadow-sm" {style}>
+<div class="md-table-container" {style}>
   {#if title}
-    <div class="p-4 border-b border-[var(--color-border)] font-bold text-[var(--color-foreground)]">
+    <div style="padding: 1rem 1.5rem; font-weight: 700; border-bottom: 1px solid var(--md-sys-color-outline-variant);">
       {title}
     </div>
   {/if}
-  <div class="overflow-x-auto">
-    <table class="w-full text-left text-sm text-[var(--color-foreground)]">
-      <thead class="bg-[var(--color-muted)]/50 text-xs uppercase tracking-wider text-[var(--color-muted-foreground)]">
+  <div style="overflow-x: auto;">
+    <table class="md-table">
+      <thead>
         <tr>
-          {#each columns as col}
-            <th class="px-6 py-3 font-semibold">{col}</th>
+          {#each columns as col (col)}
+            <th>{col}</th>
           {/each}
         </tr>
       </thead>
-      <tbody class="divide-y divide-[var(--color-border)]">
-        {#each rows as row}
-          <tr class="hover:bg-[var(--color-muted)]/30 transition-colors">
-            {#each row as cell}
-              <td class="px-6 py-4 whitespace-nowrap">{cell}</td>
+      <tbody>
+        {#each rows as row, rIdx (rIdx)}
+          <tr>
+            {#each row as cell, cIdx (cIdx)}
+              <td>{cell}</td>
             {/each}
           </tr>
         {/each}
@@ -762,62 +698,58 @@ export function getComponentSources(): Record<string, string> {
 
   function handleSubmit(e: SubmitEvent) {
     e.preventDefault();
-    savedMessage = 'Settings saved successfully! (Mocked validation passing)';
+    savedMessage = 'Settings saved successfully! (Google MD3 Form Validation passed)';
     setTimeout(() => {
       savedMessage = '';
     }, 4000);
   }
 </script>
 
-<div class="max-w-xl rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-card)] p-6 shadow-sm" {style}>
-  <h2 class="text-lg font-bold text-[var(--color-foreground)] mb-4">Workspace Preferences</h2>
+<div class="md-card md-card--outlined" style="max-width: 580px; {style}">
+  <h2 style="font-size: 1.125rem; font-weight: 700; margin-bottom: 1.25rem;">Workspace Preferences</h2>
 
   {#if savedMessage}
-    <div class="mb-4 rounded-[var(--radius-md)] bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-800 font-medium">
+    <div style="margin-bottom: 1.25rem; padding: 0.75rem 1rem; border-radius: var(--md-sys-shape-corner-small, 8px); background-color: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container); font-size: 0.875rem; font-weight: 500;">
       {savedMessage}
     </div>
   {/if}
 
-  <form onsubmit={handleSubmit} class="space-y-4">
-    <div>
-      <label for="workspace-name" class="block text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)] mb-1">
-        Workspace Name
-      </label>
+  <form onsubmit={handleSubmit}>
+    <div class="md-form-group">
+      <label for="workspace-name" class="md-label">Workspace Name</label>
       <input
         id="workspace-name"
         type="text"
         bind:value={name}
         required
-        class="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+        class="md-input"
       />
     </div>
 
-    <div>
-      <label for="workspace-email" class="block text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)] mb-1">
-        Notification Email
-      </label>
+    <div class="md-form-group">
+      <label for="workspace-email" class="md-label">Notification Email</label>
       <input
         id="workspace-email"
         type="email"
         bind:value={email}
         required
-        class="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm text-[var(--color-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-ring)]"
+        class="md-input"
       />
     </div>
 
-    <div class="flex items-center gap-2 pt-2">
+    <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; margin-bottom: 1.5rem;">
       <input
         id="notifications-toggle"
         type="checkbox"
         bind:checked={notifications}
-        class="h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-ring)]"
+        style="height: 18px; width: 18px; accent-color: var(--md-sys-color-primary);"
       />
-      <label for="notifications-toggle" class="text-sm font-medium text-[var(--color-foreground)]">
+      <label for="notifications-toggle" style="font-size: 0.875rem;">
         Enable deployment and build notification webhooks
       </label>
     </div>
 
-    <div class="pt-4 border-t border-[var(--color-border)] flex justify-end">
+    <div style="border-top: 1px solid var(--md-sys-color-outline-variant); padding-top: 1rem; display: flex; justify-content: flex-end;">
       <Button type="submit">Save Changes</Button>
     </div>
   </form>

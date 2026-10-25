@@ -20,40 +20,38 @@
   }
 </script>
 
-<header class="h-14 border-b border-[var(--color-studio-border)] bg-[var(--color-studio-panel)] px-4 flex items-center justify-between z-30 select-none">
+<header class="studio-topbar">
   <!-- Left: Brand, Project Name & Save Status -->
-  <div class="flex items-center gap-4">
-    <div class="flex items-center gap-2">
-      <div class="h-7 w-7 rounded bg-blue-600 flex items-center justify-center font-bold text-white text-sm shadow">
-        ⚡
-      </div>
-      <span class="font-bold text-sm tracking-tight text-white">{editor.blueprint.meta.name}</span>
+  <div class="studio-topbar__left">
+    <div class="brand">
+      <div class="brand-icon">⚡</div>
+      <span class="brand-name">{editor.blueprint.meta.name}</span>
     </div>
 
-    <div class="h-4 w-[1px] bg-[var(--color-studio-border)]"></div>
+    <div class="divider"></div>
 
-    <div class="flex items-center gap-2 text-xs">
+    <div class="status-indicator">
       {#if editor.isSaving}
-        <span class="flex items-center gap-1.5 text-amber-400">
-          <span class="h-2 w-2 rounded-full bg-amber-400 animate-ping"></span>
+        <span class="status status--saving">
+          <span class="status-dot status-dot--pulse"></span>
           Saving...
         </span>
       {:else}
-        <span class="flex items-center gap-1.5 text-emerald-400 font-medium">
-          <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+        <span class="status status--saved">
+          <span class="status-dot"></span>
           Saved ({editor.lastSavedAt})
         </span>
       {/if}
     </div>
 
     <!-- Undo / Redo -->
-    <div class="flex items-center bg-slate-800/80 rounded border border-[var(--color-studio-border)] p-0.5">
+    <div class="studio-btn-group">
       <button
         type="button"
         onclick={() => editor.undo()}
         disabled={!editor.canUndo}
         title="Undo (Ctrl+Z)"
-        class="px-2 py-1 text-xs rounded hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent text-slate-200"
+        class="studio-btn"
       >
         ↺
       </button>
@@ -62,7 +60,7 @@
         onclick={() => editor.redo()}
         disabled={!editor.canRedo}
         title="Redo (Ctrl+Shift+Z)"
-        class="px-2 py-1 text-xs rounded hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent text-slate-200"
+        class="studio-btn"
       >
         ↻
       </button>
@@ -70,34 +68,34 @@
   </div>
 
   <!-- Center: Viewport Breakpoint Switcher & Zoom -->
-  <div class="flex items-center gap-4">
-    <div class="flex items-center bg-slate-800/80 rounded border border-[var(--color-studio-border)] p-0.5">
-      {#each breakpoints as bp}
+  <div class="studio-topbar__center">
+    <div class="studio-btn-group">
+      {#each breakpoints as bp (bp.key)}
         <button
           type="button"
           onclick={() => editor.setBreakpoint(bp.key)}
-          class="flex items-center gap-1.5 px-3 py-1 text-xs rounded transition-colors {editor.activeBreakpoint === bp.key ? 'bg-blue-600 text-white font-semibold shadow' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'}"
+          class="studio-btn {editor.activeBreakpoint === bp.key ? 'studio-btn--active' : ''}"
         >
           <span>{bp.icon}</span>
           <span>{bp.label}</span>
-          <span class="text-[10px] opacity-60">({bp.width})</span>
+          <span class="bp-width">({bp.width})</span>
         </button>
       {/each}
     </div>
 
-    <div class="flex items-center bg-slate-800/80 rounded border border-[var(--color-studio-border)] p-0.5 text-xs text-slate-300">
+    <div class="studio-btn-group zoom-group">
       <button
         type="button"
         onclick={() => editor.setZoom(editor.zoom - 10)}
-        class="px-2 py-1 hover:bg-slate-700 rounded"
+        class="studio-btn"
       >
         -
       </button>
-      <span class="px-2 font-mono text-[11px]">{editor.zoom}%</span>
+      <span class="zoom-level">{editor.zoom}%</span>
       <button
         type="button"
         onclick={() => editor.setZoom(editor.zoom + 10)}
-        class="px-2 py-1 hover:bg-slate-700 rounded"
+        class="studio-btn"
       >
         +
       </button>
@@ -105,14 +103,14 @@
   </div>
 
   <!-- Right: Page Switcher, Mode Toggle & AI Export -->
-  <div class="flex items-center gap-3">
+  <div class="studio-topbar__right">
     <!-- Page Selector -->
     <select
       value={editor.activePageId}
       onchange={(e) => editor.setActivePage((e.target as HTMLSelectElement).value)}
-      class="bg-slate-800 border border-[var(--color-studio-border)] rounded text-xs px-2.5 py-1.5 text-slate-200 font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
+      class="studio-select page-select"
     >
-      {#each editor.blueprint.pages as page}
+      {#each editor.blueprint.pages as page (page.id)}
         <option value={page.id}>{page.path} ({page.title.slice(0, 20)}...)</option>
       {/each}
     </select>
@@ -121,7 +119,7 @@
     <button
       type="button"
       onclick={() => editor.toggleInteractiveMode()}
-      class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium border transition-colors {editor.isInteractiveMode ? 'bg-emerald-600 border-emerald-500 text-white shadow' : 'bg-slate-800 border-[var(--color-studio-border)] text-slate-300 hover:bg-slate-700'}"
+      class="studio-btn mode-btn {editor.isInteractiveMode ? 'mode-btn--interactive' : ''}"
     >
       <span>{editor.isInteractiveMode ? '▶ Interactive' : '✏️ Edit Mode'}</span>
     </button>
@@ -131,7 +129,7 @@
       type="button"
       onclick={() => editor.downloadBlueprintJson()}
       title="Download raw project.blueprint.json"
-      class="px-2.5 py-1.5 text-xs rounded border border-[var(--color-studio-border)] bg-slate-800 text-slate-300 hover:bg-slate-700 font-medium"
+      class="studio-btn json-btn"
     >
       JSON
     </button>
@@ -141,10 +139,105 @@
       type="button"
       onclick={handleExport}
       disabled={isExporting}
-      class="flex items-center gap-2 px-4 py-1.5 text-xs rounded font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-md transition-all active:scale-95 disabled:opacity-50"
+      class="studio-btn studio-btn--primary export-btn"
     >
       <span>⚡</span>
       <span>{isExporting ? 'Generating ZIP...' : 'Export for AI Agents'}</span>
     </button>
   </div>
 </header>
+
+<style>
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .brand-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--md-sys-shape-corner-extra-small, 4px);
+    background-color: var(--md-sys-color-primary);
+    color: var(--md-sys-color-on-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.875rem;
+  }
+  .brand-name {
+    font-weight: 700;
+    font-size: 0.875rem;
+    letter-spacing: -0.01em;
+    color: var(--md-sys-color-on-surface);
+  }
+  .divider {
+    width: 1px;
+    height: 16px;
+    background-color: var(--md-sys-color-outline-variant);
+  }
+  .status-indicator {
+    display: flex;
+    align-items: center;
+    font-size: 0.75rem;
+  }
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+  .status--saved {
+    color: var(--md-sys-color-success);
+  }
+  .status--saving {
+    color: #FBBF24;
+  }
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: var(--md-sys-shape-corner-full, 9999px);
+    background-color: currentColor;
+  }
+  .status-dot--pulse {
+    animation: status-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  @keyframes status-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .4; }
+  }
+  .bp-width {
+    font-size: 0.625rem;
+    opacity: 0.65;
+  }
+  .zoom-group {
+    padding: 0 4px;
+  }
+  .zoom-level {
+    font-family: var(--md-sys-font-mono);
+    font-size: 0.75rem;
+    padding: 0 0.5rem;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+  .page-select {
+    width: auto;
+    min-width: 150px;
+    max-width: 200px;
+  }
+  .mode-btn {
+    border: 1px solid var(--md-sys-color-outline-variant);
+    background-color: var(--md-sys-color-surface-container-high);
+  }
+  .mode-btn--interactive {
+    background-color: var(--md-sys-color-success-container) !important;
+    color: var(--md-sys-color-on-success-container) !important;
+    border-color: var(--md-sys-color-success) !important;
+  }
+  .json-btn {
+    border: 1px solid var(--md-sys-color-outline-variant);
+    background-color: var(--md-sys-color-surface-container-high);
+  }
+  .export-btn {
+    font-size: 0.8125rem;
+    letter-spacing: 0.02em;
+  }
+</style>
