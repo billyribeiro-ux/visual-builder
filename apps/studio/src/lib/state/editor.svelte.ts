@@ -35,7 +35,7 @@ class EditorState {
     this.blueprint.pages.find((p) => p.id === this.activePageId) || this.blueprint.pages[0]
   );
 
-  selectedNode = $derived<BlueprintNode | null>(() => {
+  selectedNode = $derived.by<BlueprintNode | null>(() => {
     if (!this.selectedNodeId || !this.activePage) return null;
     return findNodeById(this.activePage.rootNode, this.selectedNodeId);
   });

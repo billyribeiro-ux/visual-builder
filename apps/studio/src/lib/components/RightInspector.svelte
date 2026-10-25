@@ -36,7 +36,7 @@
         <div class="header-row">
           <span class="node-name">{selectedNode.name}</span>
           <span class="node-type-badge">
-            {selectedNode.componentType.split('/')[1] || selectedNode.componentType}
+            {selectedNode?.componentType ? (selectedNode.componentType.split('/')[1] || selectedNode.componentType) : ''}
           </span>
         </div>
         <div class="node-id truncate">
