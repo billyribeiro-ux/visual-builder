@@ -1,6 +1,11 @@
 <script lang="ts">
   import { editor } from '../state/editor.svelte.js';
   import type { BreakpointKey } from '@app-viz/schema';
+  import {
+    generatePageRoute,
+    generateAppCss,
+    generateAgentsMarkdown
+  } from '@app-viz/codegen';
 
   const breakpoints: { key: BreakpointKey; label: string; icon: string; width: string }[] = [
     { key: 'mobile', label: 'Mobile', icon: '📱', width: '375px' },
@@ -13,9 +18,34 @@
   let showTemplateModal = $state(false);
   let showSnapshotsModal = $state(false);
   let showPreflightModal = $state(false);
+  let showCodeModal = $state(false);
+  let activeCodeTab = $state<'page' | 'css' | 'agents' | 'blueprint'>('page');
+  let copySuccess = $state(false);
+
   let snapshotLabel = $state('');
   let importJsonText = $state('');
   let importError = $state('');
+
+  const liveCodeOutput = $derived.by(() => {
+    if (!showCodeModal) return '';
+    if (activeCodeTab === 'page' && editor.activePage) {
+      return generatePageRoute(editor.activePage, editor.blueprint);
+    }
+    if (activeCodeTab === 'css') {
+      return generateAppCss(editor.blueprint.tokens, editor.blueprint);
+    }
+    if (activeCodeTab === 'agents') {
+      return generateAgentsMarkdown(editor.blueprint);
+    }
+    return JSON.stringify(editor.blueprint, null, 2);
+  });
+
+  function closeAllModals() {
+    showTemplateModal = false;
+    showSnapshotsModal = false;
+    showPreflightModal = false;
+    showCodeModal = false;
+  }
 
   async function handleExport() {
     isExporting = true;
@@ -24,6 +54,13 @@
     } finally {
       isExporting = false;
     }
+  }
+
+  async function handleCopyCode() {
+    if (!liveCodeOutput || typeof navigator === 'undefined') return;
+    await navigator.clipboard.writeText(liveCodeOutput);
+    copySuccess = true;
+    setTimeout(() => (copySuccess = false), 2000);
   }
 
   function handleSaveSnapshot() {
@@ -65,9 +102,9 @@
     <button
       type="button"
       onclick={() => {
-        showTemplateModal = !showTemplateModal;
-        showSnapshotsModal = false;
-        showPreflightModal = false;
+        const next = !showTemplateModal;
+        closeAllModals();
+        showTemplateModal = next;
       }}
       class="studio-btn top-pill-btn"
       title="Switch starter template or import JSON"
@@ -114,9 +151,9 @@
       <button
         type="button"
         onclick={() => {
-          showSnapshotsModal = !showSnapshotsModal;
-          showTemplateModal = false;
-          showPreflightModal = false;
+          const next = !showSnapshotsModal;
+          closeAllModals();
+          showSnapshotsModal = next;
         }}
         title="Project Snapshots & Restore"
         class="studio-btn"
@@ -163,7 +200,7 @@
     </div>
   </div>
 
-  <!-- Right: Page Switcher, Preflight Badge, Mode Toggle & AI Export -->
+  <!-- Right: Page Switcher, Preflight Badge, Code View, Mode Toggle & AI Export -->
   <div class="studio-topbar__right">
     <select
       aria-label="Active page route"
@@ -180,18 +217,32 @@
     <button
       type="button"
       onclick={() => {
-        showPreflightModal = !showPreflightModal;
-        showTemplateModal = false;
-        showSnapshotsModal = false;
+        const next = !showPreflightModal;
+        closeAllModals();
+        showPreflightModal = next;
       }}
       class="studio-btn preflight-btn {editor.preflightReport.valid && editor.preflightReport.issues.length === 0 ? 'preflight-btn--ok' : 'preflight-btn--warn'}"
       title="Inspect Preflight & Export Readiness"
     >
       {#if editor.preflightReport.valid && editor.preflightReport.issues.length === 0}
-        ✓ MD3 Ready
+        ✓ MD3 ({editor.preflightReport.score}%)
       {:else}
         ⚠ {editor.preflightReport.issues.length} Notice(s)
       {/if}
+    </button>
+
+    <!-- Live Svelte 5 Code Inspector -->
+    <button
+      type="button"
+      onclick={() => {
+        const next = !showCodeModal;
+        closeAllModals();
+        showCodeModal = next;
+      }}
+      title="Inspect Live Generated Svelte 5 & MD3 CSS Code"
+      class="studio-btn json-btn"
+    >
+      &lt;/&gt; Code
     </button>
 
     <!-- Interactive Mode Toggle -->
@@ -201,16 +252,6 @@
       class="studio-btn mode-btn {editor.isInteractiveMode ? 'mode-btn--interactive' : ''}"
     >
       <span>{editor.isInteractiveMode ? '▶ Interactive' : '✏️ Edit Mode'}</span>
-    </button>
-
-    <!-- Download Blueprint JSON -->
-    <button
-      type="button"
-      onclick={() => editor.downloadBlueprintJson()}
-      title="Download raw project.blueprint.json"
-      class="studio-btn json-btn"
-    >
-      JSON
     </button>
 
     <!-- Export for AI Agents ZIP Button -->
@@ -277,7 +318,10 @@
         {#if importError}
           <div class="import-error">{importError}</div>
         {/if}
-        <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
+        <div style="display: flex; justify-content: space-between; margin-top: 0.5rem;">
+          <button type="button" class="studio-btn" onclick={() => editor.downloadBlueprintJson()}>
+            ⬇ Download Current JSON
+          </button>
           <button type="button" class="studio-btn studio-btn--primary" onclick={handleImportJson}>
             Import JSON Blueprint
           </button>
@@ -339,33 +383,78 @@
 {#if showPreflightModal}
   <div class="topbar-modal" role="dialog" aria-label="Preflight Audit Report">
     <div class="topbar-modal__header">
-      <span class="topbar-modal__title">Export Preflight & Google MD3 Audit</span>
+      <span class="topbar-modal__title">Export Preflight & Google MD3 Audit ({editor.preflightReport.score}%)</span>
       <button type="button" class="studio-btn" onclick={() => (showPreflightModal = false)}>✕</button>
     </div>
     <div class="topbar-modal__body">
       <div class="preflight-summary">
         <span>Routes: <strong>{editor.blueprint.pages.length}</strong></span>
         <span>Layouts: <strong>{editor.blueprint.layouts.length}</strong></span>
-        <span>Target: <strong>Svelte {editor.blueprint.target.svelte} / Kit {editor.blueprint.target.svelteKit}</strong></span>
+        <span>Target: <strong>Svelte {editor.blueprint.target.svelteVersion} / Kit {editor.blueprint.target.sveltekitVersion}</strong></span>
         <span>CSS Policy: <strong>Pure Vanilla MD3</strong></span>
       </div>
-      {#if editor.preflightReport.issues.length === 0}
-        <div class="preflight-pass">
-          ✓ All schema, route integrity, accessibility, and Google MD3 token checks passed with 0 issues.
-        </div>
-      {:else}
-        <div class="snapshot-list">
-          {#each editor.preflightReport.issues as issue, i (i)}
-            <div class="snapshot-row">
-              <div>
-                <span class="issue-badge issue-badge--{issue.severity}">{issue.severity.toUpperCase()}</span>
-                <span style="font-size: 0.75rem; margin-left: 0.5rem;">{issue.message}</span>
+      <div class="snapshot-list">
+        {#each editor.preflightReport.checks as check (check.id)}
+          <div class="snapshot-row">
+            <div>
+              <span class="issue-badge issue-badge--{check.status}">{check.status.toUpperCase()}</span>
+              <span style="font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;">{check.label}</span>
+              <div style="font-size: 0.6875rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.2rem;">
+                {check.detail}
               </div>
-              <span style="font-family: var(--md-sys-font-mono); font-size: 0.6875rem; color: var(--md-sys-color-outline);">{issue.code}</span>
             </div>
-          {/each}
+          </div>
+        {/each}
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showCodeModal}
+  <div class="topbar-modal topbar-modal--wide" role="dialog" aria-label="Live Generated Svelte 5 Code">
+    <div class="topbar-modal__header">
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <span class="topbar-modal__title">Live Code & AI Handoff Preview</span>
+        <div class="studio-btn-group">
+          <button
+            type="button"
+            onclick={() => (activeCodeTab = 'page')}
+            class="studio-btn {activeCodeTab === 'page' ? 'studio-btn--active' : ''}"
+          >
+            +page.svelte ({editor.activePage?.path})
+          </button>
+          <button
+            type="button"
+            onclick={() => (activeCodeTab = 'css')}
+            class="studio-btn {activeCodeTab === 'css' ? 'studio-btn--active' : ''}"
+          >
+            src/app.css (MD3)
+          </button>
+          <button
+            type="button"
+            onclick={() => (activeCodeTab = 'agents')}
+            class="studio-btn {activeCodeTab === 'agents' ? 'studio-btn--active' : ''}"
+          >
+            AGENTS.md
+          </button>
+          <button
+            type="button"
+            onclick={() => (activeCodeTab = 'blueprint')}
+            class="studio-btn {activeCodeTab === 'blueprint' ? 'studio-btn--active' : ''}"
+          >
+            project.blueprint.json
+          </button>
         </div>
-      {/if}
+      </div>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <button type="button" class="studio-btn studio-btn--primary" onclick={handleCopyCode}>
+          {copySuccess ? '✓ Copied!' : '📋 Copy Code'}
+        </button>
+        <button type="button" class="studio-btn" onclick={() => (showCodeModal = false)}>✕</button>
+      </div>
+    </div>
+    <div class="topbar-modal__body">
+      <pre class="code-preview-block"><code>{liveCodeOutput}</code></pre>
     </div>
   </div>
 {/if}
@@ -397,7 +486,7 @@
     border: 1px solid transparent;
     border-radius: 4px;
     padding: 0.125rem 0.375rem;
-    width: 9.5rem;
+    width: 9rem;
   }
   .brand-name-input:hover,
   .brand-name-input:focus {
@@ -459,8 +548,8 @@
   }
   .page-select {
     width: auto;
-    min-width: 140px;
-    max-width: 190px;
+    min-width: 135px;
+    max-width: 180px;
   }
   .preflight-btn {
     font-size: 0.6875rem;
@@ -494,14 +583,17 @@
     top: 56px;
     left: 50%;
     transform: translateX(-50%);
-    width: 520px;
-    max-width: 92vw;
+    width: 540px;
+    max-width: 94vw;
     background-color: var(--md-sys-color-surface-container-high);
     border: 1px solid var(--md-sys-color-outline-variant);
     border-radius: var(--md-sys-shape-corner-medium);
     box-shadow: var(--md-sys-elevation-level3);
     z-index: 100;
     overflow: hidden;
+  }
+  .topbar-modal--wide {
+    width: 820px;
   }
   .topbar-modal__header {
     display: flex;
@@ -520,6 +612,19 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
+  }
+  .code-preview-block {
+    background-color: #0C0E12;
+    color: #D5E3FF;
+    font-family: var(--md-sys-font-mono);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--md-sys-color-outline-variant);
+    max-height: 68vh;
+    overflow: auto;
+    margin: 0;
   }
   .template-grid {
     display: grid;
@@ -566,7 +671,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    max-height: 220px;
+    max-height: 260px;
     overflow-y: auto;
   }
   .snapshot-row {
@@ -587,25 +692,22 @@
     padding-bottom: 0.5rem;
     border-bottom: 1px solid var(--md-sys-color-outline-variant);
   }
-  .preflight-pass {
-    padding: 0.75rem;
-    border-radius: var(--md-sys-shape-corner-small);
-    background-color: var(--md-sys-color-success-container);
-    color: var(--md-sys-color-on-success-container);
-    font-size: 0.75rem;
-    font-weight: 600;
-  }
   .issue-badge {
     font-size: 0.625rem;
     font-family: var(--md-sys-font-mono);
     padding: 0.125rem 0.375rem;
     border-radius: 4px;
+    font-weight: 700;
   }
-  .issue-badge--error {
+  .issue-badge--pass {
+    background-color: var(--md-sys-color-success-container);
+    color: var(--md-sys-color-on-success-container);
+  }
+  .issue-badge--fail, .issue-badge--error {
     background-color: var(--md-sys-color-error);
     color: #fff;
   }
-  .issue-badge--warning {
+  .issue-badge--warn, .issue-badge--warning {
     background-color: #FBBF24;
     color: #1B1B1F;
   }

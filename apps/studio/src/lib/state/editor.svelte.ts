@@ -10,8 +10,11 @@ import {
 import {
   HistoryManager,
   type EditorCommand,
-  findNodeById
+  findNodeById,
+  findNodeParent,
+  cloneSubtreeWithNewIds
 } from '@app-viz/engine';
+import { getAllManifests } from '@app-viz/components';
 import { generateFullExport, createDeterministicZip } from '@app-viz/codegen';
 
 export interface ProjectSnapshot {
@@ -21,8 +24,18 @@ export interface ProjectSnapshot {
   blueprint: ProjectBlueprint;
 }
 
+export interface SavedSymbol {
+  id: string;
+  name: string;
+  componentType: string;
+  createdAt: string;
+  node: BlueprintNode;
+}
+
 const STORAGE_KEY_BLUEPRINT = 'app-viz-studio-blueprint-v1';
 const STORAGE_KEY_SNAPSHOTS = 'app-viz-studio-snapshots-v1';
+const STORAGE_KEY_FAVORITES = 'app-viz-studio-favorites-v1';
+const STORAGE_KEY_SYMBOLS = 'app-viz-studio-symbols-v1';
 
 function findNodePath(root: BlueprintNode, targetId: string): BlueprintNode[] | null {
   if (root.id === targetId) return [root];
@@ -31,6 +44,15 @@ function findNodePath(root: BlueprintNode, targetId: string): BlueprintNode[] | 
     if (subPath) return [root, ...subPath];
   }
   return null;
+}
+
+export function isContainerComponent(componentType: string): boolean {
+  return (
+    componentType === 'structure/container' ||
+    componentType === 'structure/section' ||
+    componentType === 'structure/grid' ||
+    componentType === 'app/dashboard-shell'
+  );
 }
 
 class EditorState {
@@ -49,6 +71,15 @@ class EditorState {
   isSaving = $state<boolean>(false);
   lastSavedAt = $state<string>('Saved locally');
   snapshots = $state<ProjectSnapshot[]>([]);
+  clipboardNode = $state<BlueprintNode | null>(null);
+  favoriteComponents = $state<string[]>([
+    'hero/split-hero',
+    'marketing/feature-grid',
+    'marketing/pricing-table',
+    'app/kpi-grid',
+    'app/data-table'
+  ]);
+  customSymbols = $state<SavedSymbol[]>([]);
 
   // Derived states (tracked via this.revision)
   canUndo = $derived.by(() => {
@@ -131,6 +162,14 @@ class EditorState {
       if (rawSnaps) {
         this.snapshots = JSON.parse(rawSnaps);
       }
+      const rawFavs = window.localStorage.getItem(STORAGE_KEY_FAVORITES);
+      if (rawFavs) {
+        this.favoriteComponents = JSON.parse(rawFavs);
+      }
+      const rawSyms = window.localStorage.getItem(STORAGE_KEY_SYMBOLS);
+      if (rawSyms) {
+        this.customSymbols = JSON.parse(rawSyms);
+      }
     } catch {
       // Ignore corrupt storage
     }
@@ -188,13 +227,257 @@ class EditorState {
     }
   }
 
+  // Structural & Clipboard Operations
+  copySelectedNode() {
+    if (!this.selectedNode) return;
+    this.clipboardNode = structuredClone($state.snapshot(this.selectedNode));
+  }
+
+  pasteNode(targetNodeId?: string) {
+    if (!this.clipboardNode || !this.activePage) return;
+    const cloned = cloneSubtreeWithNewIds(this.clipboardNode);
+    const baseTargetId = targetNodeId || this.selectedNodeId || this.activePage.rootNode.id;
+    const targetNode = this.findNodeAnywhere(baseTargetId);
+
+    if (targetNode && isContainerComponent(targetNode.componentType)) {
+      this.dispatch({
+        type: 'INSERT_NODE',
+        targetParentId: targetNode.id,
+        node: cloned
+      });
+      this.selectNode(cloned.id);
+      return;
+    }
+
+    const parentInfo = this.findParentAnywhere(baseTargetId);
+    if (parentInfo) {
+      this.dispatch({
+        type: 'INSERT_NODE',
+        targetParentId: parentInfo.parent.id,
+        index: parentInfo.index + 1,
+        node: cloned
+      });
+      this.selectNode(cloned.id);
+    } else {
+      this.dispatch({
+        type: 'INSERT_NODE',
+        targetParentId: this.activePage.rootNode.id,
+        node: cloned
+      });
+      this.selectNode(cloned.id);
+    }
+  }
+
+  duplicateSelectedNode() {
+    if (!this.selectedNodeId) return;
+    this.dispatch({ type: 'DUPLICATE_NODE', nodeId: this.selectedNodeId });
+  }
+
+  deleteSelectedNode() {
+    if (!this.selectedNodeId) return;
+    const id = this.selectedNodeId;
+    this.dispatch({ type: 'DELETE_NODE', nodeId: id });
+    this.selectNode(null);
+  }
+
+  reorderSelectedNode(direction: 'up' | 'down') {
+    if (!this.selectedNodeId) return;
+    this.dispatch({ type: 'REORDER_NODE', nodeId: this.selectedNodeId, direction });
+  }
+
+  wrapNode(
+    nodeId: string,
+    wrapperType: 'structure/container' | 'structure/section' | 'structure/grid' = 'structure/section'
+  ) {
+    const wrapperId = crypto.randomUUID();
+    this.dispatch({ type: 'WRAP_NODE', nodeId, wrapperId, wrapperType });
+    this.selectNode(wrapperId);
+  }
+
+  unwrapNode(nodeId: string) {
+    this.dispatch({ type: 'UNWRAP_NODE', nodeId });
+  }
+
+  private findNodeAnywhere(nodeId: string): BlueprintNode | null {
+    for (const page of this.blueprint.pages) {
+      const found = findNodeById(page.rootNode, nodeId);
+      if (found) return found;
+    }
+    for (const layout of this.blueprint.layouts) {
+      const found = findNodeById(layout.rootNode, nodeId);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  private findParentAnywhere(
+    nodeId: string
+  ): { parent: BlueprintNode; index: number } | null {
+    for (const page of this.blueprint.pages) {
+      const found = findNodeParent(page.rootNode, nodeId);
+      if (found) return found;
+    }
+    for (const layout of this.blueprint.layouts) {
+      const found = findNodeParent(layout.rootNode, nodeId);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  private resolveDropTarget(
+    targetNodeId: string,
+    position: 'before' | 'inside' | 'after'
+  ): { targetParentId: string; index?: number } | null {
+    const targetNode = this.findNodeAnywhere(targetNodeId);
+    if (!targetNode) return null;
+
+    if (position === 'inside' && isContainerComponent(targetNode.componentType)) {
+      return { targetParentId: targetNode.id, index: undefined };
+    }
+
+    const parentInfo = this.findParentAnywhere(targetNodeId);
+    if (parentInfo) {
+      const index = position === 'before' ? parentInfo.index : parentInfo.index + 1;
+      return { targetParentId: parentInfo.parent.id, index };
+    }
+
+    if (isContainerComponent(targetNode.componentType)) {
+      return {
+        targetParentId: targetNode.id,
+        index: position === 'before' ? 0 : undefined
+      };
+    }
+
+    return this.activePage ? { targetParentId: this.activePage.rootNode.id } : null;
+  }
+
+  dropComponentOnTarget(
+    componentType: string,
+    targetNodeId: string,
+    position: 'before' | 'inside' | 'after' = 'after'
+  ) {
+    const manifest = getAllManifests().find((m) => m.type === componentType);
+    if (!manifest) return;
+
+    const resolved = this.resolveDropTarget(targetNodeId, position);
+    if (!resolved) return;
+
+    const newNode: BlueprintNode = {
+      id: crypto.randomUUID(),
+      componentType: manifest.type,
+      name: manifest.displayName,
+      props: JSON.parse(JSON.stringify(manifest.defaultProps)),
+      styles: { base: {} },
+      interactions: [],
+      children: [],
+      locked: false,
+      hidden: false,
+      customClasses: ''
+    };
+
+    this.dispatch({
+      type: 'INSERT_NODE',
+      targetParentId: resolved.targetParentId,
+      index: resolved.index,
+      node: newNode
+    });
+    this.selectNode(newNode.id);
+  }
+
+  dropNodeOnTarget(
+    draggedNodeId: string,
+    targetNodeId: string,
+    position: 'before' | 'inside' | 'after' = 'after'
+  ) {
+    if (!draggedNodeId || draggedNodeId === targetNodeId) return;
+    const resolved = this.resolveDropTarget(targetNodeId, position);
+    if (!resolved) return;
+
+    this.dispatch({
+      type: 'MOVE_NODE',
+      nodeId: draggedNodeId,
+      targetParentId: resolved.targetParentId,
+      newIndex: resolved.index
+    });
+    this.selectNode(draggedNodeId);
+  }
+
+  // Favorites & Custom Reusable Symbols
+  toggleFavorite(componentType: string) {
+    if (this.favoriteComponents.includes(componentType)) {
+      this.favoriteComponents = this.favoriteComponents.filter((t) => t !== componentType);
+    } else {
+      this.favoriteComponents = [...this.favoriteComponents, componentType];
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(STORAGE_KEY_FAVORITES, JSON.stringify(this.favoriteComponents));
+      } catch {
+        // Ignore quota error
+      }
+    }
+  }
+
+  saveSelectedNodeAsSymbol(customName?: string) {
+    if (!this.selectedNode) return;
+    const cloned = cloneSubtreeWithNewIds(
+      structuredClone($state.snapshot(this.selectedNode))
+    );
+    const sym: SavedSymbol = {
+      id: crypto.randomUUID(),
+      name: customName?.trim() || `${this.selectedNode.name} Symbol`,
+      componentType: this.selectedNode.componentType,
+      createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      node: cloned
+    };
+    this.customSymbols = [sym, ...this.customSymbols];
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(STORAGE_KEY_SYMBOLS, JSON.stringify(this.customSymbols));
+      } catch {
+        // Ignore quota error
+      }
+    }
+  }
+
+  insertSymbol(symbolId: string) {
+    if (!this.activePage) return;
+    const sym = this.customSymbols.find((s) => s.id === symbolId);
+    if (!sym) return;
+    const cloned = cloneSubtreeWithNewIds(sym.node);
+    const selected = this.selectedNode;
+    const targetParentId =
+      selected && isContainerComponent(selected.componentType)
+        ? selected.id
+        : this.activePage.rootNode.id;
+
+    this.dispatch({
+      type: 'INSERT_NODE',
+      targetParentId,
+      node: cloned
+    });
+    this.selectNode(cloned.id);
+  }
+
+  deleteSymbol(symbolId: string) {
+    this.customSymbols = this.customSymbols.filter((s) => s.id !== symbolId);
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(STORAGE_KEY_SYMBOLS, JSON.stringify(this.customSymbols));
+      } catch {
+        // Ignore quota error
+      }
+    }
+  }
+
   loadStarterTemplate(template: 'acme-saas' | 'blank') {
     const nextBp =
       template === 'blank' ? createBlankProject('My New App') : createDefaultAcmeSaaSProject();
     this.historyManager.reset(nextBp);
     this.blueprint = nextBp;
     this.activePageId = nextBp.pages[0]?.id || '';
-    this.selectedNodeId = nextBp.pages[0]?.rootNode.children[0]?.id || nextBp.pages[0]?.rootNode.id || null;
+    this.selectedNodeId =
+      nextBp.pages[0]?.rootNode.children[0]?.id || nextBp.pages[0]?.rootNode.id || null;
     this.revision += 1;
     this.triggerAutosave();
   }
@@ -221,8 +504,14 @@ class EditorState {
   createSnapshot(label?: string) {
     const snap: ProjectSnapshot = {
       id: crypto.randomUUID(),
-      label: label?.trim() || `Snapshot (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
-      createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      label:
+        label?.trim() ||
+        `Snapshot (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
+      createdAt: new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      }),
       blueprint: structuredClone($state.snapshot(this.blueprint))
     };
     this.snapshots = [snap, ...this.snapshots].slice(0, 15);

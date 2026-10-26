@@ -4,39 +4,47 @@
    ========================================================================== */
 
 :root {
-  /* MD3 Dark Theme Tokens for Visual Studio Shell */
-  --md-sys-color-primary: #A8C7FA;
-  --md-sys-color-on-primary: #003063;
-  --md-sys-color-primary-container: #00468B;
-  --md-sys-color-on-primary-container: #D5E3FF;
+  /* Default MD3 Light Theme Tokens (Used by /preview SSR & Hydration) */
+  --md-sys-color-primary: #0B57D0;
+  --md-sys-color-on-primary: #FFFFFF;
+  --md-sys-color-primary-container: #D3E3FD;
+  --md-sys-color-on-primary-container: #041E49;
+  --md-sys-color-primary-hover: #0842A0;
 
-  --md-sys-color-secondary: #BDC7DC;
-  --md-sys-color-on-secondary: #273141;
-  --md-sys-color-secondary-container: #3E4758;
-  --md-sys-color-on-secondary-container: #D9E3F8;
+  --md-sys-color-secondary: #00639B;
+  --md-sys-color-on-secondary: #FFFFFF;
+  --md-sys-color-secondary-container: #C2E7FF;
+  --md-sys-color-on-secondary-container: #001D35;
 
-  --md-sys-color-surface: #111318;
-  --md-sys-color-on-surface: #E2E2E6;
-  --md-sys-color-surface-dim: #0E1013;
-  --md-sys-color-surface-bright: #37393E;
-  --md-sys-color-surface-container-lowest: #0C0E12;
-  --md-sys-color-surface-container-low: #191C20;
-  --md-sys-color-surface-container: #1D2024;
-  --md-sys-color-surface-container-high: #272A2E;
-  --md-sys-color-surface-container-highest: #32353A;
+  --md-sys-color-tertiary: #146C2E;
+  --md-sys-color-on-tertiary: #FFFFFF;
+  --md-sys-color-tertiary-container: #C4EED0;
+  --md-sys-color-on-tertiary-container: #072711;
 
-  --md-sys-color-outline: #8E9199;
-  --md-sys-color-outline-variant: #44474F;
+  --md-sys-color-surface: #FAF9FD;
+  --md-sys-color-on-surface: #1B1B1F;
+  --md-sys-color-surface-dim: #DBD9DD;
+  --md-sys-color-surface-bright: #FAF9FD;
+  --md-sys-color-surface-variant: #E1E2EC;
+  --md-sys-color-on-surface-variant: #44474E;
+  --md-sys-color-surface-container-lowest: #FFFFFF;
+  --md-sys-color-surface-container-low: #F4F3F7;
+  --md-sys-color-surface-container: #EEEDF1;
+  --md-sys-color-surface-container-high: #E8E7EC;
+  --md-sys-color-surface-container-highest: #E3E2E6;
 
-  --md-sys-color-error: #FFB4AB;
-  --md-sys-color-on-error: #690005;
-  --md-sys-color-error-container: #93000A;
-  --md-sys-color-on-error-container: #FFDAD6;
+  --md-sys-color-outline: #74777F;
+  --md-sys-color-outline-variant: #C4C6D0;
 
-  --md-sys-color-success: #6DD58C;
-  --md-sys-color-on-success: #003914;
-  --md-sys-color-success-container: #005320;
-  --md-sys-color-on-success-container: #8CF6A6;
+  --md-sys-color-error: #B3261E;
+  --md-sys-color-on-error: #FFFFFF;
+  --md-sys-color-error-container: #F9DEDC;
+  --md-sys-color-on-error-container: #410E0B;
+
+  --md-sys-color-success: #146C2E;
+  --md-sys-color-on-success: #FFFFFF;
+  --md-sys-color-success-container: #C4EED0;
+  --md-sys-color-on-success-container: #072711;
 
   /* MD3 Typography */
   --md-sys-font-heading: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -64,6 +72,44 @@
   --md-sys-motion-duration-medium: 300ms;
 }
 
+/* Studio Workspace Dark Chrome Scope (Does not leak into /preview) */
+.studio-app {
+  --md-sys-color-primary: #A8C7FA;
+  --md-sys-color-on-primary: #003063;
+  --md-sys-color-primary-container: #00468B;
+  --md-sys-color-on-primary-container: #D5E3FF;
+
+  --md-sys-color-secondary: #BDC7DC;
+  --md-sys-color-on-secondary: #273141;
+  --md-sys-color-secondary-container: #3E4758;
+  --md-sys-color-on-secondary-container: #D9E3F8;
+
+  --md-sys-color-surface: #111318;
+  --md-sys-color-on-surface: #E2E2E6;
+  --md-sys-color-surface-dim: #0E1013;
+  --md-sys-color-surface-bright: #37393E;
+  --md-sys-color-surface-variant: #44474F;
+  --md-sys-color-on-surface-variant: #C4C6D0;
+  --md-sys-color-surface-container-lowest: #0C0E12;
+  --md-sys-color-surface-container-low: #191C20;
+  --md-sys-color-surface-container: #1D2024;
+  --md-sys-color-surface-container-high: #272A2E;
+  --md-sys-color-surface-container-highest: #32353A;
+
+  --md-sys-color-outline: #8E9199;
+  --md-sys-color-outline-variant: #44474F;
+
+  --md-sys-color-error: #FFB4AB;
+  --md-sys-color-on-error: #690005;
+  --md-sys-color-error-container: #93000A;
+  --md-sys-color-on-error-container: #FFDAD6;
+
+  --md-sys-color-success: #6DD58C;
+  --md-sys-color-on-success: #003914;
+  --md-sys-color-success-container: #005320;
+  --md-sys-color-on-success-container: #8CF6A6;
+}
+
 /* CSS Reset */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -72,9 +118,8 @@
 }
 
 html, body {
-  height: 100%;
+  min-height: 100%;
   width: 100%;
-  overflow: hidden;
   font-family: var(--md-sys-font-body);
   background-color: var(--md-sys-color-surface);
   color: var(--md-sys-color-on-surface);
@@ -121,6 +166,7 @@ button {
   width: 100vw;
   overflow: hidden;
   background-color: var(--md-sys-color-surface-dim);
+  color: var(--md-sys-color-on-surface);
 }
 
 .studio-workspace {
@@ -146,19 +192,19 @@ button {
 .studio-topbar__left {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .studio-topbar__center {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .studio-topbar__right {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
 .studio-btn-group {
@@ -175,7 +221,7 @@ button {
   align-items: center;
   justify-content: center;
   gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
+  padding: 0.375rem 0.65rem;
   font-size: 0.75rem;
   font-weight: 500;
   border-radius: var(--md-sys-shape-corner-extra-small);
@@ -194,7 +240,7 @@ button {
   background-color: var(--md-sys-color-primary);
   color: var(--md-sys-color-on-primary);
   border-radius: var(--md-sys-shape-corner-full);
-  padding: 0.4rem 1.25rem;
+  padding: 0.4rem 1.1rem;
   font-weight: 700;
   box-shadow: var(--md-sys-elevation-level1);
 }
@@ -209,7 +255,7 @@ button {
 
 /* Sidebar & Inspector Drawers */
 .studio-sidebar, .studio-inspector {
-  width: 320px;
+  width: 330px;
   background-color: var(--md-sys-color-surface-container-low);
   display: flex;
   flex-direction: column;
@@ -231,7 +277,7 @@ button {
 
 .studio-tab {
   flex: 1;
-  padding: 0.75rem 0.5rem;
+  padding: 0.75rem 0.4rem;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--md-sys-color-on-surface-variant);
@@ -259,8 +305,8 @@ button {
   background-color: var(--md-sys-color-surface-container-highest);
   border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: var(--md-sys-shape-corner-extra-small);
-  padding: 0.5rem 0.75rem;
-  font-size: 0.8125rem;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.75rem;
   color: var(--md-sys-color-on-surface);
   outline: none;
   transition: border-color var(--md-sys-motion-duration-short);
@@ -277,7 +323,7 @@ button {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding: 1.5rem;
+  padding: 1.25rem;
   overflow: auto;
   position: relative;
 }
@@ -293,19 +339,62 @@ button {
 }
 
 /* ==========================================================================
-   MD3 Component Utility Classes (for Live Preview and Generated Code)
+   Official Google MD3 Typography Scale (For Live Preview & Generated App)
    ========================================================================== */
+.md-display-large { font-family: var(--md-sys-font-heading); font-size: 3.5625rem; line-height: 4rem; font-weight: 700; letter-spacing: -0.015em; }
+.md-display-medium { font-family: var(--md-sys-font-heading); font-size: 2.8125rem; line-height: 3.25rem; font-weight: 700; letter-spacing: -0.01em; }
+.md-display-small { font-family: var(--md-sys-font-heading); font-size: 2.25rem; line-height: 2.75rem; font-weight: 700; }
+
+.md-headline-large { font-family: var(--md-sys-font-heading); font-size: 2rem; line-height: 2.5rem; font-weight: 700; }
+.md-headline-medium { font-family: var(--md-sys-font-heading); font-size: 1.75rem; line-height: 2.25rem; font-weight: 700; }
+.md-headline-small { font-family: var(--md-sys-font-heading); font-size: 1.5rem; line-height: 2rem; font-weight: 600; }
+
+.md-title-large { font-family: var(--md-sys-font-heading); font-size: 1.375rem; line-height: 1.75rem; font-weight: 600; }
+.md-title-medium { font-family: var(--md-sys-font-heading); font-size: 1rem; line-height: 1.5rem; font-weight: 600; letter-spacing: 0.01em; }
+.md-title-small { font-family: var(--md-sys-font-heading); font-size: 0.875rem; line-height: 1.25rem; font-weight: 600; letter-spacing: 0.01em; }
+
+.md-body-large { font-family: var(--md-sys-font-body); font-size: 1rem; line-height: 1.5rem; font-weight: 400; }
+.md-body-medium { font-family: var(--md-sys-font-body); font-size: 0.875rem; line-height: 1.25rem; font-weight: 400; }
+.md-body-small { font-family: var(--md-sys-font-body); font-size: 0.75rem; line-height: 1rem; font-weight: 400; }
+
+.md-label-large { font-family: var(--md-sys-font-body); font-size: 0.875rem; line-height: 1.25rem; font-weight: 600; letter-spacing: 0.01em; }
+.md-label-medium { font-family: var(--md-sys-font-body); font-size: 0.75rem; line-height: 1rem; font-weight: 600; letter-spacing: 0.03em; }
+.md-label-small { font-family: var(--md-sys-font-body); font-size: 0.6875rem; line-height: 1rem; font-weight: 600; letter-spacing: 0.03em; }
+
+/* ==========================================================================
+   MD3 Component Utility Classes (Supporting both -- and - modifiers)
+   ========================================================================== */
+.md-section {
+  width: 100%;
+  padding: 4rem 0;
+}
+
 .md-container {
   width: 100%;
   margin: 0 auto;
   padding: 0 1.5rem;
 }
-.md-container--sm { max-width: 640px; }
-.md-container--md { max-width: 768px; }
-.md-container--lg { max-width: 1024px; }
-.md-container--xl { max-width: 1280px; }
-.md-container--2xl { max-width: 1536px; }
-.md-container--full { max-width: 100%; }
+.md-container--sm, .md-container-sm { max-width: 640px; }
+.md-container--md, .md-container-md { max-width: 768px; }
+.md-container--lg, .md-container-lg { max-width: 1024px; }
+.md-container--xl, .md-container-xl { max-width: 1280px; }
+.md-container--2xl, .md-container-2xl { max-width: 1536px; }
+.md-container--full, .md-container-full { max-width: 100%; }
+
+.md-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+.md-grid-cols-1 { grid-template-columns: 1fr; }
+@media (min-width: 768px) {
+  .md-grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+  .md-grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .md-grid-cols-4 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 1024px) {
+  .md-grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+}
 
 .md-btn {
   display: inline-flex;
@@ -313,28 +402,53 @@ button {
   justify-content: center;
   gap: 0.5rem;
   font-weight: 500;
+  height: 40px;
+  padding: 0 24px;
+  font-size: 0.875rem;
   border-radius: var(--md-sys-shape-corner-full, 9999px);
   transition: all var(--md-sys-motion-duration-short);
   outline: none;
+  cursor: pointer;
 }
-.md-btn--sm { height: 32px; padding: 0 16px; font-size: 0.8125rem; }
-.md-btn--md { height: 40px; padding: 0 24px; font-size: 0.875rem; }
-.md-btn--lg { height: 48px; padding: 0 32px; font-size: 1rem; }
+.md-btn--sm, .md-btn-sm { height: 32px; padding: 0 16px; font-size: 0.8125rem; }
+.md-btn--md, .md-btn-md { height: 40px; padding: 0 24px; font-size: 0.875rem; }
+.md-btn--lg, .md-btn-lg { height: 48px; padding: 0 32px; font-size: 1rem; }
 
-.md-btn--filled {
+.md-btn--filled, .md-btn-filled {
   background-color: var(--md-sys-color-primary);
   color: var(--md-sys-color-on-primary);
 }
-.md-btn--tonal {
+.md-btn--filled:hover, .md-btn-filled:hover {
+  filter: brightness(0.92);
+  box-shadow: var(--md-sys-elevation-level1);
+}
+.md-btn--tonal, .md-btn-tonal {
   background-color: var(--md-sys-color-secondary-container);
   color: var(--md-sys-color-on-secondary-container);
 }
-.md-btn--outlined {
+.md-btn--outlined, .md-btn-outlined {
   border: 1px solid var(--md-sys-color-outline);
   color: var(--md-sys-color-primary);
 }
-.md-btn--text {
+.md-btn--text, .md-btn-text {
   color: var(--md-sys-color-primary);
+}
+.md-btn--elevated, .md-btn-elevated {
+  background-color: var(--md-sys-color-surface-container-low);
+  color: var(--md-sys-color-primary);
+  box-shadow: var(--md-sys-elevation-level1);
+}
+
+.md-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--md-sys-shape-corner-full, 9999px);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
 }
 
 .md-card {
@@ -343,10 +457,13 @@ button {
   background-color: var(--md-sys-color-surface-container-low);
   color: var(--md-sys-color-on-surface);
 }
-.md-card--elevated {
+.md-card--elevated, .md-card-elevated {
   box-shadow: var(--md-sys-elevation-level1);
 }
-.md-card--outlined {
+.md-card--filled, .md-card-filled {
+  background-color: var(--md-sys-color-surface-container-highest);
+}
+.md-card--outlined, .md-card-outlined {
   background-color: var(--md-sys-color-surface);
   border: 1px solid var(--md-sys-color-outline-variant);
 }

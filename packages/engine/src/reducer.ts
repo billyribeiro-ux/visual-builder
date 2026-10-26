@@ -43,12 +43,21 @@ export function executeCommand(
     }
 
     case 'MOVE_NODE': {
+      if (command.nodeId === command.targetParentId) return prev;
+
       let foundNode: BlueprintNode | null = null;
-      // First, remove from existing parent
+      let oldParentId: string | null = null;
+      let oldIndex = -1;
+
+      // First, locate and remove from existing parent
       for (const page of next.pages) {
         const parentInfo = findNodeParent(page.rootNode, command.nodeId);
         if (parentInfo) {
           foundNode = parentInfo.parent.children[parentInfo.index];
+          // Prevent moving a node into its own descendant
+          if (findNodeById(foundNode, command.targetParentId)) return prev;
+          oldParentId = parentInfo.parent.id;
+          oldIndex = parentInfo.index;
           parentInfo.parent.children.splice(parentInfo.index, 1);
           break;
         }
@@ -58,6 +67,9 @@ export function executeCommand(
           const parentInfo = findNodeParent(layout.rootNode, command.nodeId);
           if (parentInfo) {
             foundNode = parentInfo.parent.children[parentInfo.index];
+            if (findNodeById(foundNode, command.targetParentId)) return prev;
+            oldParentId = parentInfo.parent.id;
+            oldIndex = parentInfo.index;
             parentInfo.parent.children.splice(parentInfo.index, 1);
             break;
           }
@@ -66,13 +78,22 @@ export function executeCommand(
 
       if (!foundNode) return prev; // Node not found, no-op
 
+      const computeTargetIndex = (childrenLen: number, parentId: string): number => {
+        if (command.newIndex === undefined) return childrenLen;
+        let idx = command.newIndex;
+        if (oldParentId === parentId && oldIndex !== -1 && oldIndex < idx) {
+          idx -= 1;
+        }
+        return Math.max(0, Math.min(childrenLen, idx));
+      };
+
       // Now insert into targetParentId
       let placed = false;
       for (const page of next.pages) {
         const targetParent = findNodeById(page.rootNode, command.targetParentId);
         if (targetParent) {
           targetParent.children = targetParent.children || [];
-          const idx = command.newIndex !== undefined ? command.newIndex : targetParent.children.length;
+          const idx = computeTargetIndex(targetParent.children.length, targetParent.id);
           targetParent.children.splice(idx, 0, foundNode);
           placed = true;
           break;
@@ -83,14 +104,14 @@ export function executeCommand(
           const targetParent = findNodeById(layout.rootNode, command.targetParentId);
           if (targetParent) {
             targetParent.children = targetParent.children || [];
-            const idx = command.newIndex !== undefined ? command.newIndex : targetParent.children.length;
+            const idx = computeTargetIndex(targetParent.children.length, targetParent.id);
             targetParent.children.splice(idx, 0, foundNode);
             placed = true;
             break;
           }
         }
       }
-      return next;
+      return placed ? next : prev;
     }
 
     case 'UPDATE_PROPS': {
@@ -250,6 +271,68 @@ export function executeCommand(
       }
       for (const layout of next.layouts) {
         if (reorderInRoot(layout.rootNode)) return next;
+      }
+      return next;
+    }
+
+    case 'WRAP_NODE': {
+      const defaultPropsByWrapper: Record<string, Record<string, any>> = {
+        'structure/container': { maxWidth: 'xl' },
+        'structure/section': { variant: 'surface-low', paddingY: 'md', maxWidth: 'xl' },
+        'structure/grid': { columns: 2, gap: 'md' }
+      };
+      const defaultNameByWrapper: Record<string, string> = {
+        'structure/container': 'Container Wrapper',
+        'structure/section': 'Section Wrapper',
+        'structure/grid': 'Grid Wrapper'
+      };
+
+      const wrapInRoot = (root: BlueprintNode): boolean => {
+        const parentInfo = findNodeParent(root, command.nodeId);
+        if (!parentInfo) return false;
+        const { parent, index } = parentInfo;
+        const targetNode = parent.children[index];
+        const wrapperNode: BlueprintNode = {
+          id: command.wrapperId || '40000000-0000-4000-8000-' + Math.random().toString(16).slice(2, 14).padEnd(12, '0'),
+          componentType: command.wrapperType,
+          name: command.wrapperName || defaultNameByWrapper[command.wrapperType] || 'Wrapper',
+          props: command.wrapperProps || defaultPropsByWrapper[command.wrapperType] || {},
+          styles: { base: {} },
+          interactions: [],
+          children: [targetNode],
+          locked: false,
+          hidden: false,
+          customClasses: ''
+        };
+        parent.children.splice(index, 1, wrapperNode);
+        return true;
+      };
+
+      for (const page of next.pages) {
+        if (wrapInRoot(page.rootNode)) return next;
+      }
+      for (const layout of next.layouts) {
+        if (wrapInRoot(layout.rootNode)) return next;
+      }
+      return next;
+    }
+
+    case 'UNWRAP_NODE': {
+      const unwrapInRoot = (root: BlueprintNode): boolean => {
+        const parentInfo = findNodeParent(root, command.nodeId);
+        if (!parentInfo) return false;
+        const { parent, index } = parentInfo;
+        const wrapperNode = parent.children[index];
+        if (!wrapperNode.children || wrapperNode.children.length === 0) return false;
+        parent.children.splice(index, 1, ...wrapperNode.children);
+        return true;
+      };
+
+      for (const page of next.pages) {
+        if (unwrapInRoot(page.rootNode)) return next;
+      }
+      for (const layout of next.layouts) {
+        if (unwrapInRoot(layout.rootNode)) return next;
       }
       return next;
     }

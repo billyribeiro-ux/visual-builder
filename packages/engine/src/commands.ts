@@ -29,6 +29,18 @@ export type EditorCommand =
       direction: 'up' | 'down';
     }
   | {
+      type: 'WRAP_NODE';
+      nodeId: string;
+      wrapperId?: string;
+      wrapperType: 'structure/container' | 'structure/section' | 'structure/grid';
+      wrapperName?: string;
+      wrapperProps?: Record<string, any>;
+    }
+  | {
+      type: 'UNWRAP_NODE';
+      nodeId: string;
+    }
+  | {
       type: 'UPDATE_NODE_META';
       nodeId: string;
       meta: Partial<Pick<BlueprintNode, 'name' | 'locked' | 'hidden'>>;

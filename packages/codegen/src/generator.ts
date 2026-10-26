@@ -104,7 +104,7 @@ export function generateFullExport(blueprint: ProjectBlueprint): GeneratedProjec
   files[`${appPrefix}vite.config.ts`] = generateViteConfig();
   files[`${appPrefix}tsconfig.json`] = generateTsConfig();
   files[`${appPrefix}src/app.html`] = generateAppHtml(blueprint);
-  files[`${appPrefix}src/app.css`] = generateAppCss(blueprint.tokens);
+  files[`${appPrefix}src/app.css`] = generateAppCss(blueprint.tokens, blueprint);
   files[`${appPrefix}src/routes/+layout.svelte`] = generateRootLayout(blueprint);
   files[`${appPrefix}src/routes/+error.svelte`] = generateErrorRoute();
 

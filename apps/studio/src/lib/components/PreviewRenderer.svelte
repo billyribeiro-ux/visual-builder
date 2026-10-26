@@ -28,6 +28,19 @@
   import AuthCard from './preview-components/AuthCard.svelte';
   import PreviewRenderer from './PreviewRenderer.svelte';
 
+  export type NodeQuickAction =
+    | 'up'
+    | 'down'
+    | 'duplicate'
+    | 'delete'
+    | 'wrap-section'
+    | 'wrap-container'
+    | 'unwrap'
+    | 'copy'
+    | 'paste'
+    | 'save-symbol'
+    | 'hide';
+
   interface Props {
     node: BlueprintNode;
     slotNode?: BlueprintNode;
@@ -36,7 +49,13 @@
     isInteractiveMode: boolean;
     onSelectNode?: (id: string) => void;
     onNavigate?: (path: string) => void;
-    onNodeAction?: (nodeId: string, action: 'up' | 'down' | 'duplicate' | 'delete') => void;
+    onNodeAction?: (nodeId: string, action: NodeQuickAction) => void;
+    onDropItem?: (
+      payload: { componentType?: string; nodeId?: string },
+      targetNodeId: string,
+      position: 'before' | 'inside' | 'after'
+    ) => void;
+    onContextMenuNode?: (node: BlueprintNode, x: number, y: number) => void;
   }
 
   let {
@@ -47,12 +66,22 @@
     isInteractiveMode,
     onSelectNode,
     onNavigate,
-    onNodeAction
+    onNodeAction,
+    onDropItem,
+    onContextMenuNode
   }: Props = $props();
 
   const isSelected = $derived(selectedNodeId === node.id);
   const effectiveCss = $derived(resolveEffectiveStyles(node.styles, activeBreakpoint));
   const inlineStyle = $derived(cssPropertiesToString(effectiveCss));
+  const isContainer = $derived(
+    node.componentType === 'structure/container' ||
+      node.componentType === 'structure/section' ||
+      node.componentType === 'structure/grid' ||
+      node.componentType === 'app/dashboard-shell'
+  );
+
+  let dropZone = $state<'before' | 'inside' | 'after' | null>(null);
 
   function handleClick(e: MouseEvent) {
     if (!isInteractiveMode) {
@@ -62,13 +91,24 @@
       return;
     }
 
-    // In interactive mode, execute declarative onClick interaction rules if configured
     const clickRule = (node.interactions || []).find((r) => r.trigger === 'onClick');
-    if (clickRule && clickRule.actionType === 'navigate' && typeof clickRule.payload?.path === 'string') {
+    if (
+      clickRule &&
+      clickRule.actionType === 'navigate' &&
+      typeof clickRule.payload?.path === 'string'
+    ) {
       e.preventDefault();
       e.stopPropagation();
       onNavigate?.(clickRule.payload.path);
     }
+  }
+
+  function handleContextMenu(e: MouseEvent) {
+    if (isInteractiveMode) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onSelectNode?.(node.id);
+    onContextMenuNode?.(node, e.clientX, e.clientY);
   }
 
   function handleKeyDown(e: KeyboardEvent) {
@@ -79,7 +119,54 @@
     }
   }
 
-  function triggerAction(e: MouseEvent, action: 'up' | 'down' | 'duplicate' | 'delete') {
+  function handleDragStart(e: DragEvent) {
+    if (isInteractiveMode || node.locked) return;
+    e.stopPropagation();
+    e.dataTransfer?.setData('application/x-app-viz-node-id', node.id);
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function handleDragOver(e: DragEvent) {
+    if (isInteractiveMode) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const el = e.currentTarget as HTMLElement;
+    const rect = el.getBoundingClientRect();
+    const relY = e.clientY - rect.top;
+    const ratio = rect.height > 0 ? relY / rect.height : 0.5;
+
+    if (isContainer && ratio > 0.22 && ratio < 0.78) {
+      dropZone = 'inside';
+    } else if (ratio < 0.5) {
+      dropZone = 'before';
+    } else {
+      dropZone = 'after';
+    }
+  }
+
+  function handleDragLeave(e: DragEvent) {
+    e.stopPropagation();
+    dropZone = null;
+  }
+
+  function handleDrop(e: DragEvent) {
+    if (isInteractiveMode) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const targetZone = dropZone || (isContainer ? 'inside' : 'after');
+    dropZone = null;
+
+    const componentType = e.dataTransfer?.getData('application/x-app-viz-component');
+    const draggedNodeId = e.dataTransfer?.getData('application/x-app-viz-node-id');
+
+    if (componentType) {
+      onDropItem?.({ componentType }, node.id, targetZone);
+    } else if (draggedNodeId && draggedNodeId !== node.id) {
+      onDropItem?.({ nodeId: draggedNodeId }, node.id, targetZone);
+    }
+  }
+
+  function triggerAction(e: MouseEvent, action: NodeQuickAction) {
     e.preventDefault();
     e.stopPropagation();
     onNodeAction?.(node.id, action);
@@ -97,20 +184,34 @@
         {onSelectNode}
         {onNavigate}
         {onNodeAction}
+        {onDropItem}
+        {onContextMenuNode}
       />
     {/if}
   {:else}
     <div
       data-node-id={node.id}
       data-node-type={node.componentType}
+      draggable={!isInteractiveMode && !node.locked}
+      ondragstart={handleDragStart}
+      ondragover={handleDragOver}
+      ondragleave={handleDragLeave}
+      ondrop={handleDrop}
       onclick={handleClick}
+      oncontextmenu={handleContextMenu}
       onkeydown={handleKeyDown}
       role="button"
       tabindex="0"
       aria-label={node.name}
-      class="preview-node {!isInteractiveMode ? 'preview-node--editable' : ''} {isSelected && !isInteractiveMode ? 'preview-node--selected' : ''}"
+      class="preview-node {!isInteractiveMode ? 'preview-node--editable' : ''} {isSelected && !isInteractiveMode ? 'preview-node--selected' : ''} {dropZone ? `preview-node--drop-${dropZone}` : ''}"
       style={inlineStyle}
     >
+      {#if dropZone && !isInteractiveMode}
+        <div class="drop-indicator drop-indicator--{dropZone}">
+          {dropZone === 'inside' ? `Drop inside ${node.name}` : `Insert ${dropZone} ${node.name}`}
+        </div>
+      {/if}
+
       {#if isSelected && !isInteractiveMode}
         <div class="preview-node__toolbar">
           <span class="preview-node__badge-text">{node.name}</span>
@@ -119,28 +220,35 @@
               <button
                 type="button"
                 class="preview-node__action-btn"
-                title="Move Up"
+                title="Move Up (Alt+↑)"
                 aria-label="Move node up"
                 onclick={(e) => triggerAction(e, 'up')}
               >↑</button>
               <button
                 type="button"
                 class="preview-node__action-btn"
-                title="Move Down"
+                title="Move Down (Alt+↓)"
                 aria-label="Move node down"
                 onclick={(e) => triggerAction(e, 'down')}
               >↓</button>
               <button
                 type="button"
                 class="preview-node__action-btn"
-                title="Duplicate"
+                title="Wrap in Section"
+                aria-label="Wrap node in section"
+                onclick={(e) => triggerAction(e, 'wrap-section')}
+              >📦</button>
+              <button
+                type="button"
+                class="preview-node__action-btn"
+                title="Duplicate (Cmd+D)"
                 aria-label="Duplicate node"
                 onclick={(e) => triggerAction(e, 'duplicate')}
               >⧉</button>
               <button
                 type="button"
                 class="preview-node__action-btn preview-node__action-btn--danger"
-                title="Delete"
+                title="Delete (Backspace)"
                 aria-label="Delete node"
                 onclick={(e) => triggerAction(e, 'delete')}
               >✕</button>
@@ -161,6 +269,8 @@
               {onSelectNode}
               {onNavigate}
               {onNodeAction}
+              {onDropItem}
+              {onContextMenuNode}
             />
           {/each}
         </Container>
@@ -180,6 +290,8 @@
               {onSelectNode}
               {onNavigate}
               {onNodeAction}
+              {onDropItem}
+              {onContextMenuNode}
             />
           {/each}
         </Section>
@@ -195,6 +307,8 @@
               {onSelectNode}
               {onNavigate}
               {onNodeAction}
+              {onDropItem}
+              {onContextMenuNode}
             />
           {/each}
         </Grid>
@@ -299,6 +413,8 @@
               {onSelectNode}
               {onNavigate}
               {onNodeAction}
+              {onDropItem}
+              {onContextMenuNode}
             />
           {/each}
         </DashboardShell>
@@ -367,6 +483,8 @@
               {onSelectNode}
               {onNavigate}
               {onNodeAction}
+              {onDropItem}
+              {onContextMenuNode}
             />
           {/each}
         </div>
@@ -386,6 +504,40 @@
   .preview-node--selected {
     outline: 2px solid var(--md-sys-color-primary, #0B57D0) !important;
     z-index: 10;
+  }
+  .preview-node--drop-before {
+    box-shadow: inset 0 4px 0 0 #0B57D0;
+  }
+  .preview-node--drop-after {
+    box-shadow: inset 0 -4px 0 0 #0B57D0;
+  }
+  .preview-node--drop-inside {
+    outline: 2px dashed #146C2E !important;
+    background-color: rgba(20, 108, 46, 0.04);
+  }
+  .drop-indicator {
+    position: absolute;
+    left: 12px;
+    z-index: 40;
+    background-color: #0B57D0;
+    color: #FFFFFF;
+    font-size: 0.6875rem;
+    font-family: var(--md-sys-font-mono, monospace);
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    pointer-events: none;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  }
+  .drop-indicator--before {
+    top: -10px;
+  }
+  .drop-indicator--after {
+    bottom: -10px;
+  }
+  .drop-indicator--inside {
+    top: 8px;
+    background-color: #146C2E;
   }
   .preview-node__toolbar {
     position: absolute;

@@ -1,10 +1,11 @@
-import type { DesignTokens } from '@app-viz/schema';
+import type { DesignTokens, ProjectBlueprint } from '@app-viz/schema';
+import { compileNodeScopedCss } from '@app-viz/engine';
 
 /**
  * Generates pure Vanilla CSS implementing the official Google Material Design 3 (MD3) Design System
  * (Locked: October 25, 2026). Zero Tailwind, zero PostCSS.
  */
-export function generateAppCss(tokens: DesignTokens): string {
+export function generateAppCss(tokens: DesignTokens, blueprint?: ProjectBlueprint): string {
   const colorVars = Object.entries(tokens.colors || {})
     .map(([key, val]) => `  --md-sys-color-${key}: ${val};`)
     .join('\n');
@@ -86,10 +87,36 @@ button {
 }
 
 /* ==========================================================================
-   MD3 Component Utility Classes (Pure Vanilla CSS)
+   Official Google MD3 Typography Scale
    ========================================================================== */
+.md-display-large { font-family: var(--md-sys-font-heading); font-size: 3.5625rem; line-height: 4rem; font-weight: 700; letter-spacing: -0.015em; }
+.md-display-medium { font-family: var(--md-sys-font-heading); font-size: 2.8125rem; line-height: 3.25rem; font-weight: 700; letter-spacing: -0.01em; }
+.md-display-small { font-family: var(--md-sys-font-heading); font-size: 2.25rem; line-height: 2.75rem; font-weight: 700; }
 
-/* MD3 Container */
+.md-headline-large { font-family: var(--md-sys-font-heading); font-size: 2rem; line-height: 2.5rem; font-weight: 700; }
+.md-headline-medium { font-family: var(--md-sys-font-heading); font-size: 1.75rem; line-height: 2.25rem; font-weight: 700; }
+.md-headline-small { font-family: var(--md-sys-font-heading); font-size: 1.5rem; line-height: 2rem; font-weight: 600; }
+
+.md-title-large { font-family: var(--md-sys-font-heading); font-size: 1.375rem; line-height: 1.75rem; font-weight: 600; }
+.md-title-medium { font-family: var(--md-sys-font-heading); font-size: 1rem; line-height: 1.5rem; font-weight: 600; letter-spacing: 0.01em; }
+.md-title-small { font-family: var(--md-sys-font-heading); font-size: 0.875rem; line-height: 1.25rem; font-weight: 600; letter-spacing: 0.01em; }
+
+.md-body-large { font-family: var(--md-sys-font-body); font-size: 1rem; line-height: 1.5rem; font-weight: 400; }
+.md-body-medium { font-family: var(--md-sys-font-body); font-size: 0.875rem; line-height: 1.25rem; font-weight: 400; }
+.md-body-small { font-family: var(--md-sys-font-body); font-size: 0.75rem; line-height: 1rem; font-weight: 400; }
+
+.md-label-large { font-family: var(--md-sys-font-body); font-size: 0.875rem; line-height: 1.25rem; font-weight: 600; letter-spacing: 0.01em; }
+.md-label-medium { font-family: var(--md-sys-font-body); font-size: 0.75rem; line-height: 1rem; font-weight: 600; letter-spacing: 0.03em; }
+.md-label-small { font-family: var(--md-sys-font-body); font-size: 0.6875rem; line-height: 1rem; font-weight: 600; letter-spacing: 0.03em; }
+
+/* ==========================================================================
+   MD3 Layout, Section, Container & Grid System
+   ========================================================================== */
+.md-section {
+  width: 100%;
+  padding: 4rem 0;
+}
+
 .md-container {
   width: 100%;
   margin-left: auto;
@@ -97,26 +124,47 @@ button {
   padding-left: 1.5rem;
   padding-right: 1.5rem;
 }
-.md-container--sm { max-width: 640px; }
-.md-container--md { max-width: 768px; }
-.md-container--lg { max-width: 1024px; }
-.md-container--xl { max-width: 1280px; }
-.md-container--2xl { max-width: 1536px; }
-.md-container--full { max-width: 100%; }
+.md-container--sm, .md-container-sm { max-width: 640px; }
+.md-container--md, .md-container-md { max-width: 768px; }
+.md-container--lg, .md-container-lg { max-width: 1024px; }
+.md-container--xl, .md-container-xl { max-width: 1280px; }
+.md-container--2xl, .md-container-2xl { max-width: 1536px; }
+.md-container--full, .md-container-full { max-width: 100%; }
 
-/* MD3 Buttons */
+.md-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+.md-grid-cols-1 { grid-template-columns: 1fr; }
+@media (min-width: 768px) {
+  .md-grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+  .md-grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .md-grid-cols-4 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 1024px) {
+  .md-grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* ==========================================================================
+   MD3 Buttons & Badges
+   ========================================================================== */
 .md-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   font-weight: 500;
+  height: 40px;
+  padding: 0 24px;
+  font-size: 0.875rem;
   border-radius: var(--md-sys-shape-corner-full, 9999px);
   transition: all var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard);
   text-align: center;
   white-space: nowrap;
   vertical-align: middle;
   outline: none;
+  cursor: pointer;
 }
 .md-btn:focus-visible {
   outline: 2px solid var(--md-sys-color-primary);
@@ -128,62 +176,80 @@ button {
   pointer-events: none;
 }
 
-/* MD3 Button Sizes */
-.md-btn--sm {
+.md-btn--sm, .md-btn-sm {
   height: 32px;
   padding: 0 16px;
   font-size: 0.8125rem;
 }
-.md-btn--md {
+.md-btn--md, .md-btn-md {
   height: 40px;
   padding: 0 24px;
   font-size: 0.875rem;
 }
-.md-btn--lg {
+.md-btn--lg, .md-btn-lg {
   height: 48px;
   padding: 0 32px;
   font-size: 1rem;
 }
 
-/* MD3 Button Variants */
-.md-btn--filled {
+.md-btn--filled, .md-btn-filled {
   background-color: var(--md-sys-color-primary);
   color: var(--md-sys-color-on-primary);
 }
-.md-btn--filled:hover {
+.md-btn--filled:hover, .md-btn-filled:hover {
   filter: brightness(0.92);
   box-shadow: var(--md-sys-elevation-level1);
 }
 
-.md-btn--tonal {
+.md-btn--tonal, .md-btn-tonal {
   background-color: var(--md-sys-color-secondary-container);
   color: var(--md-sys-color-on-secondary-container);
 }
-.md-btn--tonal:hover {
+.md-btn--tonal:hover, .md-btn-tonal:hover {
   filter: brightness(0.95);
   box-shadow: var(--md-sys-elevation-level1);
 }
 
-.md-btn--outlined {
+.md-btn--outlined, .md-btn-outlined {
   border: 1px solid var(--md-sys-color-outline);
   color: var(--md-sys-color-primary);
   background-color: transparent;
 }
-.md-btn--outlined:hover {
-  background-color: rgba(0, 95, 176, 0.08);
+.md-btn--outlined:hover, .md-btn-outlined:hover {
+  background-color: rgba(11, 87, 208, 0.08);
 }
 
-.md-btn--text {
+.md-btn--text, .md-btn-text {
   background-color: transparent;
   color: var(--md-sys-color-primary);
   padding-left: 12px;
   padding-right: 12px;
 }
-.md-btn--text:hover {
-  background-color: rgba(0, 95, 176, 0.08);
+.md-btn--text:hover, .md-btn-text:hover {
+  background-color: rgba(11, 87, 208, 0.08);
 }
 
-/* MD3 Cards */
+.md-btn--elevated, .md-btn-elevated {
+  background-color: var(--md-sys-color-surface-container-low);
+  color: var(--md-sys-color-primary);
+  box-shadow: var(--md-sys-elevation-level1);
+}
+
+.md-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--md-sys-shape-corner-full, 9999px);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+/* ==========================================================================
+   MD3 Cards
+   ========================================================================== */
 .md-card {
   border-radius: var(--md-sys-shape-corner-medium, 12px);
   padding: 1.5rem;
@@ -191,13 +257,16 @@ button {
   color: var(--md-sys-color-on-surface);
   transition: box-shadow var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard);
 }
-.md-card--elevated {
+.md-card--elevated, .md-card-elevated {
   box-shadow: var(--md-sys-elevation-level1);
 }
-.md-card--elevated:hover {
+.md-card--elevated:hover, .md-card-elevated:hover {
   box-shadow: var(--md-sys-elevation-level2);
 }
-.md-card--outlined {
+.md-card--filled, .md-card-filled {
+  background-color: var(--md-sys-color-surface-container-highest);
+}
+.md-card--outlined, .md-card-outlined {
   background-color: var(--md-sys-color-surface);
   border: 1px solid var(--md-sys-color-outline-variant);
 }
@@ -524,5 +593,12 @@ button {
   border-color: var(--md-sys-color-primary);
   box-shadow: 0 0 0 1px var(--md-sys-color-primary);
 }
-`;
+${
+  blueprint
+    ? `\n/* Responsive Breakpoint Overrides & Interactive State Variants */\n${compileNodeScopedCss([
+        ...blueprint.layouts.map((l) => l.rootNode),
+        ...blueprint.pages.map((p) => p.rootNode)
+      ])}\n`
+    : ''
+}`;
 }

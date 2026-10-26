@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { createDefaultAcmeSaaSProject } from '@app-viz/schema';
+import { createDefaultAcmeSaaSProject, createPageFromTemplate, PAGE_TEMPLATE_CATALOG } from '@app-viz/schema';
+import { executeCommand } from '@app-viz/engine';
 import { generateFullExport, createDeterministicZip } from '../src/index.js';
 
 describe('Codegen Engine', () => {
@@ -72,5 +73,55 @@ describe('Codegen Engine', () => {
     for (let i = 0; i < zip1.length; i++) {
       expect(zip1[i]).toBe(zip2[i]);
     }
+  });
+
+  it('includes unified MD3 utility classes, responsive/hover rules, and supports all page templates', () => {
+    let project = createDefaultAcmeSaaSProject();
+    const heroNodeId = '30000000-0000-0000-0000-000000000002';
+
+    // Add responsive and hover styles to a node
+    project = executeCommand(project, {
+      type: 'UPDATE_STYLES',
+      nodeId: heroNodeId,
+      breakpoint: 'tablet',
+      styles: { paddingBottom: '40px' }
+    });
+    project = executeCommand(project, {
+      type: 'UPDATE_STYLES',
+      nodeId: heroNodeId,
+      breakpoint: 'hover',
+      styles: { opacity: '0.96' }
+    });
+
+    // Add pages from all 6 templates in PAGE_TEMPLATE_CATALOG
+    expect(PAGE_TEMPLATE_CATALOG.length).toBeGreaterThanOrEqual(6);
+    for (const tpl of PAGE_TEMPLATE_CATALOG) {
+      const page = createPageFromTemplate(tpl.key, `/tpl-${tpl.key}`, `Test ${tpl.label}`);
+      project = executeCommand(project, { type: 'ADD_PAGE', page });
+    }
+
+    const result = generateFullExport(project);
+    const appCss = result.files['generated-app/src/app.css'];
+
+    // Verify both single-hyphen and double-hyphen MD3 classes and typography scales exist
+    expect(appCss).toContain('.md-section');
+    expect(appCss).toContain('.md-grid');
+    expect(appCss).toContain('.md-grid-cols-3');
+    expect(appCss).toContain('.md-btn-filled');
+    expect(appCss).toContain('.md-btn--filled');
+    expect(appCss).toContain('.md-card-outlined');
+    expect(appCss).toContain('.md-card--outlined');
+    expect(appCss).toContain('.md-container-xl');
+    expect(appCss).toContain('.md-container--xl');
+    expect(appCss).toContain('.md-headline-large');
+    expect(appCss).toContain('.md-title-medium');
+    expect(appCss).toContain('.md-body-medium');
+    expect(appCss).toContain('.md-label-large');
+    expect(appCss).toContain('.md-badge');
+
+    // Verify responsive and stateful node rules are emitted into app.css and node wrapper has data-node-id
+    expect(appCss).toContain(`[data-node-id="${heroNodeId}"]:hover { opacity: 0.96 !important; }`);
+    expect(appCss).toContain(`[data-node-id="${heroNodeId}"] { padding-bottom: 40px !important; }`);
+    expect(result.files['generated-app/src/routes/+page.svelte']).toContain(`data-node-id="${heroNodeId}"`);
   });
 });

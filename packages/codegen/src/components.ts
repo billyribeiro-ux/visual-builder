@@ -594,10 +594,12 @@ export function getComponentSources(): Record<string, string> {
 
     'src/lib/components/KpiGrid.svelte': `<script lang="ts">
   interface Card {
-    title: string;
+    label?: string;
+    title?: string;
     value: string;
-    change: string;
-    trend: 'up' | 'down';
+    delta?: string;
+    change?: string;
+    trend?: 'up' | 'down' | string;
   }
 
   interface Props {
@@ -611,11 +613,11 @@ export function getComponentSources(): Record<string, string> {
 <div class="md-kpi-grid" {style}>
   {#each cards as card, idx (idx)}
     <div class="md-card md-card--elevated">
-      <div class="md-kpi-card__title">{card.title}</div>
+      <div class="md-kpi-card__title">{card.label || card.title || 'Metric'}</div>
       <div style="display: flex; align-items: baseline; justify-content: space-between; margin-top: 0.5rem;">
         <div class="md-kpi-card__val">{card.value}</div>
         <span style="font-size: 0.75rem; font-weight: 600; color: {card.trend === 'up' ? 'var(--md-sys-color-success)' : 'var(--md-sys-color-error)'};">
-          {card.change}
+          {card.delta || card.change || ''}
         </span>
       </div>
     </div>

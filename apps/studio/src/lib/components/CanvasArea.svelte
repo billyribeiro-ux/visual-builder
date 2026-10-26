@@ -55,7 +55,39 @@
         } else if (action === 'delete') {
           editor.dispatch({ type: 'DELETE_NODE', nodeId });
           if (editor.selectedNodeId === nodeId) editor.selectNode(null);
+        } else if (action === 'wrap-section') {
+          editor.wrapNode(nodeId, 'structure/section');
+        } else if (action === 'wrap-container') {
+          editor.wrapNode(nodeId, 'structure/container');
+        } else if (action === 'unwrap') {
+          editor.unwrapNode(nodeId);
+        } else if (action === 'copy') {
+          editor.selectNode(nodeId);
+          editor.copySelectedNode();
+        } else if (action === 'paste') {
+          editor.pasteNode(nodeId);
+        } else if (action === 'save-symbol') {
+          editor.selectNode(nodeId);
+          editor.saveSelectedNodeAsSymbol();
+        } else if (action === 'hide') {
+          editor.dispatch({ type: 'UPDATE_NODE_META', nodeId, meta: { hidden: true } });
         }
+      } else if (data.type === 'DROP_ITEM') {
+        const { componentType, draggedNodeId, targetNodeId, position } = data;
+        if (componentType) {
+          editor.dropComponentOnTarget(componentType, targetNodeId, position);
+        } else if (draggedNodeId) {
+          editor.dropNodeOnTarget(draggedNodeId, targetNodeId, position);
+        }
+      } else if (data.type === 'KEY_SHORTCUT') {
+        const { shortcut } = data;
+        if (shortcut === 'undo') editor.undo();
+        else if (shortcut === 'redo') editor.redo();
+        else if (shortcut === 'duplicate') editor.duplicateSelectedNode();
+        else if (shortcut === 'copy') editor.copySelectedNode();
+        else if (shortcut === 'paste') editor.pasteNode();
+        else if (shortcut === 'delete') editor.deleteSelectedNode();
+        else if (shortcut === 'escape') editor.selectNode(null);
       }
     }
 
@@ -72,7 +104,9 @@
     </span>
     <span class="dot-separator">•</span>
     <span class="mode-text">
-      {editor.isInteractiveMode ? 'Interactive Preview (Live App)' : 'Design Mode (Click to Inspect)'}
+      {editor.isInteractiveMode
+        ? 'Interactive Preview (Live App)'
+        : 'Design Mode (Click, Drag & Drop, or Right-Click)'}
     </span>
 
     {#if editor.selectedNodeBreadcrumb.length > 0 && !editor.isInteractiveMode}

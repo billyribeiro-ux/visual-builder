@@ -1,4 +1,4 @@
-import { ProjectBlueprintSchema, type ProjectBlueprint, type BlueprintNode } from './blueprint.js';
+import { ProjectBlueprintSchema, type ProjectBlueprint, type BlueprintNode, type PageRoute } from './blueprint.js';
 import { DEFAULT_MD3_LIGHT_COLORS } from './tokens.js';
 
 export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
@@ -416,10 +416,10 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
               name: 'KPI Metric Cards',
               props: {
                 cards: [
-                  { title: 'Total Revenue', value: '$124,592', change: '+14.2%', trend: 'up' },
-                  { title: 'Active AI Sessions', value: '8,421', change: '+28.4%', trend: 'up' },
-                  { title: 'Export Parity Score', value: '99.9%', change: '+0.1%', trend: 'up' },
-                  { title: 'Avg Build Time', value: '1.2s', change: '-18.5%', trend: 'up' }
+                  { label: 'Total Revenue', title: 'Total Revenue', value: '$124,592', delta: '+14.2%', change: '+14.2%', trend: 'up' },
+                  { label: 'Active AI Sessions', title: 'Active AI Sessions', value: '8,421', delta: '+28.4%', change: '+28.4%', trend: 'up' },
+                  { label: 'Export Parity Score', title: 'Export Parity Score', value: '99.9%', delta: '+0.1%', change: '+0.1%', trend: 'up' },
+                  { label: 'Avg Build Time', title: 'Avg Build Time', value: '1.2s', delta: '-18.5%', change: '-18.5%', trend: 'up' }
                 ]
               },
               styles: { base: { marginBottom: '1.5rem' } },
@@ -561,10 +561,17 @@ export interface PreflightCheckItem {
   detail: string;
 }
 
+export interface PreflightIssue {
+  severity: 'error' | 'warning';
+  code: string;
+  message: string;
+}
+
 export interface PreflightReport {
   valid: boolean;
   score: number;
   checks: PreflightCheckItem[];
+  issues: PreflightIssue[];
 }
 
 export function validateBlueprintPreflight(blueprint: ProjectBlueprint): PreflightReport {
@@ -659,10 +666,238 @@ export function validateBlueprintPreflight(blueprint: ProjectBlueprint): Preflig
   const failCount = checks.filter((c) => c.status === 'fail').length;
   const score = Math.round((passCount / checks.length) * 100);
 
+  const issues: PreflightIssue[] = checks
+    .filter((c) => c.status !== 'pass')
+    .map((c) => ({
+      severity: c.status === 'fail' ? 'error' : 'warning',
+      code: c.id.toUpperCase(),
+      message: `${c.label}: ${c.detail}`
+    }));
+
   return {
     valid: failCount === 0,
     score,
-    checks
+    checks,
+    issues
+  };
+}
+
+export type PageTemplateKey =
+  | 'blank'
+  | 'saas-landing'
+  | 'features'
+  | 'pricing'
+  | 'dashboard'
+  | 'auth-contact';
+
+export const PAGE_TEMPLATE_CATALOG: Array<{
+  key: PageTemplateKey;
+  label: string;
+  description: string;
+  usesSharedLayout: boolean;
+}> = [
+  {
+    key: 'blank',
+    label: 'Blank Container Page',
+    description: 'Clean MD3 container ready for custom sections.',
+    usesSharedLayout: true
+  },
+  {
+    key: 'saas-landing',
+    label: 'SaaS Marketing Landing',
+    description: 'Split Hero, Stats Bar, Feature Grid, Testimonials, FAQ & CTA Banner.',
+    usesSharedLayout: true
+  },
+  {
+    key: 'features',
+    label: 'Product Features & Specs',
+    description: 'Interactive Tabs, 3-Column Feature Grid, and Newsletter signup.',
+    usesSharedLayout: true
+  },
+  {
+    key: 'pricing',
+    label: 'Pricing Tiers & FAQ',
+    description: '3-tier Pricing Table with Popular highlight and FAQ Accordion.',
+    usesSharedLayout: true
+  },
+  {
+    key: 'dashboard',
+    label: 'Executive Analytics Dashboard',
+    description: 'Standalone Dashboard Shell with KPI Metric Cards and filterable Data Table.',
+    usesSharedLayout: false
+  },
+  {
+    key: 'auth-contact',
+    label: 'Authentication & Contact Portal',
+    description: 'Sign-In Card and MD3 Contact Form for customer onboarding.',
+    usesSharedLayout: true
+  }
+];
+
+function nextUuid(): string {
+  return '70000000-0000-4000-8000-' + Math.random().toString(16).slice(2, 14).padEnd(12, '0');
+}
+
+export function createPageFromTemplate(
+  templateKey: PageTemplateKey,
+  path: string,
+  title: string,
+  layoutId?: string
+): PageRoute {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const slug = normalizedPath.replace(/^\//, '').replace(/\//g, '-') || 'page';
+  const acme = createDefaultAcmeSaaSProject();
+
+  if (templateKey === 'saas-landing') {
+    const src = JSON.parse(JSON.stringify(acme.pages[0].rootNode));
+    src.id = nextUuid();
+    for (const c of src.children) c.id = nextUuid();
+    return {
+      id: nextUuid(),
+      path: normalizedPath,
+      slug,
+      title,
+      description: `${title} — SaaS Landing Page`,
+      layoutId,
+      isDynamic: false,
+      seo: { title },
+      rootNode: src
+    };
+  }
+
+  if (templateKey === 'features') {
+    const src = JSON.parse(JSON.stringify(acme.pages[1].rootNode));
+    src.id = nextUuid();
+    for (const c of src.children) c.id = nextUuid();
+    return {
+      id: nextUuid(),
+      path: normalizedPath,
+      slug,
+      title,
+      description: `${title} — Product Features`,
+      layoutId,
+      isDynamic: false,
+      seo: { title },
+      rootNode: src
+    };
+  }
+
+  if (templateKey === 'pricing') {
+    const src = JSON.parse(JSON.stringify(acme.pages[2].rootNode));
+    src.id = nextUuid();
+    for (const c of src.children) c.id = nextUuid();
+    return {
+      id: nextUuid(),
+      path: normalizedPath,
+      slug,
+      title,
+      description: `${title} — Pricing Plans`,
+      layoutId,
+      isDynamic: false,
+      seo: { title },
+      rootNode: src
+    };
+  }
+
+  if (templateKey === 'dashboard') {
+    const src = JSON.parse(JSON.stringify(acme.pages[3].rootNode));
+    src.id = nextUuid();
+    for (const c of src.children) c.id = nextUuid();
+    return {
+      id: nextUuid(),
+      path: normalizedPath,
+      slug,
+      title,
+      description: `${title} — Analytics Dashboard`,
+      layoutId: undefined,
+      isDynamic: false,
+      seo: { title },
+      rootNode: src
+    };
+  }
+
+  if (templateKey === 'auth-contact') {
+    return {
+      id: nextUuid(),
+      path: normalizedPath,
+      slug,
+      title,
+      description: `${title} — Portal`,
+      layoutId,
+      isDynamic: false,
+      seo: { title },
+      rootNode: {
+        id: nextUuid(),
+        componentType: 'structure/container',
+        name: `${title} Root Container`,
+        props: { maxWidth: 'xl' },
+        styles: { base: { paddingTop: '2rem', paddingBottom: '4rem' } },
+        interactions: [],
+        locked: false,
+        hidden: false,
+        customClasses: '',
+        children: [
+          {
+            id: nextUuid(),
+            componentType: 'app/auth-card',
+            name: 'Workspace Sign-In Card',
+            props: {
+              mode: 'signin',
+              brandName: 'Acme Cloud',
+              title: 'Sign in to your account',
+              subtitle: 'Enter your work credentials to access the console.',
+              redirectHref: '/dashboard'
+            },
+            styles: { base: {} },
+            interactions: [],
+            locked: false,
+            hidden: false,
+            customClasses: '',
+            children: []
+          },
+          {
+            id: nextUuid(),
+            componentType: 'marketing/contact-form',
+            name: 'Enterprise Contact Form',
+            props: {
+              sectionEyebrow: 'ENTERPRISE SUPPORT',
+              sectionTitle: 'Need a custom deployment?',
+              sectionSubtitle: 'Reach out to our solutions engineering team.',
+              submitText: 'Send Request'
+            },
+            styles: { base: {} },
+            interactions: [],
+            locked: false,
+            hidden: false,
+            customClasses: '',
+            children: []
+          }
+        ]
+      }
+    };
+  }
+
+  return {
+    id: nextUuid(),
+    path: normalizedPath,
+    slug,
+    title,
+    description: `${title} page`,
+    layoutId,
+    isDynamic: false,
+    seo: { title },
+    rootNode: {
+      id: nextUuid(),
+      componentType: 'structure/container',
+      name: `${title} Root Container`,
+      props: { maxWidth: 'xl' },
+      styles: { base: { minHeight: '60vh', paddingTop: '3rem', paddingBottom: '3rem' } },
+      interactions: [],
+      locked: false,
+      hidden: false,
+      customClasses: '',
+      children: []
+    }
   };
 }
 

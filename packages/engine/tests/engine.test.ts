@@ -4,7 +4,8 @@ import {
   HistoryManager,
   executeCommand,
   findNodeById,
-  resolveEffectiveStyles
+  resolveEffectiveStyles,
+  compileNodeScopedCss
 } from '../src/index.js';
 
 describe('Editor Engine & Reducer', () => {
@@ -88,5 +89,68 @@ describe('Editor Engine & Reducer', () => {
 
     const hoverEffective = resolveEffectiveStyles(style, 'desktop', 'hover');
     expect(hoverEffective.color).toBe('#FF0000');
+  });
+
+  it('supports WRAP_NODE, UNWRAP_NODE, and MOVE_NODE with circular nesting guard', () => {
+    const project = createDefaultAcmeSaaSProject();
+    const heroNodeId = '30000000-0000-0000-0000-000000000002';
+    const wrapperId = '99999999-0000-4000-8000-000000000001';
+
+    // Wrap heroNode in a Section container
+    const wrapped = executeCommand(project, {
+      type: 'WRAP_NODE',
+      nodeId: heroNodeId,
+      wrapperId,
+      wrapperType: 'structure/section',
+      wrapperName: 'Wrapper Section',
+      wrapperProps: { paddingY: '64px' }
+    });
+
+    const homeAfterWrap = wrapped.pages.find((p) => p.path === '/')!;
+    const wrapperInTree = findNodeById(homeAfterWrap.rootNode, wrapperId);
+    expect(wrapperInTree).toBeDefined();
+    expect(wrapperInTree?.children[0]?.id).toBe(heroNodeId);
+
+    // Prevent moving wrapper inside its own child (circular guard)
+    const afterInvalidMove = executeCommand(wrapped, {
+      type: 'MOVE_NODE',
+      nodeId: wrapperId,
+      targetParentId: heroNodeId,
+      newIndex: 0
+    });
+    expect(findNodeById(afterInvalidMove.pages[0].rootNode, wrapperId)?.children[0]?.id).toBe(heroNodeId);
+
+    // Unwrap wrapper node and restore heroNode in place
+    const unwrapped = executeCommand(wrapped, {
+      type: 'UNWRAP_NODE',
+      nodeId: wrapperId
+    });
+    const homeAfterUnwrap = unwrapped.pages.find((p) => p.path === '/')!;
+    expect(findNodeById(homeAfterUnwrap.rootNode, wrapperId)).toBeNull();
+    expect(homeAfterUnwrap.rootNode.children[0]?.id).toBe(heroNodeId);
+  });
+
+  it('compiles responsive and stateful node styles via compileNodeScopedCss', () => {
+    const project = createDefaultAcmeSaaSProject();
+    const heroNodeId = '30000000-0000-0000-0000-000000000002';
+
+    let updated = executeCommand(project, {
+      type: 'UPDATE_STYLES',
+      nodeId: heroNodeId,
+      breakpoint: 'mobile',
+      styles: { paddingTop: '24px' }
+    });
+
+    updated = executeCommand(updated, {
+      type: 'UPDATE_STYLES',
+      nodeId: heroNodeId,
+      breakpoint: 'hover',
+      styles: { backgroundColor: '#EDF2FC' }
+    });
+
+    const css = compileNodeScopedCss([updated.pages[0].rootNode]);
+    expect(css).toContain(`[data-node-id="${heroNodeId}"]:hover { background-color: #EDF2FC !important; }`);
+    expect(css).toContain(`@media (max-width: 767px)`);
+    expect(css).toContain(`[data-node-id="${heroNodeId}"] { padding-top: 24px !important; }`);
   });
 });

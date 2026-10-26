@@ -1,16 +1,26 @@
 <script lang="ts">
-  import { editor } from '../state/editor.svelte.js';
+  import { editor, isContainerComponent } from '../state/editor.svelte.js';
   import { getAllManifests, getManifestsByCategory } from '@app-viz/components';
-  import { MD3_THEME_PRESETS, type BlueprintNode, type PageRoute } from '@app-viz/schema';
+  import {
+    MD3_THEME_PRESETS,
+    PAGE_TEMPLATE_CATALOG,
+    createPageFromTemplate,
+    type PageTemplateKey,
+    type BlueprintNode
+  } from '@app-viz/schema';
 
   let searchQuery = $state('');
-  let newPagePath = $state('/about');
-  let newPageTitle = $state('About Us');
+  let newPagePath = $state('/solutions');
+  let newPageTitle = $state('Solutions');
+  let selectedPageTemplate = $state<PageTemplateKey>('saas-landing');
   let usePublicLayout = $state(true);
   let showAddPageModal = $state(false);
+  let dragOverLayerId = $state<string | null>(null);
+  let dragOverPosition = $state<'before' | 'inside' | 'after'>('after');
 
   const categories = [
     { key: 'all', label: 'All (25)' },
+    { key: 'favorites', label: '★ Favorites' },
     { key: 'hero', label: 'Hero' },
     { key: 'marketing', label: 'Marketing' },
     { key: 'navigation', label: 'Navigation' },
@@ -21,7 +31,12 @@
   let selectedCategory = $state('all');
 
   const filteredComponents = $derived.by(() => {
-    let list = selectedCategory === 'all' ? getAllManifests() : getManifestsByCategory(selectedCategory);
+    let list =
+      selectedCategory === 'all'
+        ? getAllManifests()
+        : selectedCategory === 'favorites'
+          ? getAllManifests().filter((m) => editor.favoriteComponents.includes(m.type))
+          : getManifestsByCategory(selectedCategory);
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(
@@ -34,15 +49,6 @@
     return list;
   });
 
-  function canAcceptChildren(componentType: string): boolean {
-    return (
-      componentType === 'structure/container' ||
-      componentType === 'structure/section' ||
-      componentType === 'structure/grid' ||
-      componentType === 'app/dashboard-shell'
-    );
-  }
-
   function insertComponent(componentType: string) {
     if (!editor.activePage) return;
     const manifest = getAllManifests().find((m) => m.type === componentType);
@@ -54,12 +60,16 @@
       name: manifest.displayName,
       props: JSON.parse(JSON.stringify(manifest.defaultProps)),
       styles: { base: {} },
-      children: []
+      interactions: [],
+      children: [],
+      locked: false,
+      hidden: false,
+      customClasses: ''
     };
 
     const selected = editor.selectedNode;
     const targetParentId =
-      selected && canAcceptChildren(selected.componentType)
+      selected && isContainerComponent(selected.componentType)
         ? selected.id
         : editor.activePage.rootNode.id;
 
@@ -72,29 +82,22 @@
   }
 
   function createNewPage() {
-    if (!newPagePath.startsWith('/')) {
-      newPagePath = '/' + newPagePath;
-    }
-    const slug = newPagePath.replace(/^\//, '').replace(/\//g, '-') || 'page';
-    const defaultLayout = editor.blueprint.layouts.find((l) => l.isDefault) || editor.blueprint.layouts[0];
+    const defaultLayout =
+      editor.blueprint.layouts.find((l) => l.isDefault) || editor.blueprint.layouts[0];
+    const tplMeta = PAGE_TEMPLATE_CATALOG.find((t) => t.key === selectedPageTemplate);
+    const shouldAttachLayout =
+      tplMeta && !tplMeta.usesSharedLayout
+        ? undefined
+        : usePublicLayout && defaultLayout
+          ? defaultLayout.id
+          : undefined;
 
-    const newPage: PageRoute = {
-      id: crypto.randomUUID(),
-      path: newPagePath,
-      slug,
-      title: newPageTitle,
-      description: `${newPageTitle} page`,
-      layoutId: usePublicLayout && defaultLayout ? defaultLayout.id : undefined,
-      isDynamic: false,
-      rootNode: {
-        id: crypto.randomUUID(),
-        componentType: 'structure/container',
-        name: `${newPageTitle} Root Container`,
-        props: { maxWidth: 'xl' },
-        styles: { base: { minHeight: '60vh', paddingTop: '3rem', paddingBottom: '3rem' } },
-        children: []
-      }
-    };
+    const newPage = createPageFromTemplate(
+      selectedPageTemplate,
+      newPagePath,
+      newPageTitle,
+      shouldAttachLayout
+    );
 
     editor.dispatch({
       type: 'ADD_PAGE',
@@ -112,12 +115,63 @@
       }
     });
   }
+
+  function handleLibDragStart(e: DragEvent, componentType: string) {
+    e.dataTransfer?.setData('application/x-app-viz-component', componentType);
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
+  }
+
+  function handleLayerDragStart(e: DragEvent, nodeId: string) {
+    e.stopPropagation();
+    e.dataTransfer?.setData('application/x-app-viz-node-id', nodeId);
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function handleLayerDragOver(e: DragEvent, node: BlueprintNode) {
+    e.preventDefault();
+    e.stopPropagation();
+    const el = e.currentTarget as HTMLElement;
+    const rect = el.getBoundingClientRect();
+    const ratio = rect.height > 0 ? (e.clientY - rect.top) / rect.height : 0.5;
+    dragOverLayerId = node.id;
+
+    if (isContainerComponent(node.componentType) && ratio > 0.25 && ratio < 0.75) {
+      dragOverPosition = 'inside';
+    } else if (ratio < 0.5) {
+      dragOverPosition = 'before';
+    } else {
+      dragOverPosition = 'after';
+    }
+  }
+
+  function handleLayerDrop(e: DragEvent, targetNode: BlueprintNode) {
+    e.preventDefault();
+    e.stopPropagation();
+    const pos = dragOverPosition;
+    dragOverLayerId = null;
+
+    const componentType = e.dataTransfer?.getData('application/x-app-viz-component');
+    const draggedNodeId = e.dataTransfer?.getData('application/x-app-viz-node-id');
+
+    if (componentType) {
+      editor.dropComponentOnTarget(componentType, targetNode.id, pos);
+    } else if (draggedNodeId && draggedNodeId !== targetNode.id) {
+      editor.dropNodeOnTarget(draggedNodeId, targetNode.id, pos);
+    }
+  }
 </script>
 
 {#snippet layerTreeItem(node: BlueprintNode, depth: number, isRoot: boolean)}
   <div
-    class="layer-item {editor.selectedNodeId === node.id ? 'layer-item--selected' : ''} {node.hidden ? 'layer-item--hidden' : ''}"
+    class="layer-item {editor.selectedNodeId === node.id ? 'layer-item--selected' : ''} {node.hidden ? 'layer-item--hidden' : ''} {dragOverLayerId === node.id ? `layer-item--drop-${dragOverPosition}` : ''}"
     style="padding-left: {0.625 + depth * 0.875}rem;"
+    draggable={!isRoot && !node.locked && node.componentType !== 'structure/slot'}
+    ondragstart={(e) => handleLayerDragStart(e, node.id)}
+    ondragover={(e) => handleLayerDragOver(e, node)}
+    ondragleave={() => {
+      if (dragOverLayerId === node.id) dragOverLayerId = null;
+    }}
+    ondrop={(e) => handleLayerDrop(e, node)}
     onclick={() => editor.selectNode(node.id)}
     role="button"
     tabindex="0"
@@ -156,11 +210,25 @@
         >↓</button>
         <button
           type="button"
+          title="Wrap in Section"
+          aria-label="Wrap layer in section"
+          onclick={(e) => {
+            e.stopPropagation();
+            editor.wrapNode(node.id, 'structure/section');
+          }}
+          class="action-icon"
+        >📦</button>
+        <button
+          type="button"
           title={node.hidden ? 'Show Layer' : 'Hide Layer'}
           aria-label="Toggle layer visibility"
           onclick={(e) => {
             e.stopPropagation();
-            editor.dispatch({ type: 'UPDATE_NODE_META', nodeId: node.id, meta: { hidden: !node.hidden } });
+            editor.dispatch({
+              type: 'UPDATE_NODE_META',
+              nodeId: node.id,
+              meta: { hidden: !node.hidden }
+            });
           }}
           class="action-icon"
         >{node.hidden ? '🙈' : '👁'}</button>
@@ -233,7 +301,7 @@
         <span class="panel-title">Project Routes ({editor.blueprint.pages.length})</span>
         <button
           type="button"
-          onclick={() => (showAddPageModal = true)}
+          onclick={() => (showAddPageModal = !showAddPageModal)}
           class="studio-btn studio-btn--primary sm-btn"
         >
           + Add Page
@@ -242,9 +310,24 @@
 
       {#if showAddPageModal}
         <div class="modal-card">
-          <div class="modal-title">Create New Page Route</div>
+          <div class="modal-title">Create Page from Template</div>
           <div class="field-group">
-            <label for="route-path-input" class="field-label">Route Path (e.g. /about)</label>
+            <label for="page-template-select" class="field-label">Whole-Page Template</label>
+            <select
+              id="page-template-select"
+              bind:value={selectedPageTemplate}
+              class="studio-select"
+            >
+              {#each PAGE_TEMPLATE_CATALOG as tpl (tpl.key)}
+                <option value={tpl.key}>{tpl.label}</option>
+              {/each}
+            </select>
+            <span class="tpl-hint">
+              {PAGE_TEMPLATE_CATALOG.find((t) => t.key === selectedPageTemplate)?.description}
+            </span>
+          </div>
+          <div class="field-group">
+            <label for="route-path-input" class="field-label">Route Path (e.g. /solutions)</label>
             <input
               id="route-path-input"
               type="text"
@@ -261,10 +344,12 @@
               class="studio-input"
             />
           </div>
-          <label class="checkbox-row">
-            <input type="checkbox" bind:checked={usePublicLayout} />
-            <span>Wrap in Shared Public Site Layout (Navbar + Footer)</span>
-          </label>
+          {#if selectedPageTemplate !== 'dashboard'}
+            <label class="checkbox-row">
+              <input type="checkbox" bind:checked={usePublicLayout} />
+              <span>Wrap in Shared Public Layout (Navbar + Footer)</span>
+            </label>
+          {/if}
           <div class="modal-actions">
             <button
               type="button"
@@ -278,7 +363,7 @@
               onclick={createNewPage}
               class="studio-btn studio-btn--primary sm-btn"
             >
-              Create
+              Create Page
             </button>
           </div>
         </div>
@@ -321,7 +406,7 @@
       </div>
     </div>
 
-  <!-- Tab Content: Layers (Recursive DOM Tree) -->
+  <!-- Tab Content: Layers (Recursive DOM Tree with Drag & Drop) -->
   {:else if editor.activeLeftTab === 'layers'}
     <div class="studio-panel-content flow-v">
       <div class="panel-header">
@@ -331,7 +416,7 @@
           onclick={() => editor.selectNode(null)}
           class="studio-btn text-link"
         >
-          Deselect
+          Page Settings
         </button>
       </div>
 
@@ -342,7 +427,10 @@
       {/if}
 
       {#if editor.activeLayout}
-        <div class="panel-header" style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--md-sys-color-outline-variant);">
+        <div
+          class="panel-header"
+          style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--md-sys-color-outline-variant);"
+        >
           <span class="panel-title">Shared Layout: {editor.activeLayout.name}</span>
         </div>
         <div class="list-stack">
@@ -351,9 +439,50 @@
       {/if}
     </div>
 
-  <!-- Tab Content: Component & Pattern Library -->
+  <!-- Tab Content: Component & Pattern Library + Reusable Symbols -->
   {:else if editor.activeLeftTab === 'library'}
     <div class="studio-panel-content library-container">
+      <!-- Reusable Symbols Section -->
+      <div class="symbols-box">
+        <div class="panel-header">
+          <span class="panel-title">Reusable Symbols ({editor.customSymbols.length})</span>
+          {#if editor.selectedNode}
+            <button
+              type="button"
+              onclick={() => editor.saveSelectedNodeAsSymbol()}
+              class="studio-btn text-link"
+              title="Save current selection as reusable symbol"
+            >
+              + Save Selected
+            </button>
+          {/if}
+        </div>
+        {#if editor.customSymbols.length > 0}
+          <div class="symbol-list">
+            {#each editor.customSymbols as sym (sym.id)}
+              <div class="symbol-row">
+                <span class="truncate" style="font-size: 0.75rem; font-weight: 600;">★ {sym.name}</span>
+                <div style="display: flex; gap: 0.25rem;">
+                  <button
+                    type="button"
+                    onclick={() => editor.insertSymbol(sym.id)}
+                    class="studio-btn studio-btn--primary"
+                    style="padding: 0.15rem 0.5rem; font-size: 0.6875rem;"
+                  >
+                    Insert
+                  </button>
+                  <button
+                    type="button"
+                    onclick={() => editor.deleteSymbol(sym.id)}
+                    class="action-icon action-icon--danger"
+                  >✕</button>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </div>
+
       <div class="library-search">
         <input
           type="text"
@@ -378,10 +507,29 @@
 
       <div class="cards-grid">
         {#each filteredComponents as item (item.type)}
-          <div class="lib-card">
+          {@const isFav = editor.favoriteComponents.includes(item.type)}
+          <div
+            class="lib-card"
+            draggable="true"
+            ondragstart={(e) => handleLibDragStart(e, item.type)}
+            role="listitem"
+          >
             <div class="lib-card__header">
-              <span class="lib-card__title">{item.displayName}</span>
-              <span class="lib-card__category">{item.category}</span>
+              <div style="display: flex; align-items: center; gap: 0.375rem;">
+                <span class="drag-grip" title="Drag onto canvas">⋮⋮</span>
+                <span class="lib-card__title">{item.displayName}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.25rem;">
+                <button
+                  type="button"
+                  onclick={() => editor.toggleFavorite(item.type)}
+                  aria-label="Toggle favorite"
+                  class="fav-btn {isFav ? 'fav-btn--active' : ''}"
+                >
+                  {isFav ? '★' : '☆'}
+                </button>
+                <span class="lib-card__category">{item.category}</span>
+              </div>
             </div>
             <p class="lib-card__desc">{item.description}</p>
             <button
@@ -389,7 +537,7 @@
               onclick={() => insertComponent(item.type)}
               class="studio-btn studio-btn--primary lib-card__btn"
             >
-              + Insert Component
+              + Insert or Drag to Canvas
             </button>
           </div>
         {/each}
@@ -550,6 +698,11 @@
     font-weight: 700;
     color: var(--md-sys-color-on-surface);
   }
+  .tpl-hint {
+    font-size: 0.6875rem;
+    color: var(--md-sys-color-on-surface-variant);
+    line-height: 1.3;
+  }
   .field-group {
     display: flex;
     flex-direction: column;
@@ -658,6 +811,15 @@
   .layer-item--hidden {
     opacity: 0.45;
   }
+  .layer-item--drop-before {
+    border-top: 2px solid var(--md-sys-color-primary);
+  }
+  .layer-item--drop-after {
+    border-bottom: 2px solid var(--md-sys-color-primary);
+  }
+  .layer-item--drop-inside {
+    outline: 1px dashed var(--md-sys-color-success);
+  }
   .layer-info {
     display: flex;
     align-items: center;
@@ -707,6 +869,27 @@
     flex-direction: column;
     gap: 0.75rem;
   }
+  .symbols-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  }
+  .symbol-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .symbol-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.35rem 0.5rem;
+    border-radius: 4px;
+    background-color: var(--md-sys-color-surface-container);
+    border: 1px solid var(--md-sys-color-outline-variant);
+  }
   .category-pills {
     display: flex;
     flex-wrap: wrap;
@@ -742,6 +925,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
+    cursor: grab;
     transition: border-color var(--md-sys-motion-duration-short);
   }
   .lib-card:hover {
@@ -751,6 +935,18 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+  }
+  .drag-grip {
+    color: var(--md-sys-color-outline);
+    font-size: 0.75rem;
+  }
+  .fav-btn {
+    font-size: 0.8125rem;
+    color: var(--md-sys-color-outline);
+    padding: 0 0.2rem;
+  }
+  .fav-btn--active {
+    color: #FBBF24;
   }
   .lib-card__title {
     font-size: 0.8125rem;

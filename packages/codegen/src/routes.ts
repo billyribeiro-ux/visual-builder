@@ -1,13 +1,44 @@
 import type { BlueprintNode, PageRoute, ProjectBlueprint } from '@app-viz/schema';
 import { cssPropertiesToString } from '@app-viz/engine';
 
+function hasScopedStyles(node: BlueprintNode): boolean {
+  const s = node.styles;
+  if (!s) return false;
+  return Boolean(
+    (s.mobile && Object.keys(s.mobile).length > 0) ||
+      (s.tablet && Object.keys(s.tablet).length > 0) ||
+      (s.desktop && Object.keys(s.desktop).length > 0) ||
+      (s.wide && Object.keys(s.wide).length > 0) ||
+      (s.hover && Object.keys(s.hover).length > 0) ||
+      (s.focus && Object.keys(s.focus).length > 0) ||
+      (s.active && Object.keys(s.active).length > 0)
+  );
+}
+
 function renderNodeToSvelte(
   node: BlueprintNode,
   indent = '  ',
   slotNode?: BlueprintNode
 ): string {
   if (node.hidden) return '';
+  if (node.componentType === 'structure/slot') {
+    return slotNode ? renderNodeToSvelte(slotNode, indent) : '';
+  }
 
+  const scoped = hasScopedStyles(node);
+  const innerIndent = scoped ? indent + '  ' : indent;
+  const rendered = renderNodeInner(node, innerIndent, slotNode);
+  if (scoped) {
+    return `${indent}<div data-node-id="${node.id}">\n${rendered}\n${indent}</div>`;
+  }
+  return rendered;
+}
+
+function renderNodeInner(
+  node: BlueprintNode,
+  indent = '  ',
+  slotNode?: BlueprintNode
+): string {
   const inlineStyle = cssPropertiesToString(node.styles?.base || {});
   const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : '';
 
