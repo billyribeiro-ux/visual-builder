@@ -637,25 +637,41 @@ export function getComponentSources(): Record<string, string> {
     rows = [],
     style = ''
   }: Props = $props();
+
+  let filterText = $state('');
+
+  const filteredRows = $derived.by(() => {
+    if (!filterText.trim()) return rows;
+    const q = filterText.toLowerCase();
+    return rows.filter((r) => r.some((cell) => String(cell).toLowerCase().includes(q)));
+  });
 </script>
 
 <div class="md-table-container" {style}>
-  {#if title}
-    <div style="padding: 1rem 1.5rem; font-weight: 700; border-bottom: 1px solid var(--md-sys-color-outline-variant);">
-      {title}
-    </div>
-  {/if}
+  <div style="padding: 1rem 1.5rem; border-bottom: 1px solid var(--md-sys-color-outline-variant); display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+    {#if title}
+      <div style="font-weight: 700; font-size: 1rem;">{title}</div>
+    {/if}
+    <input
+      type="search"
+      bind:value={filterText}
+      placeholder="Filter records..."
+      aria-label="Filter table records"
+      class="md-input"
+      style="max-width: 240px; padding: 0.4rem 0.75rem; font-size: 0.8125rem;"
+    />
+  </div>
   <div style="overflow-x: auto;">
     <table class="md-table">
       <thead>
         <tr>
-          {#each columns as col (col)}
+          {#each columns as col, cIdx (cIdx)}
             <th>{col}</th>
           {/each}
         </tr>
       </thead>
       <tbody>
-        {#each rows as row, rIdx (rIdx)}
+        {#each filteredRows as row, rIdx (rIdx)}
           <tr>
             {#each row as cell, cIdx (cIdx)}
               <td>{cell}</td>
@@ -754,6 +770,485 @@ export function getComponentSources(): Record<string, string> {
     </div>
   </form>
 </div>
+`,
+
+    'src/lib/components/Section.svelte': `<script lang="ts">
+  import type { Snippet } from 'svelte';
+  import Container from './Container.svelte';
+
+  interface Props {
+    surfaceTone?: 'surface' | 'low' | 'container' | 'high' | 'primary-container';
+    paddingY?: 'sm' | 'md' | 'lg' | 'xl';
+    maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full';
+    style?: string;
+    children?: Snippet;
+  }
+
+  let {
+    surfaceTone = 'low',
+    paddingY = 'lg',
+    maxWidth = 'xl',
+    style = '',
+    children
+  }: Props = $props();
+
+  const bgMap: Record<string, string> = {
+    surface: 'var(--md-sys-color-surface)',
+    low: 'var(--md-sys-color-surface-container-low)',
+    container: 'var(--md-sys-color-surface-container)',
+    high: 'var(--md-sys-color-surface-container-high)',
+    'primary-container': 'var(--md-sys-color-primary-container)'
+  };
+
+  const padMap: Record<string, string> = {
+    sm: '2rem 0',
+    md: '3.5rem 0',
+    lg: '5rem 0',
+    xl: '7rem 0'
+  };
+</script>
+
+<section style="background-color: {bgMap[surfaceTone] || bgMap.surface}; padding: {padMap[paddingY] || padMap.lg}; {style}">
+  <Container {maxWidth}>
+    {@render children?.()}
+  </Container>
+</section>
+`,
+
+    'src/lib/components/Grid.svelte': `<script lang="ts">
+  import type { Snippet } from 'svelte';
+
+  interface Props {
+    columns?: number;
+    gap?: string;
+    alignItems?: 'stretch' | 'start' | 'center' | 'end';
+    style?: string;
+    children?: Snippet;
+  }
+
+  let {
+    columns = 2,
+    gap = '1.5rem',
+    alignItems = 'stretch',
+    style = '',
+    children
+  }: Props = $props();
+</script>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: {gap}; align-items: {alignItems}; {style}" data-cols={columns}>
+  {@render children?.()}
+</div>
+`,
+
+    'src/lib/components/Divider.svelte': `<script lang="ts">
+  interface Props {
+    inset?: boolean;
+    spacingY?: string;
+    style?: string;
+  }
+
+  let { inset = false, spacingY = '2rem', style = '' }: Props = $props();
+</script>
+
+<hr style="border: 0; border-top: 1px solid var(--md-sys-color-outline-variant); margin: {spacingY} {inset ? '2rem' : '0'}; {style}" />
+`,
+
+    'src/lib/components/CtaBanner.svelte': `<script lang="ts">
+  import Button from './Button.svelte';
+  import Container from './Container.svelte';
+
+  interface Props {
+    title?: string;
+    subtitle?: string;
+    primaryCtaText?: string;
+    primaryCtaHref?: string;
+    secondaryCtaText?: string;
+    secondaryCtaHref?: string;
+    style?: string;
+  }
+
+  let {
+    title = 'Ready to accelerate your Svelte 5 workflow?',
+    subtitle = 'Export a deterministic, self-contained SvelteKit 3 handoff package for your AI coding agents in one click.',
+    primaryCtaText = 'Launch Studio Free',
+    primaryCtaHref = '/dashboard',
+    secondaryCtaText = 'Compare Plans',
+    secondaryCtaHref = '/pricing',
+    style = ''
+  }: Props = $props();
+</script>
+
+<section style="padding: 4.5rem 0; {style}">
+  <Container maxWidth="xl">
+    <div style="border-radius: var(--md-sys-shape-corner-extra-large, 28px); background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); padding: 3.5rem 2.5rem; text-align: center; box-shadow: var(--md-sys-elevation-level1);">
+      <h2 style="font-size: 2.25rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 1rem;">{title}</h2>
+      <p style="font-size: 1.0625rem; max-width: 640px; margin: 0 auto 2rem auto; opacity: 0.9;">{subtitle}</p>
+      <div style="display: flex; align-items: center; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+        <Button href={primaryCtaHref} size="lg" variant="filled">{primaryCtaText}</Button>
+        {#if secondaryCtaText}
+          <Button href={secondaryCtaHref} size="lg" variant="outlined">{secondaryCtaText}</Button>
+        {/if}
+      </div>
+    </div>
+  </Container>
+</section>
+`,
+
+    'src/lib/components/StatsBar.svelte': `<script lang="ts">
+  import Container from './Container.svelte';
+
+  interface StatItem {
+    value: string;
+    label: string;
+    detail?: string;
+  }
+
+  interface Props {
+    stats?: StatItem[];
+    style?: string;
+  }
+
+  let { stats = [], style = '' }: Props = $props();
+</script>
+
+<section style="padding: 3.5rem 0; background-color: var(--md-sys-color-surface-container); border-top: 1px solid var(--md-sys-color-outline-variant); border-bottom: 1px solid var(--md-sys-color-outline-variant); {style}">
+  <Container maxWidth="xl">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2rem; text-align: center;">
+      {#each stats as stat, idx (idx)}
+        <div>
+          <div style="font-size: 2.5rem; font-weight: 800; color: var(--md-sys-color-primary); letter-spacing: -0.02em;">{stat.value}</div>
+          <div style="font-size: 0.9375rem; font-weight: 700; color: var(--md-sys-color-on-surface); margin-top: 0.25rem;">{stat.label}</div>
+          {#if stat.detail}
+            <div style="font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.25rem;">{stat.detail}</div>
+          {/if}
+        </div>
+      {/each}
+    </div>
+  </Container>
+</section>
+`,
+
+    'src/lib/components/Newsletter.svelte': `<script lang="ts">
+  import Button from './Button.svelte';
+  import Container from './Container.svelte';
+
+  interface Props {
+    title?: string;
+    subtitle?: string;
+    placeholder?: string;
+    buttonText?: string;
+    style?: string;
+  }
+
+  let {
+    title = 'Stay ahead of the Svelte 5 ecosystem',
+    subtitle = 'Receive monthly architecture deep-dives, MD3 design token updates, and AI agent patterns.',
+    placeholder = 'engineer@company.com',
+    buttonText = 'Subscribe',
+    style = ''
+  }: Props = $props();
+
+  let email = $state('');
+  let subscribed = $state(false);
+
+  function handleSubscribe(e: SubmitEvent) {
+    e.preventDefault();
+    if (email.trim()) {
+      subscribed = true;
+      email = '';
+    }
+  }
+</script>
+
+<section style="padding: 4rem 0; background-color: var(--md-sys-color-surface-container-low); {style}">
+  <Container maxWidth="md">
+    <div class="md-card md-card--outlined" style="text-align: center; padding: 2.5rem;">
+      <h2 style="font-size: 1.75rem; font-weight: 800; margin-bottom: 0.75rem;">{title}</h2>
+      <p style="color: var(--md-sys-color-on-surface-variant); font-size: 0.9375rem; margin-bottom: 1.75rem;">{subtitle}</p>
+      {#if subscribed}
+        <div style="padding: 0.75rem 1rem; border-radius: var(--md-sys-shape-corner-small, 8px); background-color: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container); font-weight: 600; font-size: 0.875rem;">
+          ✓ Subscribed! Check your inbox for confirmation.
+        </div>
+      {:else}
+        <form onsubmit={handleSubscribe} style="display: flex; gap: 0.75rem; max-width: 460px; margin: 0 auto; flex-wrap: wrap;">
+          <input
+            type="email"
+            required
+            bind:value={email}
+            {placeholder}
+            aria-label="Email address"
+            class="md-input"
+            style="flex: 1; min-width: 200px;"
+          />
+          <Button type="submit">{buttonText}</Button>
+        </form>
+      {/if}
+    </div>
+  </Container>
+</section>
+`,
+
+    'src/lib/components/ContactForm.svelte': `<script lang="ts">
+  import Button from './Button.svelte';
+  import Container from './Container.svelte';
+
+  interface Props {
+    title?: string;
+    subtitle?: string;
+    submitText?: string;
+    style?: string;
+  }
+
+  let {
+    title = 'Talk to our Architecture Team',
+    subtitle = 'Questions about custom component registries, enterprise handoffs, or self-hosted deployments?',
+    submitText = 'Send Message',
+    style = ''
+  }: Props = $props();
+
+  let fullName = $state('');
+  let email = $state('');
+  let message = $state('');
+  let submitted = $state(false);
+
+  function handleSubmit(e: SubmitEvent) {
+    e.preventDefault();
+    submitted = true;
+  }
+</script>
+
+<section style="padding: 4.5rem 0; {style}">
+  <Container maxWidth="md">
+    <div class="md-card md-card--elevated" style="padding: 2.5rem;">
+      <h2 style="font-size: 1.75rem; font-weight: 800; margin-bottom: 0.5rem;">{title}</h2>
+      <p style="color: var(--md-sys-color-on-surface-variant); font-size: 0.9375rem; margin-bottom: 2rem;">{subtitle}</p>
+
+      {#if submitted}
+        <div style="padding: 1rem; border-radius: var(--md-sys-shape-corner-small, 8px); background-color: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container); font-weight: 600;">
+          ✓ Inquiry received. An engineering lead will respond within 1 business day.
+        </div>
+      {:else}
+        <form onsubmit={handleSubmit}>
+          <div class="md-form-group">
+            <label for="contact-name" class="md-label">Full Name</label>
+            <input id="contact-name" type="text" required bind:value={fullName} class="md-input" placeholder="Ada Lovelace" />
+          </div>
+          <div class="md-form-group">
+            <label for="contact-email" class="md-label">Work Email</label>
+            <input id="contact-email" type="email" required bind:value={email} class="md-input" placeholder="ada@analytical.engine" />
+          </div>
+          <div class="md-form-group">
+            <label for="contact-msg" class="md-label">Project Details</label>
+            <textarea id="contact-msg" rows="4" required bind:value={message} class="md-input" placeholder="Tell us about your SvelteKit 3 architecture goals..."></textarea>
+          </div>
+          <div style="display: flex; justify-content: flex-end; margin-top: 1.5rem;">
+            <Button type="submit">{submitText}</Button>
+          </div>
+        </form>
+      {/if}
+    </div>
+  </Container>
+</section>
+`,
+
+    'src/lib/components/AuthCard.svelte': `<script lang="ts">
+  import Button from './Button.svelte';
+
+  interface Props {
+    title?: string;
+    subtitle?: string;
+    redirectHref?: string;
+    style?: string;
+  }
+
+  let {
+    title = 'Welcome back to Acme SaaS',
+    subtitle = 'Sign in to your workspace to manage visual blueprints and deployments.',
+    redirectHref = '/dashboard',
+    style = ''
+  }: Props = $props();
+
+  let mode = $state<'signin' | 'signup'>('signin');
+  let email = $state('');
+  let password = $state('');
+  let authStatus = $state('');
+
+  function handleAuth(e: SubmitEvent) {
+    e.preventDefault();
+    authStatus = mode === 'signin' ? 'Authenticated! Redirecting to workspace...' : 'Account created! Initializing studio...';
+  }
+</script>
+
+<div style="padding: 4rem 1.5rem; display: flex; justify-content: center; {style}">
+  <div class="md-card md-card--elevated" style="width: 100%; max-width: 440px; padding: 2.25rem;">
+    <h2 style="font-size: 1.5rem; font-weight: 800; margin-bottom: 0.5rem;">
+      {mode === 'signin' ? title : 'Create your Acme SaaS Account'}
+    </h2>
+    <p style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant); margin-bottom: 1.75rem;">{subtitle}</p>
+
+    {#if authStatus}
+      <div style="margin-bottom: 1.25rem; padding: 0.75rem 1rem; border-radius: var(--md-sys-shape-corner-small, 8px); background-color: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container); font-size: 0.875rem; font-weight: 600;">
+        ✓ {authStatus}
+      </div>
+    {/if}
+
+    <form onsubmit={handleAuth}>
+      <div class="md-form-group">
+        <label for="auth-email" class="md-label">Email Address</label>
+        <input id="auth-email" type="email" required bind:value={email} class="md-input" placeholder="developer@company.com" />
+      </div>
+      <div class="md-form-group">
+        <label for="auth-pass" class="md-label">Password</label>
+        <input id="auth-pass" type="password" required bind:value={password} class="md-input" placeholder="••••••••" />
+      </div>
+      <div style="margin-top: 1.5rem;">
+        <Button type="submit" style="width: 100%;">{mode === 'signin' ? 'Sign In' : 'Create Account'}</Button>
+      </div>
+    </form>
+
+    <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--md-sys-color-outline-variant); text-align: center; font-size: 0.8125rem; color: var(--md-sys-color-on-surface-variant);">
+      {#if mode === 'signin'}
+        New to Acme SaaS?
+        <button type="button" onclick={() => (mode = 'signup')} style="color: var(--md-sys-color-primary); font-weight: 700; margin-left: 0.25rem;">Create an account</button>
+      {:else}
+        Already have an account?
+        <button type="button" onclick={() => (mode = 'signin')} style="color: var(--md-sys-color-primary); font-weight: 700; margin-left: 0.25rem;">Sign in</button>
+      {/if}
+    </div>
+  </div>
+</div>
+`,
+
+    'src/lib/components/Badge.svelte': `<script lang="ts">
+  interface Props {
+    text?: string;
+    tone?: 'primary' | 'secondary' | 'success' | 'error' | 'outline';
+    style?: string;
+  }
+
+  let { text = 'MD3 Verified', tone = 'primary', style = '' }: Props = $props();
+
+  const toneStyles: Record<string, string> = {
+    primary: 'background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container);',
+    secondary: 'background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container);',
+    success: 'background-color: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container);',
+    error: 'background-color: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);',
+    outline: 'border: 1px solid var(--md-sys-color-outline); color: var(--md-sys-color-on-surface);'
+  };
+</script>
+
+<span style="display: inline-flex; align-items: center; padding: 0.25rem 0.75rem; border-radius: var(--md-sys-shape-corner-small, 8px); font-size: 0.75rem; font-weight: 600; {toneStyles[tone] || toneStyles.primary} {style}">
+  {text}
+</span>
+`,
+
+    'src/lib/components/Card.svelte': `<script lang="ts">
+  import Button from './Button.svelte';
+
+  interface Props {
+    variant?: 'elevated' | 'filled' | 'outlined';
+    eyebrow?: string;
+    title?: string;
+    body?: string;
+    ctaText?: string;
+    ctaHref?: string;
+    style?: string;
+  }
+
+  let {
+    variant = 'elevated',
+    eyebrow = 'Feature Module',
+    title = 'Composable Architecture',
+    body = 'Built with pure Vanilla CSS and Google Material Design 3 tokens for zero runtime overhead.',
+    ctaText = 'Learn more',
+    ctaHref = '/features',
+    style = ''
+  }: Props = $props();
+</script>
+
+<div class="md-card md-card--{variant}" {style}>
+  {#if eyebrow}
+    <div style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--md-sys-color-primary); margin-bottom: 0.5rem;">
+      {eyebrow}
+    </div>
+  {/if}
+  <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.625rem;">{title}</h3>
+  <p style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant); line-height: 1.6; margin-bottom: 1.25rem;">{body}</p>
+  {#if ctaText}
+    <Button href={ctaHref} size="sm" variant="tonal">{ctaText}</Button>
+  {/if}
+</div>
+`,
+
+    'src/lib/components/Alert.svelte': `<script lang="ts">
+  interface Props {
+    tone?: 'info' | 'success' | 'error';
+    title?: string;
+    message?: string;
+    style?: string;
+  }
+
+  let {
+    tone = 'info',
+    title = 'System Status Nominal',
+    message = 'All SvelteKit 3 routes and Google MD3 design tokens are synchronized.',
+    style = ''
+  }: Props = $props();
+
+  const toneMap: Record<string, string> = {
+    info: 'background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container);',
+    success: 'background-color: var(--md-sys-color-success-container); color: var(--md-sys-color-on-success-container);',
+    error: 'background-color: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);'
+  };
+</script>
+
+<div role="status" style="padding: 1rem 1.25rem; border-radius: var(--md-sys-shape-corner-medium, 12px); {toneMap[tone] || toneMap.info} {style}">
+  <div style="font-weight: 700; font-size: 0.875rem; margin-bottom: 0.25rem;">{title}</div>
+  <div style="font-size: 0.8125rem; opacity: 0.9;">{message}</div>
+</div>
+`,
+
+    'src/lib/components/Tabs.svelte': `<script lang="ts">
+  import Container from './Container.svelte';
+
+  interface TabItem {
+    label: string;
+    title: string;
+    content: string;
+  }
+
+  interface Props {
+    tabs?: TabItem[];
+    style?: string;
+  }
+
+  let { tabs = [], style = '' }: Props = $props();
+  let activeIndex = $state(0);
+</script>
+
+<section style="padding: 3.5rem 0; {style}">
+  <Container maxWidth="lg">
+    <div style="display: flex; border-bottom: 1px solid var(--md-sys-color-outline-variant); gap: 0.5rem; margin-bottom: 1.75rem; overflow-x: auto;" role="tablist">
+      {#each tabs as tab, idx (idx)}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeIndex === idx}
+          onclick={() => (activeIndex = idx)}
+          style="padding: 0.875rem 1.25rem; font-size: 0.875rem; font-weight: 600; border-bottom: 3px solid {activeIndex === idx ? 'var(--md-sys-color-primary)' : 'transparent'}; color: {activeIndex === idx ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-on-surface-variant)'}; transition: all 150ms ease;"
+        >
+          {tab.label}
+        </button>
+      {/each}
+    </div>
+    {#if tabs[activeIndex]}
+      <div class="md-card md-card--outlined" role="tabpanel" style="padding: 2rem;">
+        <h3 style="font-size: 1.375rem; font-weight: 700; margin-bottom: 0.75rem;">{tabs[activeIndex].title}</h3>
+        <p style="font-size: 0.9375rem; color: var(--md-sys-color-on-surface-variant); line-height: 1.6;">{tabs[activeIndex].content}</p>
+      </div>
+    {/if}
+  </Container>
+</section>
 `
   };
 }

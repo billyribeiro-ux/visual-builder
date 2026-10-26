@@ -1,30 +1,29 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import Button from './Button.svelte';
 
   interface Props {
     title?: string;
     activeNav?: string;
     style?: string;
-    onNavigate?: (path: string) => void;
+    onNavigate?: (href: string) => void;
     children?: Snippet;
   }
 
   let {
-    title = 'Analytics Overview',
-    activeNav = 'overview',
+    title = 'Dashboard',
+    activeNav = 'dashboard',
     style = '',
     onNavigate,
     children
   }: Props = $props();
 
   const navItems = [
-    { key: 'overview', label: 'Overview', href: '/dashboard' },
-    { key: 'performance', label: 'Performance', href: '/dashboard' },
-    { key: 'settings', label: 'Settings', href: '/dashboard' }
+    { id: 'dashboard', label: 'Overview', href: '/dashboard' },
+    { id: 'settings', label: 'Settings', href: '/dashboard/settings' },
+    { id: 'home', label: 'Public Site', href: '/' }
   ];
 
-  function handleLink(e: MouseEvent, href: string) {
+  function handleNav(e: MouseEvent, href: string) {
     if (onNavigate && href.startsWith('/')) {
       e.preventDefault();
       onNavigate(href);
@@ -32,46 +31,33 @@
   }
 </script>
 
-<div class="md-dashboard" {style}>
-  <aside class="md-dashboard__sidebar">
-    <div>
-      <div style="font-weight: 800; font-size: 1.125rem; margin-bottom: 2rem; display: flex; align-items: center; gap: 0.5rem;">
-        <span style="color: var(--md-sys-color-primary);">⚡</span> Acme SaaS
-      </div>
-
-      <nav style="display: flex; flex-direction: column; gap: 0.375rem;">
-        {#each navItems as item (item.key)}
-          <a
-            href={item.href}
-            onclick={(e) => handleLink(e, item.href)}
-            style="padding: 0.625rem 1rem; border-radius: var(--md-sys-shape-corner-small, 8px); font-size: 0.875rem; font-weight: 600; text-decoration: none; color: {activeNav === item.key ? 'var(--md-sys-color-on-primary-container)' : 'var(--md-sys-color-on-surface-variant)'}; background-color: {activeNav === item.key ? 'var(--md-sys-color-primary-container)' : 'transparent'};"
-          >
-            {item.label}
-          </a>
-        {/each}
-      </nav>
-    </div>
-
-    <div>
-      <a
-        href="/"
-        onclick={(e) => handleLink(e, '/')}
-        style="font-size: 0.8125rem; color: var(--md-sys-color-primary); text-decoration: none;"
-      >
-        ← Back to Landing
+<div style="display: flex; min-height: 100vh; background-color: var(--md-sys-color-surface-container-low); {style}">
+  <aside style="width: 16rem; border-right: 1px solid var(--md-sys-color-outline-variant); background-color: var(--md-sys-color-surface); padding: 1.5rem 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
+    <div style="padding: 0 0.75rem 1.25rem; border-bottom: 1px solid var(--md-sys-color-outline-variant); margin-bottom: 0.75rem;">
+      <a href="/" onclick={(e) => handleNav(e, '/')} class="md-title-medium" style="text-decoration: none; color: var(--md-sys-color-primary); display: flex; align-items: center; gap: 0.5rem;">
+        <span style="width: 1.5rem; height: 1.5rem; border-radius: 0.375rem; background-color: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">A</span>
+        Acme Console
       </a>
     </div>
+    <nav style="display: flex; flex-direction: column; gap: 0.25rem;">
+      {#each navItems as item (item.id)}
+        <a
+          href={item.href}
+          onclick={(e) => handleNav(e, item.href)}
+          class="md-label-large"
+          style="padding: 0.75rem 1rem; border-radius: var(--md-sys-shape-corner-full); text-decoration: none; transition: background-color 150ms; background-color: {activeNav === item.id ? 'var(--md-sys-color-secondary-container)' : 'transparent'}; color: {activeNav === item.id ? 'var(--md-sys-color-on-secondary-container)' : 'var(--md-sys-color-on-surface-variant)'};"
+        >
+          {item.label}
+        </a>
+      {/each}
+    </nav>
   </aside>
-
-  <div class="md-dashboard__main">
-    <header class="md-dashboard__header">
-      <h1 style="font-size: 1.25rem; font-weight: 700;">{title}</h1>
-      <div style="display: flex; align-items: center; gap: 1rem;">
-        <Button size="sm" variant="tonal">Download Report</Button>
-      </div>
+  <div style="flex: 1; display: flex; flex-direction: column;">
+    <header style="height: 4rem; border-bottom: 1px solid var(--md-sys-color-outline-variant); background-color: var(--md-sys-color-surface); display: flex; align-items: center; justify-content: space-between; padding: 0 2rem;">
+      <h1 class="md-title-large" style="margin: 0;">{title}</h1>
+      <span class="md-badge">Material Design 3</span>
     </header>
-
-    <div class="md-dashboard__content">
+    <div style="padding: 2rem; flex: 1;">
       {@render children?.()}
     </div>
   </div>

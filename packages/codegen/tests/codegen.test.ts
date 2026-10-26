@@ -7,12 +7,20 @@ describe('Codegen Engine', () => {
     const project = createDefaultAcmeSaaSProject();
     const result = generateFullExport(project);
 
-    // Verify Agent docs
+    // Verify Agent & Section 10 handoff docs
     expect(result.files['AGENTS.md']).toContain('Svelte 5.57.2 + SvelteKit 3.1.0');
     expect(result.files['AGENTS.md']).toContain('/dashboard');
     expect(result.files['README.md']).toBeDefined();
+    expect(result.files['PROJECT_OVERVIEW.md']).toBeDefined();
+    expect(result.files['DATA_AND_INTEGRATIONS.md']).toBeDefined();
     expect(result.files['MANIFEST.json']).toBeDefined();
     expect(result.files['blueprint/project.blueprint.json']).toBeDefined();
+    expect(result.files['blueprint/component-manifest.json']).toBeDefined();
+    expect(result.files['blueprint/interaction-graph.json']).toBeDefined();
+    expect(result.files['blueprint/data-contracts.json']).toBeDefined();
+    expect(result.files['acceptance/acceptance-criteria.md']).toBeDefined();
+    expect(result.files['acceptance/scenarios.json']).toBeDefined();
+    expect(result.files['acceptance/dependency-compatibility.md']).toBeDefined();
 
     // Verify SvelteKit 3 project files
     expect(result.files['generated-app/package.json']).toContain('"@sveltejs/kit": "^3.1.0"');
@@ -20,18 +28,32 @@ describe('Codegen Engine', () => {
     expect(result.files['generated-app/src/app.css']).toContain('--md-sys-color-primary');
     expect(result.files['generated-app/src/app.css']).not.toContain('tailwindcss');
     expect(result.files['generated-app/src/routes/+layout.svelte']).toContain('{@render children?.()}');
+    expect(result.files['generated-app/src/routes/+error.svelte']).toBeDefined();
 
-    // Verify all 5 routes
-    expect(result.files['generated-app/src/routes/+page.svelte']).toBeDefined();
-    expect(result.files['generated-app/src/routes/features/+page.svelte']).toBeDefined();
-    expect(result.files['generated-app/src/routes/pricing/+page.svelte']).toBeDefined();
-    expect(result.files['generated-app/src/routes/dashboard/+page.svelte']).toBeDefined();
-    expect(result.files['generated-app/src/routes/dashboard/settings/+page.svelte']).toBeDefined();
+    // Verify all 5 routes & shared layout injection (Navbar + Footer on public pages)
+    expect(result.files['generated-app/src/routes/+page.svelte']).toContain('<Navbar');
+    expect(result.files['generated-app/src/routes/+page.svelte']).toContain('<Footer');
+    expect(result.files['generated-app/src/routes/features/+page.svelte']).toContain('<Navbar');
+    expect(result.files['generated-app/src/routes/pricing/+page.svelte']).toContain('<PricingTable');
+    expect(result.files['generated-app/src/routes/dashboard/+page.svelte']).toContain('<DashboardShell');
+    expect(result.files['generated-app/src/routes/dashboard/settings/+page.svelte']).toContain('<SettingsForm');
 
-    // Verify library components
+    // Verify all 25 library components
     expect(result.files['generated-app/src/lib/components/Container.svelte']).toBeDefined();
+    expect(result.files['generated-app/src/lib/components/Section.svelte']).toBeDefined();
+    expect(result.files['generated-app/src/lib/components/Grid.svelte']).toBeDefined();
+    expect(result.files['generated-app/src/lib/components/Divider.svelte']).toBeDefined();
     expect(result.files['generated-app/src/lib/components/SplitHero.svelte']).toBeDefined();
     expect(result.files['generated-app/src/lib/components/Button.svelte']).toBeDefined();
+    expect(result.files['generated-app/src/lib/components/Badge.svelte']).toBeDefined();
+    expect(result.files['generated-app/src/lib/components/Card.svelte']).toBeDefined();
+    expect(result.files['generated-app/src/lib/components/Alert.svelte']).toBeDefined();
+    expect(result.files['generated-app/src/lib/components/Tabs.svelte']).toBeDefined();
+    expect(result.files['generated-app/src/lib/components/CtaBanner.svelte']).toBeDefined();
+    expect(result.files['generated-app/src/lib/components/StatsBar.svelte']).toBeDefined();
+    expect(result.files['generated-app/src/lib/components/Newsletter.svelte']).toBeDefined();
+    expect(result.files['generated-app/src/lib/components/ContactForm.svelte']).toBeDefined();
+    expect(result.files['generated-app/src/lib/components/AuthCard.svelte']).toBeDefined();
     expect(result.files['generated-app/src/lib/components/DashboardShell.svelte']).toBeDefined();
   });
 

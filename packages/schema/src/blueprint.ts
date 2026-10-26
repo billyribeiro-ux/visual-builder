@@ -11,6 +11,7 @@ export const BlueprintNodeSchema: z.ZodType<any> = z.lazy(() =>
     slotName: z.string().optional(),
     props: z.record(z.string(), z.any()).default({}),
     styles: ResponsiveStyleSchema.default({ base: {} }),
+    interactions: z.array(InteractionRuleSchema).default([]),
     children: z.array(BlueprintNodeSchema).default([]),
     locked: z.boolean().default(false),
     hidden: z.boolean().default(false),

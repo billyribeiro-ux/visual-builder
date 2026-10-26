@@ -4,7 +4,9 @@ import type {
   DesignTokens,
   InteractionRule,
   BreakpointKey,
-  CSSProperties
+  CSSProperties,
+  ProjectMeta,
+  ProjectBlueprint
 } from '@app-viz/schema';
 
 export type EditorCommand =
@@ -20,6 +22,16 @@ export type EditorCommand =
       nodeId: string;
       targetParentId: string;
       newIndex?: number;
+    }
+  | {
+      type: 'REORDER_NODE';
+      nodeId: string;
+      direction: 'up' | 'down';
+    }
+  | {
+      type: 'UPDATE_NODE_META';
+      nodeId: string;
+      meta: Partial<Pick<BlueprintNode, 'name' | 'locked' | 'hidden'>>;
     }
   | {
       type: 'UPDATE_PROPS';
@@ -51,7 +63,11 @@ export type EditorCommand =
   | {
       type: 'UPDATE_PAGE_META';
       pageId: string;
-      meta: Partial<Pick<PageRoute, 'title' | 'path' | 'slug' | 'description' | 'seo'>>;
+      meta: Partial<Pick<PageRoute, 'title' | 'path' | 'slug' | 'description' | 'seo' | 'layoutId'>>;
+    }
+  | {
+      type: 'UPDATE_PROJECT_META';
+      meta: Partial<Pick<ProjectMeta, 'name' | 'slug' | 'description'>>;
     }
   | {
       type: 'UPDATE_TOKENS';
@@ -64,4 +80,13 @@ export type EditorCommand =
   | {
       type: 'DELETE_INTERACTION';
       interactionId: string;
+    }
+  | {
+      type: 'UPDATE_INTERACTIONS';
+      nodeId: string;
+      interactions: InteractionRule[];
+    }
+  | {
+      type: 'LOAD_BLUEPRINT';
+      blueprint: ProjectBlueprint;
     };

@@ -5,11 +5,18 @@
 
   let blueprint = $state<ProjectBlueprint>(createDefaultAcmeSaaSProject());
   let activePageId = $state<string>('10000000-0000-0000-0000-000000000001');
+  let activeBreakpoint = $state<'mobile' | 'tablet' | 'desktop' | 'wide'>('desktop');
   let selectedNodeId = $state<string | null>(null);
   let isInteractiveMode = $state<boolean>(false);
 
   const activePage = $derived(
     blueprint.pages.find((p) => p.id === activePageId) || blueprint.pages[0]
+  );
+
+  const activeLayout = $derived(
+    activePage?.layoutId
+      ? blueprint.layouts.find((l) => l.id === activePage.layoutId)
+      : undefined
   );
 
   // Injects CSS variables for MD3 design tokens dynamically into :root
@@ -39,6 +46,7 @@
       if (data.type === 'SYNC_STATE') {
         blueprint = data.blueprint;
         activePageId = data.activePageId;
+        if (data.activeBreakpoint) activeBreakpoint = data.activeBreakpoint;
         selectedNodeId = data.selectedNodeId;
         isInteractiveMode = data.isInteractiveMode;
       }
@@ -60,6 +68,10 @@
       window.parent.postMessage({ type: 'NAVIGATE_PAGE', path }, window.location.origin);
     }
   }
+
+  function handleNodeAction(nodeId: string, action: 'up' | 'down' | 'duplicate' | 'delete') {
+    window.parent.postMessage({ type: 'NODE_ACTION', nodeId, action }, window.location.origin);
+  }
 </script>
 
 <svelte:head>
@@ -68,21 +80,36 @@
 
 <div class="preview-root">
   {#if activePage}
-    <PreviewRenderer
-      node={activePage.rootNode}
-      {selectedNodeId}
-      {isInteractiveMode}
-      onSelectNode={handleSelectNode}
-      onNavigate={handleNavigate}
-    />
+    {#if activeLayout}
+      <PreviewRenderer
+        node={activeLayout.rootNode}
+        slotNode={activePage.rootNode}
+        {activeBreakpoint}
+        {selectedNodeId}
+        {isInteractiveMode}
+        onSelectNode={handleSelectNode}
+        onNavigate={handleNavigate}
+        onNodeAction={handleNodeAction}
+      />
+    {:else}
+      <PreviewRenderer
+        node={activePage.rootNode}
+        {activeBreakpoint}
+        {selectedNodeId}
+        {isInteractiveMode}
+        onSelectNode={handleSelectNode}
+        onNavigate={handleNavigate}
+        onNodeAction={handleNodeAction}
+      />
+    {/if}
   {/if}
 </div>
 
 <style>
   .preview-root {
     min-height: 100vh;
-    background-color: var(--md-sys-color-surface, #FFFFFF);
-    color: var(--md-sys-color-on-surface, #1C1B1F);
+    background-color: var(--md-sys-color-surface, #FAF9FD);
+    color: var(--md-sys-color-on-surface, #1B1B1F);
     font-family: var(--md-sys-font-body, Roboto, sans-serif);
     user-select: none;
   }

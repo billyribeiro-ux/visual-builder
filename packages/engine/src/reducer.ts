@@ -215,6 +215,72 @@ export function executeCommand(
       return next;
     }
 
+    case 'UPDATE_INTERACTIONS': {
+      let target: BlueprintNode | null = null;
+      for (const page of next.pages) {
+        target = findNodeById(page.rootNode, command.nodeId);
+        if (target) break;
+      }
+      if (!target) {
+        for (const layout of next.layouts) {
+          target = findNodeById(layout.rootNode, command.nodeId);
+          if (target) break;
+        }
+      }
+      if (target) {
+        target.interactions = command.interactions;
+      }
+      return next;
+    }
+
+    case 'REORDER_NODE': {
+      const reorderInRoot = (root: BlueprintNode): boolean => {
+        const parentInfo = findNodeParent(root, command.nodeId);
+        if (!parentInfo) return false;
+        const { parent, index } = parentInfo;
+        const targetIndex = command.direction === 'up' ? index - 1 : index + 1;
+        if (targetIndex < 0 || targetIndex >= parent.children.length) return true;
+        const [moved] = parent.children.splice(index, 1);
+        parent.children.splice(targetIndex, 0, moved);
+        return true;
+      };
+
+      for (const page of next.pages) {
+        if (reorderInRoot(page.rootNode)) return next;
+      }
+      for (const layout of next.layouts) {
+        if (reorderInRoot(layout.rootNode)) return next;
+      }
+      return next;
+    }
+
+    case 'UPDATE_NODE_META': {
+      let target: BlueprintNode | null = null;
+      for (const page of next.pages) {
+        target = findNodeById(page.rootNode, command.nodeId);
+        if (target) break;
+      }
+      if (!target) {
+        for (const layout of next.layouts) {
+          target = findNodeById(layout.rootNode, command.nodeId);
+          if (target) break;
+        }
+      }
+      if (target) {
+        Object.assign(target, command.meta);
+      }
+      return next;
+    }
+
+    case 'UPDATE_PROJECT_META': {
+      next.meta = { ...next.meta, ...command.meta };
+      return next;
+    }
+
+    case 'LOAD_BLUEPRINT': {
+      return JSON.parse(JSON.stringify(command.blueprint));
+    }
+
     default:
       return next;
   }
@@ -244,6 +310,21 @@ export class HistoryManager {
 
   public get canRedo(): boolean {
     return this.future.length > 0;
+  }
+
+  public get pastCount(): number {
+    return this.past.length;
+  }
+
+  public get futureCount(): number {
+    return this.future.length;
+  }
+
+  public reset(initial: ProjectBlueprint): ProjectBlueprint {
+    this.past = [];
+    this.future = [];
+    this.present = JSON.parse(JSON.stringify(initial));
+    return this.present;
   }
 
   public execute(command: EditorCommand): ProjectBlueprint {

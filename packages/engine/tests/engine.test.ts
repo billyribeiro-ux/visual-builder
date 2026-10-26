@@ -26,9 +26,9 @@ describe('Editor Engine & Reducer', () => {
     expect(history.canUndo).toBe(true);
     expect(history.current.tokens.colors.primary).toBe('#FF0000');
 
-    // Undo
+    // Undo restores Google MD3 primary (#0B57D0)
     history.undo();
-    expect(history.current.tokens.colors.primary).toBe('#2563EB');
+    expect(history.current.tokens.colors.primary).toBe('#0B57D0');
     expect(history.canRedo).toBe(true);
 
     // Redo
@@ -36,26 +36,41 @@ describe('Editor Engine & Reducer', () => {
     expect(history.current.tokens.colors.primary).toBe('#FF0000');
   });
 
-  it('updates node props via executeCommand', () => {
+  it('updates node props, meta, interactions, and reorders siblings via executeCommand', () => {
     const project = createDefaultAcmeSaaSProject();
     const heroNodeId = '30000000-0000-0000-0000-000000000002';
 
-    const updated = executeCommand(project, {
+    let updated = executeCommand(project, {
       type: 'UPDATE_PROPS',
       nodeId: heroNodeId,
       props: { title: 'Updated Hero Title via Studio' }
     });
 
+    updated = executeCommand(updated, {
+      type: 'UPDATE_NODE_META',
+      nodeId: heroNodeId,
+      meta: { name: 'Custom Hero Name', locked: true }
+    });
+
+    updated = executeCommand(updated, {
+      type: 'REORDER_NODE',
+      nodeId: heroNodeId,
+      direction: 'down'
+    });
+
     const homePage = updated.pages.find((p) => p.path === '/');
     const heroNode = findNodeById(homePage!.rootNode, heroNodeId);
     expect(heroNode?.props.title).toBe('Updated Hero Title via Studio');
+    expect(heroNode?.name).toBe('Custom Hero Name');
+    expect(heroNode?.locked).toBe(true);
+    expect(homePage!.rootNode.children[1].id).toBe(heroNodeId);
   });
 
   it('cascades responsive styles properly', () => {
     const style = {
       base: { fontSize: '16px', color: '#000000' },
       tablet: { fontSize: '20px' },
-      desktop: { fontSize: '24px', color: '#2563EB' },
+      desktop: { fontSize: '24px', color: '#0B57D0' },
       hover: { color: '#FF0000' }
     };
 
@@ -69,7 +84,7 @@ describe('Editor Engine & Reducer', () => {
 
     const desktopEffective = resolveEffectiveStyles(style, 'desktop');
     expect(desktopEffective.fontSize).toBe('24px');
-    expect(desktopEffective.color).toBe('#2563EB');
+    expect(desktopEffective.color).toBe('#0B57D0');
 
     const hoverEffective = resolveEffectiveStyles(style, 'desktop', 'hover');
     expect(hoverEffective.color).toBe('#FF0000');

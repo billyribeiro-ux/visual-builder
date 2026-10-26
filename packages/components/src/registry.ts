@@ -346,6 +346,272 @@ export const COMPONENT_REGISTRY: Record<string, ComponentManifest<any>> = {
       notificationsEnabled: true
     },
     slots: []
+  },
+
+  'structure/section': {
+    type: 'structure/section',
+    displayName: 'MD3 Surface Section',
+    category: 'structure',
+    description: 'Semantic page section with configurable MD3 surface container tone and vertical spacing.',
+    icon: 'Layout',
+    isSection: true,
+    propsSchema: z.object({
+      surfaceTone: z.enum(['surface', 'low', 'container', 'high', 'primary-container']).default('surface'),
+      paddingY: z.enum(['sm', 'md', 'lg', 'xl']).default('lg'),
+      maxWidth: z.enum(['sm', 'md', 'lg', 'xl', '2xl', 'full']).default('xl')
+    }),
+    defaultProps: {
+      surfaceTone: 'low',
+      paddingY: 'lg',
+      maxWidth: 'xl'
+    },
+    slots: [{ name: 'children', displayName: 'Section Content' }]
+  },
+
+  'structure/grid': {
+    type: 'structure/grid',
+    displayName: 'Responsive Grid / Stack',
+    category: 'structure',
+    description: 'Flexible multi-column grid or stack container for nesting cards, buttons, and UI blocks.',
+    icon: 'Columns',
+    propsSchema: z.object({
+      columns: z.number().min(1).max(4).default(2),
+      gap: z.string().default('1.5rem'),
+      alignItems: z.enum(['stretch', 'start', 'center', 'end']).default('stretch')
+    }),
+    defaultProps: {
+      columns: 2,
+      gap: '1.5rem',
+      alignItems: 'stretch'
+    },
+    slots: [{ name: 'children', displayName: 'Grid Items' }]
+  },
+
+  'structure/divider': {
+    type: 'structure/divider',
+    displayName: 'MD3 Divider',
+    category: 'structure',
+    description: 'Material Design 3 horizontal outline-variant divider line with configurable spacing.',
+    icon: 'Minus',
+    propsSchema: z.object({
+      inset: z.boolean().default(false),
+      spacingY: z.string().default('2rem')
+    }),
+    defaultProps: {
+      inset: false,
+      spacingY: '2rem'
+    },
+    slots: []
+  },
+
+  'marketing/cta-banner': {
+    type: 'marketing/cta-banner',
+    displayName: 'Call-to-Action Banner',
+    category: 'marketing',
+    description: 'High-impact MD3 primary container call-to-action banner with headline, subtitle, and dual actions.',
+    icon: 'Megaphone',
+    isSection: true,
+    propsSchema: z.object({
+      title: z.string().default('Ready to accelerate your Svelte 5 workflow?'),
+      subtitle: z.string().default('Export a deterministic, self-contained SvelteKit 3 handoff package for your AI coding agents in one click.'),
+      primaryCtaText: z.string().default('Launch Studio Free'),
+      primaryCtaHref: z.string().default('/dashboard'),
+      secondaryCtaText: z.string().default('Compare Plans'),
+      secondaryCtaHref: z.string().default('/pricing')
+    }),
+    defaultProps: {
+      title: 'Ready to accelerate your Svelte 5 workflow?',
+      subtitle: 'Export a deterministic, self-contained SvelteKit 3 handoff package for your AI coding agents in one click.',
+      primaryCtaText: 'Launch Studio Free',
+      primaryCtaHref: '/dashboard',
+      secondaryCtaText: 'Compare Plans',
+      secondaryCtaHref: '/pricing'
+    },
+    slots: []
+  },
+
+  'marketing/stats-bar': {
+    type: 'marketing/stats-bar',
+    displayName: 'Metrics & Stats Bar',
+    category: 'marketing',
+    description: 'Horizontal band showcasing key product metrics, benchmarks, and social proof numbers.',
+    icon: 'BarChart2',
+    isSection: true,
+    propsSchema: z.object({
+      stats: z.array(z.object({
+        value: z.string(),
+        label: z.string(),
+        detail: z.string().default('')
+      })).default([])
+    }),
+    defaultProps: {
+      stats: [
+        { value: '100%', label: 'Preview-to-Export Parity', detail: 'Zero runtime translation drift' },
+        { value: '5.57.2', label: 'Svelte 5 Runes Target', detail: 'Modern signal reactivity' },
+        { value: '0 KB', label: 'External CSS Runtime', detail: 'Pure Google MD3 Vanilla CSS' },
+        { value: '< 1.2s', label: 'Production Build Time', detail: 'Powered by Vite 8 & SvelteKit 3' }
+      ]
+    },
+    slots: []
+  },
+
+  'marketing/newsletter': {
+    type: 'marketing/newsletter',
+    displayName: 'Newsletter Capture',
+    category: 'marketing',
+    description: 'Interactive email subscription section with validation and confirmation state.',
+    icon: 'Mail',
+    isSection: true,
+    propsSchema: z.object({
+      title: z.string().default('Stay ahead of the Svelte 5 ecosystem'),
+      subtitle: z.string().default('Receive monthly architecture deep-dives, MD3 design token updates, and AI agent patterns.'),
+      placeholder: z.string().default('engineer@company.com'),
+      buttonText: z.string().default('Subscribe')
+    }),
+    defaultProps: {
+      title: 'Stay ahead of the Svelte 5 ecosystem',
+      subtitle: 'Receive monthly architecture deep-dives, MD3 design token updates, and AI agent patterns.',
+      placeholder: 'engineer@company.com',
+      buttonText: 'Subscribe'
+    },
+    slots: []
+  },
+
+  'marketing/contact-form': {
+    type: 'marketing/contact-form',
+    displayName: 'Contact & Inquiry Form',
+    category: 'marketing',
+    description: 'Multi-field enterprise contact section with interactive validation and submission state.',
+    icon: 'Send',
+    isSection: true,
+    propsSchema: z.object({
+      title: z.string().default('Talk to our Architecture Team'),
+      subtitle: z.string().default('Questions about custom component registries, enterprise handoffs, or self-hosted deployments?'),
+      submitText: z.string().default('Send Message')
+    }),
+    defaultProps: {
+      title: 'Talk to our Architecture Team',
+      subtitle: 'Questions about custom component registries, enterprise handoffs, or self-hosted deployments?',
+      submitText: 'Send Message'
+    },
+    slots: []
+  },
+
+  'app/auth-card': {
+    type: 'app/auth-card',
+    displayName: 'SaaS Auth Card (Sign In / Up)',
+    category: 'app',
+    description: 'Interactive authentication card supporting Sign-In and Sign-Up state switching and form validation.',
+    icon: 'Lock',
+    isSection: true,
+    propsSchema: z.object({
+      title: z.string().default('Welcome back to Acme SaaS'),
+      subtitle: z.string().default('Sign in to your workspace to manage visual blueprints and deployments.'),
+      redirectHref: z.string().default('/dashboard')
+    }),
+    defaultProps: {
+      title: 'Welcome back to Acme SaaS',
+      subtitle: 'Sign in to your workspace to manage visual blueprints and deployments.',
+      redirectHref: '/dashboard'
+    },
+    slots: []
+  },
+
+  'ui/badge': {
+    type: 'ui/badge',
+    displayName: 'MD3 Chip Badge',
+    category: 'ui',
+    description: 'Material Design 3 pill badge for status labels, version tags, and category chips.',
+    icon: 'Tag',
+    propsSchema: z.object({
+      text: z.string().default('MD3 Verified'),
+      tone: z.enum(['primary', 'secondary', 'success', 'error', 'outline']).default('primary')
+    }),
+    defaultProps: {
+      text: 'MD3 Verified',
+      tone: 'primary'
+    },
+    slots: []
+  },
+
+  'ui/card': {
+    type: 'ui/card',
+    displayName: 'MD3 Content Card',
+    category: 'ui',
+    description: 'Material Design 3 card (elevated, filled, or outlined) with title, body, and optional action.',
+    icon: 'CreditCard',
+    propsSchema: z.object({
+      variant: z.enum(['elevated', 'filled', 'outlined']).default('elevated'),
+      eyebrow: z.string().default('Feature Module'),
+      title: z.string().default('Composable Architecture'),
+      body: z.string().default('Built with pure Vanilla CSS and Google Material Design 3 tokens for zero runtime overhead.'),
+      ctaText: z.string().default('Learn more'),
+      ctaHref: z.string().default('/features')
+    }),
+    defaultProps: {
+      variant: 'elevated',
+      eyebrow: 'Feature Module',
+      title: 'Composable Architecture',
+      body: 'Built with pure Vanilla CSS and Google Material Design 3 tokens for zero runtime overhead.',
+      ctaText: 'Learn more',
+      ctaHref: '/features'
+    },
+    slots: []
+  },
+
+  'ui/alert': {
+    type: 'ui/alert',
+    displayName: 'MD3 Status Alert',
+    category: 'ui',
+    description: 'Semantic alert banner for informational, success, or error callouts.',
+    icon: 'AlertCircle',
+    propsSchema: z.object({
+      tone: z.enum(['info', 'success', 'error']).default('info'),
+      title: z.string().default('System Status Nominal'),
+      message: z.string().default('All SvelteKit 3 routes and Google MD3 design tokens are synchronized.')
+    }),
+    defaultProps: {
+      tone: 'info',
+      title: 'System Status Nominal',
+      message: 'All SvelteKit 3 routes and Google MD3 design tokens are synchronized.'
+    },
+    slots: []
+  },
+
+  'ui/tabs': {
+    type: 'ui/tabs',
+    displayName: 'MD3 Interactive Tabs',
+    category: 'ui',
+    description: 'Accessible tabbed interface with interactive panel switching.',
+    icon: 'Folder',
+    isSection: true,
+    propsSchema: z.object({
+      tabs: z.array(z.object({
+        label: z.string(),
+        title: z.string(),
+        content: z.string()
+      })).default([])
+    }),
+    defaultProps: {
+      tabs: [
+        {
+          label: '1. Design Visually',
+          title: 'Compose Multi-Page Flows on a Live Svelte 5 Canvas',
+          content: 'Assemble responsive marketing pages and SaaS dashboards using 25+ Google MD3 sections, live breakpoint controls, and real-time token cascading.'
+        },
+        {
+          label: '2. Inspect & Wire',
+          title: 'Fine-Tune Properties, Responsive Overrides, and Events',
+          content: 'Every edit dispatches a typed command to the immutable HistoryManager, enabling instant Undo/Redo, localStorage autosave, and named snapshots.'
+        },
+        {
+          label: '3. Export for AI Agents',
+          title: 'Deterministic Handoff ZIP + Standalone SvelteKit 3 Source',
+          content: 'Download a bit-exact archive containing AGENTS.md, project.blueprint.json, and a complete SvelteKit 3 application with zero external runtime lock-in.'
+        }
+      ]
+    },
+    slots: []
   }
 };
 

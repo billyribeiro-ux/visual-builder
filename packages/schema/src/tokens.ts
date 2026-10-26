@@ -1,7 +1,146 @@
 import { z } from 'zod';
 
-export const BreakpointKeySchema = z.enum(['compact', 'medium', 'expanded', 'large', 'extra-large', 'mobile', 'tablet', 'desktop', 'wide']);
+export const BreakpointKeySchema = z.enum([
+  'mobile',
+  'tablet',
+  'desktop',
+  'wide'
+]);
 export type BreakpointKey = z.infer<typeof BreakpointKeySchema>;
+
+export const DEFAULT_MD3_LIGHT_COLORS: Record<string, string> = {
+  // Primary (Google MD3 Blue)
+  primary: '#0B57D0',
+  'on-primary': '#FFFFFF',
+  'primary-container': '#D3E3FD',
+  'on-primary-container': '#041E49',
+  'primary-hover': '#0842A0',
+
+  // Secondary
+  secondary: '#00639B',
+  'on-secondary': '#FFFFFF',
+  'secondary-container': '#C2E7FF',
+  'on-secondary-container': '#001D35',
+  'secondary-hover': '#004A77',
+
+  // Tertiary
+  tertiary: '#146C2E',
+  'on-tertiary': '#FFFFFF',
+  'tertiary-container': '#C4EED0',
+  'on-tertiary-container': '#072711',
+
+  // Surface & Background
+  surface: '#FAF9FD',
+  'on-surface': '#1B1B1F',
+  'surface-dim': '#DBD9DD',
+  'surface-bright': '#FAF9FD',
+  'surface-variant': '#E1E2EC',
+  'on-surface-variant': '#44474E',
+  'surface-container-lowest': '#FFFFFF',
+  'surface-container-low': '#F4F3F7',
+  'surface-container': '#EEEDF1',
+  'surface-container-high': '#E8E7EC',
+  'surface-container-highest': '#E3E2E6',
+
+  // Outline & Borders
+  outline: '#74777F',
+  'outline-variant': '#C4C6D0',
+
+  // Error & Destructive
+  error: '#B3261E',
+  'on-error': '#FFFFFF',
+  'error-container': '#F9DEDC',
+  'on-error-container': '#410E0B',
+
+  // Success
+  success: '#146C2E',
+  'on-success': '#FFFFFF',
+  'success-container': '#C4EED0',
+  'on-success-container': '#072711'
+};
+
+export const DEFAULT_MD3_DARK_COLORS: Record<string, string> = {
+  primary: '#A8C7FA',
+  'on-primary': '#062E6F',
+  'primary-container': '#0842A0',
+  'on-primary-container': '#D3E3FD',
+  'primary-hover': '#C2D7FC',
+
+  secondary: '#7FCFFF',
+  'on-secondary': '#003355',
+  'secondary-container': '#004A77',
+  'on-secondary-container': '#C2E7FF',
+  'secondary-hover': '#A4DDFF',
+
+  tertiary: '#6DD58C',
+  'on-tertiary': '#0A3818',
+  'tertiary-container': '#0F5223',
+  'on-tertiary-container': '#C4EED0',
+
+  surface: '#131314',
+  'on-surface': '#E3E3E3',
+  'surface-dim': '#131314',
+  'surface-bright': '#37393B',
+  'surface-variant': '#444746',
+  'on-surface-variant': '#C4C7C5',
+  'surface-container-lowest': '#0E0E0F',
+  'surface-container-low': '#1B1B1B',
+  'surface-container': '#1E1F20',
+  'surface-container-high': '#282A2C',
+  'surface-container-highest': '#333537',
+
+  outline: '#8E918F',
+  'outline-variant': '#444746',
+
+  error: '#F2B8B5',
+  'on-error': '#601410',
+  'error-container': '#8C1D18',
+  'on-error-container': '#F9DEDC',
+
+  success: '#6DD58C',
+  'on-success': '#0A3818',
+  'success-container': '#0F5223',
+  'on-success-container': '#C4EED0'
+};
+
+export const MD3_THEME_PRESETS: Record<string, { label: string; colors: Record<string, string> }> = {
+  'google-blue-light': {
+    label: 'Google MD3 Blue (Light)',
+    colors: DEFAULT_MD3_LIGHT_COLORS
+  },
+  'google-blue-dark': {
+    label: 'Google MD3 Blue (Dark)',
+    colors: DEFAULT_MD3_DARK_COLORS
+  },
+  'emerald-light': {
+    label: 'MD3 Emerald FinTech (Light)',
+    colors: {
+      ...DEFAULT_MD3_LIGHT_COLORS,
+      primary: '#006C4C',
+      'on-primary': '#FFFFFF',
+      'primary-container': '#89F8C7',
+      'on-primary-container': '#002114',
+      'primary-hover': '#005138',
+      secondary: '#4D6357',
+      'secondary-container': '#CFE9D9',
+      'on-secondary-container': '#092016'
+    }
+  },
+  'violet-light': {
+    label: 'MD3 AI Studio Violet (Light)',
+    colors: {
+      ...DEFAULT_MD3_LIGHT_COLORS,
+      primary: '#6750A4',
+      'on-primary': '#FFFFFF',
+      'primary-container': '#EADDFF',
+      'on-primary-container': '#21005D',
+      'primary-hover': '#4F378B',
+      secondary: '#625B71',
+      'secondary-container': '#E8DEF8',
+      'on-secondary-container': '#1D192B'
+    }
+  }
+};
 
 /**
  * Google Material Design 3 (MD3) Design Tokens Specification (as of Oct 25, 2026)
@@ -9,65 +148,16 @@ export type BreakpointKey = z.infer<typeof BreakpointKeySchema>;
  */
 export const DesignTokensSchema = z.object({
   // MD3 Color System Roles
-  colors: z.record(z.string(), z.string()).default({
-    // Primary
-    primary: '#005FB0',
-    'on-primary': '#FFFFFF',
-    'primary-container': '#D5E3FF',
-    'on-primary-container': '#001C3B',
-    'primary-hover': '#004C8F',
-
-    // Secondary
-    secondary: '#555F71',
-    'on-secondary': '#FFFFFF',
-    'secondary-container': '#D9E3F8',
-    'on-secondary-container': '#121C2B',
-    'secondary-hover': '#434B5A',
-
-    // Tertiary
-    tertiary: '#6E5676',
-    'on-tertiary': '#FFFFFF',
-    'tertiary-container': '#F8D8FE',
-    'on-tertiary-container': '#281330',
-
-    // Surface & Background
-    surface: '#FDFBFF',
-    'on-surface': '#1A1C1E',
-    'surface-dim': '#D9D9E0',
-    'surface-bright': '#FDFBFF',
-    'surface-variant': '#E0E2EC',
-    'on-surface-variant': '#44474F',
-    'surface-container-lowest': '#FFFFFF',
-    'surface-container-low': '#F7F9FF',
-    'surface-container': '#F1F4FA',
-    'surface-container-high': '#EBEFF5',
-    'surface-container-highest': '#E5E9EF',
-
-    // Outline & Borders
-    outline: '#74777F',
-    'outline-variant': '#C4C6D0',
-
-    // Error & Destructive
-    error: '#BA1A1A',
-    'on-error': '#FFFFFF',
-    'error-container': '#FFDAD6',
-    'on-error-container': '#410002',
-
-    // Success
-    success: '#146C2E',
-    'on-success': '#FFFFFF',
-    'success-container': '#A3F5AA',
-    'on-success-container': '#002107'
-  }),
+  colors: z.record(z.string(), z.string()).default(DEFAULT_MD3_LIGHT_COLORS),
 
   // MD3 Typography Scale (Roboto / Roboto Flex standard)
   fonts: z.object({
-    heading: z.string().default('Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'),
-    body: z.string().default('Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'),
+    heading: z.string().default('Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'),
+    body: z.string().default('Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'),
     mono: z.string().default('"Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace')
   }).default({
-    heading: 'Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    body: 'Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    heading: 'Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    body: 'Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     mono: '"Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
   }),
 
@@ -81,7 +171,7 @@ export const DesignTokensSchema = z.object({
     'extra-large': '28px',
     full: '9999px',
     sm: '4px',
-    md: '8px',
+    md: '12px',
     lg: '16px',
     xl: '28px'
   }),

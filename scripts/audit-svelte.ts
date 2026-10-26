@@ -1,7 +1,10 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import vm from 'node:vm';
+import { createDefaultAcmeSaaSProject } from '../packages/schema/src/index.js';
+import { generateFullExport } from '../packages/codegen/src/index.js';
 
 const ROOT_DIR = process.cwd();
 const SVELTE_VERSION = '5.57.2';
@@ -56,61 +59,101 @@ async function auditRepository() {
   console.log('🔍 SVELTE AI-TOOL (@sveltejs/mcp) AUDIT — Svelte 5.57.2');
   console.log('=================================================================');
 
-  const files = findSvelteFiles(ROOT_DIR);
-  console.log(`Found ${files.length} Svelte component(s) to audit.\n`);
+  // 1. Audit all repository .svelte files
+  const repoFiles = findSvelteFiles(ROOT_DIR);
+
+  // 2. Also materialize generated SvelteKit 3 files to a temp directory and audit them
+  const tmpExportDir = fs.mkdtempSync(path.join(os.tmpdir(), 'app-viz-mcp-audit-'));
+  const exported = generateFullExport(createDefaultAcmeSaaSProject());
+  const generatedFiles: { fullPath: string; label: string }[] = [];
+
+  for (const [relPath, content] of Object.entries(exported.files)) {
+    if (relPath.endsWith('.svelte')) {
+      const fullPath = path.join(tmpExportDir, relPath);
+      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+      fs.writeFileSync(fullPath, content, 'utf-8');
+      generatedFiles.push({ fullPath, label: `[codegen] ${relPath}` });
+    }
+  }
+
+  const allTargets = [
+    ...repoFiles.map((f) => ({ fullPath: f, label: path.relative(ROOT_DIR, f) })),
+    ...generatedFiles
+  ];
+
+  console.log(
+    `Found ${repoFiles.length} Studio Svelte file(s) + ${generatedFiles.length} Codegen Svelte file(s) (${allTargets.length} total).\n`
+  );
 
   const results: AuditResult[] = [];
   let totalIssues = 0;
 
-  for (const file of files) {
-    const relative = path.relative(ROOT_DIR, file);
+  try {
+    for (const target of allTargets) {
+      try {
+        const output = execSync(
+          `pnpm exec svelte-mcp svelte-autofixer "${target.fullPath}" --svelte-version ${SVELTE_VERSION}`,
+          { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }
+        );
 
-    try {
-      const output = execSync(
-        `pnpm exec svelte-mcp svelte-autofixer "${file}" --svelte-version ${SVELTE_VERSION}`,
-        { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }
-      );
+        const { issues, suggestions } = parseMcpOutput(output);
 
-      const { issues, suggestions } = parseMcpOutput(output);
-
-      if (issues.length === 0) {
-        console.log(`✅ PASS: ${relative}`);
-        results.push({ file, relative, passed: true, issues: [], suggestions });
-      } else {
-        console.log(`❌ FAIL: ${relative} (${issues.length} issue(s))`);
-        for (const iss of issues) {
-          console.log(`   - ${iss}`);
+        if (issues.length === 0) {
+          console.log(`✅ PASS: ${target.label}`);
+          results.push({
+            file: target.fullPath,
+            relative: target.label,
+            passed: true,
+            issues: [],
+            suggestions
+          });
+        } else {
+          console.log(`❌ FAIL: ${target.label} (${issues.length} issue(s))`);
+          for (const iss of issues) {
+            console.log(`   - ${iss}`);
+          }
+          totalIssues += issues.length;
+          results.push({
+            file: target.fullPath,
+            relative: target.label,
+            passed: false,
+            issues,
+            suggestions
+          });
         }
-        totalIssues += issues.length;
-        results.push({ file, relative, passed: false, issues, suggestions });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.log(`❌ ERROR on ${target.label}: ${message}`);
+        totalIssues += 1;
+        results.push({
+          file: target.fullPath,
+          relative: target.label,
+          passed: false,
+          issues: [message],
+          suggestions: []
+        });
       }
-    } catch (err: any) {
-      console.log(`❌ ERROR on ${relative}: ${err.message}`);
-      totalIssues += 1;
-      results.push({
-        file,
-        relative,
-        passed: false,
-        issues: [err.message],
-        suggestions: []
-      });
     }
+  } finally {
+    fs.rmSync(tmpExportDir, { recursive: true, force: true });
   }
 
   console.log('\n=================================================================');
   console.log('📊 AUDIT SUMMARY');
   console.log('=================================================================');
-  console.log(`Total Files Audited : ${files.length}`);
-  console.log(`Passed Cleanly      : ${results.filter((r) => r.passed).length}`);
-  console.log(`Failed / Has Issues : ${results.filter((r) => !r.passed).length}`);
-  console.log(`Total Issues Found  : ${totalIssues}`);
+  console.log(`Studio Files Audited  : ${repoFiles.length}`);
+  console.log(`Codegen Files Audited : ${generatedFiles.length}`);
+  console.log(`Total Files Audited   : ${allTargets.length}`);
+  console.log(`Passed Cleanly        : ${results.filter((r) => r.passed).length}`);
+  console.log(`Failed / Has Issues   : ${results.filter((r) => !r.passed).length}`);
+  console.log(`Total Issues Found    : ${totalIssues}`);
   console.log('=================================================================');
 
   if (totalIssues > 0) {
     console.error(`\n❌ Svelte AI-tool audit failed with ${totalIssues} issue(s).`);
     process.exit(1);
   } else {
-    console.log('\n✨ All Svelte components passed the Svelte AI-Tool audit with 0 issues!');
+    console.log('\n✨ All Studio & Codegen Svelte 5 components passed the Svelte AI-Tool audit with 0 issues!');
     process.exit(0);
   }
 }
