@@ -53,7 +53,7 @@
 
     <!-- Desktop Navigation Links -->
     <nav class="md-navbar__nav">
-      {#each links as link (link.href)}
+      {#each links as link, idx (idx)}
         <a
           href={link.href}
           onclick={(e) => handleLink(e, link.href)}

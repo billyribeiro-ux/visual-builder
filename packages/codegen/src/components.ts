@@ -129,7 +129,7 @@ export function getComponentSources(): Record<string, string> {
     </a>
 
     <nav class="md-navbar__nav">
-      {#each links as link (link.href)}
+      {#each links as link, idx (idx)}
         <a href={link.href} class="md-navbar__link">
           {link.label}
         </a>
@@ -320,7 +320,7 @@ export function getComponentSources(): Record<string, string> {
     </div>
 
     <div class="md-pricing__grid">
-      {#each plans as plan (plan.name)}
+      {#each plans as plan, idx (idx)}
         <div class="md-card md-pricing__card {plan.isPopular ? 'md-pricing__card--popular md-card--elevated' : 'md-card--outlined'}">
           {#if plan.isPopular}
             <div class="md-pricing__popular-badge">
@@ -509,7 +509,7 @@ export function getComponentSources(): Record<string, string> {
             {col.title}
           </h4>
           <ul style="list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">
-            {#each col.links as link (link.href)}
+            {#each col.links as link, lIdx (lIdx)}
               <li>
                 <a href={link.href} style="transition: color 150ms ease;">
                   {link.label}

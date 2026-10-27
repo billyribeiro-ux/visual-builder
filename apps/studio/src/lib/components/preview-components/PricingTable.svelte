@@ -46,7 +46,7 @@
     </div>
 
     <div class="md-pricing__grid">
-      {#each plans as plan (plan.name)}
+      {#each plans as plan, idx (idx)}
         <div class="md-card md-pricing__card {plan.isPopular ? 'md-pricing__card--popular' : 'md-card--outlined'}">
           <div>
             {#if plan.isPopular}

@@ -44,7 +44,7 @@
         <div>
           <div style="font-weight: 700; font-size: 0.875rem; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em;">{col.title}</div>
           <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.625rem; font-size: 0.875rem;">
-            {#each col.links as link (link.href)}
+            {#each col.links as link, lIdx (lIdx)}
               <li>
                 <a
                   href={link.href}

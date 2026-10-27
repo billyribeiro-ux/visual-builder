@@ -352,7 +352,7 @@
               <div class="flow-subsection">
                 <div class="flow-subtitle">Declarative Interactions</div>
                 <div class="flow-edge-list">
-                  {#each item.interactiveActions as act (act)}
+                  {#each item.interactiveActions as act, aIdx (aIdx)}
                     <span class="flow-action-chip">⚡ {act}</span>
                   {/each}
                 </div>

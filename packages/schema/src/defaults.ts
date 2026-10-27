@@ -139,9 +139,9 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
                   {
                     title: 'Company',
                     links: [
-                      { label: 'About', href: '#' },
-                      { label: 'Careers', href: '#' },
-                      { label: 'Privacy Policy', href: '#' }
+                      { label: 'About', href: '#about' },
+                      { label: 'Careers', href: '#careers' },
+                      { label: 'Privacy Policy', href: '#privacy' }
                     ]
                   }
                 ]

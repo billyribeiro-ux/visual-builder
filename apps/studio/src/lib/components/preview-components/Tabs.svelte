@@ -20,7 +20,7 @@
     role="tablist"
     style="display: flex; border-bottom: 1px solid var(--md-sys-color-outline-variant); background-color: var(--md-sys-color-surface-container-low);"
   >
-    {#each tabs as tab (tab.id)}
+    {#each tabs as tab, idx (idx)}
       <button
         type="button"
         role="tab"
@@ -34,7 +34,7 @@
     {/each}
   </div>
   <div role="tabpanel" style="padding: 1.5rem;">
-    {#each tabs as tab (tab.id)}
+    {#each tabs as tab, idx (idx)}
       {#if activeId === tab.id}
         <p class="md-body-large" style="margin: 0; color: var(--md-sys-color-on-surface);">{tab.content}</p>
       {/if}

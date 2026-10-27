@@ -35,7 +35,7 @@
     </div>
 
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;">
-      {#each testimonials as item (item.author)}
+      {#each testimonials as item, idx (idx)}
         <div class="md-card md-card--elevated" style="display: flex; flex-direction: column; justify-content: space-between;">
           <p style="font-size: 1rem; line-height: 1.6; font-style: italic; margin-bottom: 1.5rem; color: var(--md-sys-color-on-surface);">
             "{item.quote}"
