@@ -4,6 +4,7 @@
   import CanvasArea from '#lib/components/CanvasArea.svelte';
   import RightInspector from '#lib/components/RightInspector.svelte';
   import CommandPalette from '#lib/components/CommandPalette.svelte';
+  import TemplateLibraryModal from '#lib/components/TemplateLibraryModal.svelte';
   import { editor } from '#lib/state/editor.svelte.js';
   import { onMount } from 'svelte';
 
@@ -26,9 +27,10 @@
         return;
       }
 
-      if (e.key === 'Escape' && editor.showCommandPalette) {
+      if (e.key === 'Escape' && (editor.showCommandPalette || editor.showBlockLibraryModal)) {
         e.preventDefault();
         editor.showCommandPalette = false;
+        editor.showBlockLibraryModal = false;
         return;
       }
 
@@ -90,18 +92,28 @@
   <!-- Top Control Bar -->
   <TopToolbar />
 
-  <!-- Main Studio Workspace Grid -->
-  <div class="studio-workspace">
-    <!-- Left Navigation & Library Drawer -->
-    <LeftSidebar />
+  <!-- Main Studio Workspace Grid (Full-Screen Canvas in Interactive Preview Mode) -->
+  <div
+    class="studio-workspace"
+    style={editor.isInteractiveMode ? 'grid-template-columns: 1fr;' : ''}
+  >
+    {#if !editor.isInteractiveMode}
+      <!-- Left Elementor Widget & Route Drawer -->
+      <LeftSidebar />
+    {/if}
 
     <!-- Center Interactive Responsive Canvas -->
     <CanvasArea />
 
-    <!-- Right Property & Event Inspector -->
-    <RightInspector />
+    {#if !editor.isInteractiveMode}
+      <!-- Right Content / Style / Advanced Inspector -->
+      <RightInspector />
+    {/if}
   </div>
 
   <!-- Universal Cmd+K Command Palette & AI Section Composer -->
   <CommandPalette />
+
+  <!-- Elementor Pro Block & Page Template Library Modal -->
+  <TemplateLibraryModal />
 </div>

@@ -200,6 +200,8 @@
         else if (shortcut === 'command-palette') {
           editor.showCommandPalette = !editor.showCommandPalette;
         }
+      } else if (data.type === 'OPEN_BLOCK_LIBRARY') {
+        editor.showBlockLibraryModal = true;
       }
     }
 

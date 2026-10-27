@@ -7,6 +7,36 @@
   let styleTargetMode = $state<'base' | 'breakpoint' | 'hover' | 'focus' | 'active'>('base');
   let rawJsonToggles = $state<Record<string, boolean>>({});
 
+  function humanizeLabel(raw: string): string {
+    return raw
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/[-_]/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      .replace(/\bCta\b/g, 'CTA')
+      .replace(/\bUrl\b/g, 'URL')
+      .replace(/\bId\b/g, 'ID')
+      .trim();
+  }
+
+  const quickBgSwatches = [
+    { label: 'White', val: '#FFFFFF' },
+    { label: 'Surface', val: '#FAF9FD' },
+    { label: 'Soft Gray', val: '#F0F4F9' },
+    { label: 'Blue Tint', val: '#EDF2FC' },
+    { label: 'Violet Tint', val: '#F3E8FD' },
+    { label: 'Mint Tint', val: '#E6F4EA' },
+    { label: 'Dark Slate', val: '#111318' }
+  ];
+
+  const quickTextSwatches = [
+    { label: 'Ink Dark', val: '#1B1B1F' },
+    { label: 'Muted Slate', val: '#444746' },
+    { label: 'MD3 Blue', val: '#0B57D0' },
+    { label: 'Violet', val: '#6750A4' },
+    { label: 'Emerald', val: '#146C2E' },
+    { label: 'Pure White', val: '#FFFFFF' }
+  ];
+
   const selectedNode = $derived(editor.selectedNode);
   const manifest = $derived(selectedNode ? getManifest(selectedNode.componentType) : null);
   const effectiveStyleBucket = $derived<
@@ -234,28 +264,28 @@
       </div>
     </div>
 
-    <!-- Inspector Tabs -->
+    <!-- Elementor Pro Inspector Tabs (Content | Style | Advanced) -->
     <div class="studio-tabs">
       <button
         type="button"
         onclick={() => (activeTab = 'props')}
         class="studio-tab {activeTab === 'props' ? 'studio-tab--active' : ''}"
       >
-        Content
+        ✏️ Content
       </button>
       <button
         type="button"
         onclick={() => (activeTab = 'style')}
         class="studio-tab {activeTab === 'style' ? 'studio-tab--active' : ''}"
       >
-        Styles
+        🎨 Style
       </button>
       <button
         type="button"
         onclick={() => (activeTab = 'interactions')}
         class="studio-tab {activeTab === 'interactions' ? 'studio-tab--active' : ''}"
       >
-        Events
+        ⚙️ Advanced
       </button>
     </div>
 
@@ -267,7 +297,7 @@
           <div class="field-item">
             <div class="field-label-row">
               <label for="prop-{propKey}" class="field-label">
-                {controlMeta?.label || propKey}
+                {controlMeta?.label || humanizeLabel(propKey)}
               </label>
               {#if Array.isArray(propVal)}
                 <button
@@ -734,29 +764,98 @@
           </div>
         </div>
 
-        <div class="section-title">MD3 Surface, Elevation & Effects</div>
+        <div class="section-title">Colors &amp; Surface Swatches</div>
         <div class="field-item">
-          <label for="style-bg" class="field-label">Background Color</label>
+          <div class="field-header-row">
+            <label for="style-bg" class="field-label">Background Color</label>
+            <input
+              type="color"
+              aria-label="Pick background color"
+              value={readStyle('backgroundColor').startsWith('#') ? readStyle('backgroundColor') : '#FAF9FD'}
+              oninput={(e) => updateStyle('backgroundColor', (e.target as HTMLInputElement).value)}
+              style="width: 24px; height: 22px; border: none; background: transparent; cursor: pointer;"
+            />
+          </div>
+          <div class="spacing-pill-row" style="margin-bottom: 0.35rem;">
+            {#each quickBgSwatches as sw (sw.label)}
+              <button
+                type="button"
+                onclick={() => updateStyle('backgroundColor', sw.val)}
+                title="{sw.label} ({sw.val})"
+                style="width: 22px; height: 22px; border-radius: 6px; background: {sw.val}; border: 1px solid var(--md-sys-color-outline-variant); cursor: pointer;"
+              ></button>
+            {/each}
+            <button
+              type="button"
+              onclick={() => updateStyle('backgroundColor', '')}
+              class="spacing-pill"
+            >Reset</button>
+          </div>
           <input
             id="style-bg"
             type="text"
-            placeholder="var(--md-sys-color-surface-container)"
+            placeholder="Default surface"
             value={readStyle('backgroundColor')}
             onchange={(e) => updateStyle('backgroundColor', (e.target as HTMLInputElement).value)}
             class="studio-input"
           />
         </div>
+
         <div class="field-item">
-          <label for="style-color" class="field-label">Text Color</label>
+          <div class="field-header-row">
+            <label for="style-color" class="field-label">Text Color</label>
+            <input
+              type="color"
+              aria-label="Pick text color"
+              value={readStyle('color').startsWith('#') ? readStyle('color') : '#1B1B1F'}
+              oninput={(e) => updateStyle('color', (e.target as HTMLInputElement).value)}
+              style="width: 24px; height: 22px; border: none; background: transparent; cursor: pointer;"
+            />
+          </div>
+          <div class="spacing-pill-row" style="margin-bottom: 0.35rem;">
+            {#each quickTextSwatches as sw (sw.label)}
+              <button
+                type="button"
+                onclick={() => updateStyle('color', sw.val)}
+                title="{sw.label} ({sw.val})"
+                style="width: 22px; height: 22px; border-radius: 6px; background: {sw.val}; border: 1px solid var(--md-sys-color-outline-variant); cursor: pointer;"
+              ></button>
+            {/each}
+            <button
+              type="button"
+              onclick={() => updateStyle('color', '')}
+              class="spacing-pill"
+            >Reset</button>
+          </div>
           <input
             id="style-color"
             type="text"
-            placeholder="var(--md-sys-color-on-surface)"
+            placeholder="Default text color"
             value={readStyle('color')}
             onchange={(e) => updateStyle('color', (e.target as HTMLInputElement).value)}
             class="studio-input"
           />
         </div>
+
+        <div class="field-item">
+          <span class="field-label">Text Alignment</span>
+          <div class="bp-target-bar">
+            {#each [
+              { val: 'left', label: '⬅ Left' },
+              { val: 'center', label: '⬌ Center' },
+              { val: 'right', label: '➡ Right' }
+            ] as al (al.val)}
+              <button
+                type="button"
+                onclick={() => updateStyle('textAlign', al.val)}
+                class="bp-target-btn {readStyle('textAlign') === al.val ? 'bp-target-btn--active' : ''}"
+              >
+                {al.label}
+              </button>
+            {/each}
+          </div>
+        </div>
+
         <div class="grid-2">
           <div class="field-item">
             <label for="style-radius" class="field-label">Corner Radius</label>
@@ -770,7 +869,7 @@
             />
           </div>
           <div class="field-item">
-            <label for="style-shadow" class="field-label">MD3 Elevation</label>
+            <label for="style-shadow" class="field-label">Shadow Elevation</label>
             <select
               id="style-shadow"
               value={readStyle('boxShadow')}
@@ -778,35 +877,10 @@
               class="studio-select"
             >
               <option value="">(Default)</option>
-              <option value="none">Level 0 (None)</option>
-              <option value="var(--md-sys-elevation-level1)">Level 1 (Low)</option>
-              <option value="var(--md-sys-elevation-level2)">Level 2 (Medium)</option>
-              <option value="var(--md-sys-elevation-level3)">Level 3 (High)</option>
-            </select>
-          </div>
-          <div class="field-item">
-            <label for="style-transform" class="field-label">Transform</label>
-            <input
-              id="style-transform"
-              type="text"
-              placeholder="translateY(-2px)"
-              value={readStyle('transform')}
-              onchange={(e) => updateStyle('transform', (e.target as HTMLInputElement).value)}
-              class="studio-input"
-            />
-          </div>
-          <div class="field-item">
-            <label for="style-align" class="field-label">Text Align</label>
-            <select
-              id="style-align"
-              value={readStyle('textAlign')}
-              onchange={(e) => updateStyle('textAlign', (e.target as HTMLSelectElement).value)}
-              class="studio-select"
-            >
-              <option value="">(Default)</option>
-              <option value="left">left</option>
-              <option value="center">center</option>
-              <option value="right">right</option>
+              <option value="none">None (Flat)</option>
+              <option value="var(--md-sys-elevation-level1)">Soft</option>
+              <option value="var(--md-sys-elevation-level2)">Medium</option>
+              <option value="var(--md-sys-elevation-level3)">Floating</option>
             </select>
           </div>
         </div>

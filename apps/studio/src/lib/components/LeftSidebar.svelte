@@ -28,15 +28,43 @@
 
   const categories = [
     { key: 'all', label: 'All (25)' },
-    { key: 'favorites', label: '★ Favorites' },
+    { key: 'favorites', label: '★ Saved' },
     { key: 'hero', label: 'Hero' },
     { key: 'marketing', label: 'Marketing' },
-    { key: 'navigation', label: 'Navigation' },
-    { key: 'app', label: 'Web-App UI' },
-    { key: 'structure', label: 'Structure' },
-    { key: 'ui', label: 'Primitives' }
+    { key: 'app', label: 'App UI' },
+    { key: 'ui', label: 'Basic' },
+    { key: 'structure', label: 'Layout' },
+    { key: 'navigation', label: 'Nav' }
   ];
   let selectedCategory = $state('all');
+
+  const widgetIcons: Record<string, string> = {
+    'hero/split-hero': '🦸',
+    'marketing/feature-grid': '✨',
+    'marketing/pricing-table': '💎',
+    'marketing/stats-bar': '📈',
+    'marketing/testimonials': '💬',
+    'marketing/faq-accordion': '❓',
+    'marketing/cta-banner': '📣',
+    'marketing/newsletter': '✉️',
+    'marketing/contact-form': '📞',
+    'marketing/footer': '🦶',
+    'navigation/navbar': '🧭',
+    'app/dashboard-shell': '🖥️',
+    'app/kpi-grid': '📊',
+    'app/data-table': '📋',
+    'app/settings-form': '⚙️',
+    'app/auth-card': '🔐',
+    'ui/button': '🔘',
+    'ui/badge': '🏷️',
+    'ui/card': '🃏',
+    'ui/alert': '🔔',
+    'ui/tabs': '🗂️',
+    'structure/section': '🧱',
+    'structure/container': '📐',
+    'structure/grid': '▦',
+    'structure/divider': '➖'
+  };
 
   const filteredComponents = $derived.by(() => {
     let list =
@@ -316,8 +344,15 @@
 {/snippet}
 
 <aside class="studio-sidebar">
-  <!-- Tabs Navigation Header -->
+  <!-- Tabs Navigation Header (Elementor Pro Order: Elements First) -->
   <div class="studio-tabs">
+    <button
+      type="button"
+      onclick={() => (editor.activeLeftTab = 'library')}
+      class="studio-tab {editor.activeLeftTab === 'library' ? 'studio-tab--active' : ''}"
+    >
+      ⊞ Elements
+    </button>
     <button
       type="button"
       onclick={() => (editor.activeLeftTab = 'pages')}
@@ -334,24 +369,17 @@
     </button>
     <button
       type="button"
-      onclick={() => (editor.activeLeftTab = 'library')}
-      class="studio-tab {editor.activeLeftTab === 'library' ? 'studio-tab--active' : ''}"
-    >
-      Library
-    </button>
-    <button
-      type="button"
       onclick={() => (editor.activeLeftTab = 'assets')}
       class="studio-tab {editor.activeLeftTab === 'assets' ? 'studio-tab--active' : ''}"
     >
-      Assets
+      Media
     </button>
     <button
       type="button"
       onclick={() => (editor.activeLeftTab = 'tokens')}
       class="studio-tab {editor.activeLeftTab === 'tokens' ? 'studio-tab--active' : ''}"
     >
-      Tokens
+      Theme
     </button>
   </div>
 
@@ -500,56 +528,33 @@
       {/if}
     </div>
 
-  <!-- Tab Content: Component & Pattern Library + Reusable Symbols -->
+  <!-- Tab Content: Elementor Pro 2-Column Widget Tile Grid -->
   {:else if editor.activeLeftTab === 'library'}
     <div class="studio-panel-content library-container">
-      <!-- Reusable Symbols Section -->
-      <div class="symbols-box">
-        <div class="panel-header">
-          <span class="panel-title">Reusable Symbols ({editor.customSymbols.length})</span>
-          {#if editor.selectedNode}
-            <button
-              type="button"
-              onclick={() => editor.saveSelectedNodeAsSymbol()}
-              class="studio-btn text-link"
-              title="Save current selection as reusable symbol"
-            >
-              + Save Selected
-            </button>
-          {/if}
-        </div>
-        {#if editor.customSymbols.length > 0}
-          <div class="symbol-list">
-            {#each editor.customSymbols as sym (sym.id)}
-              <div class="symbol-row">
-                <span class="truncate" style="font-size: 0.75rem; font-weight: 600;">★ {sym.name}</span>
-                <div style="display: flex; gap: 0.25rem;">
-                  <button
-                    type="button"
-                    onclick={() => editor.insertSymbol(sym.id)}
-                    class="studio-btn studio-btn--primary"
-                    style="padding: 0.15rem 0.5rem; font-size: 0.6875rem;"
-                  >
-                    Insert
-                  </button>
-                  <button
-                    type="button"
-                    onclick={() => editor.deleteSymbol(sym.id)}
-                    class="action-icon action-icon--danger"
-                  >✕</button>
-                </div>
-              </div>
-            {/each}
-          </div>
-        {/if}
+      <!-- Elementor Pro Template & AI Quick Launchers -->
+      <div class="el-quick-bar">
+        <button
+          type="button"
+          onclick={() => (editor.showBlockLibraryModal = true)}
+          class="studio-btn studio-btn--primary el-quick-btn"
+        >
+          📁 Block &amp; Page Kits
+        </button>
+        <button
+          type="button"
+          onclick={() => (editor.showCommandPalette = true)}
+          class="studio-btn el-quick-btn"
+        >
+          ✨ AI Builder
+        </button>
       </div>
 
       <div class="library-search">
         <input
-          type="text"
+          type="search"
           bind:value={searchQuery}
-          placeholder="Search 25 MD3 components..."
-          aria-label="Search components"
+          placeholder="🔍 Search widgets (Hero, Pricing, Form...)"
+          aria-label="Search widgets"
           class="studio-input"
         />
       </div>
@@ -566,43 +571,84 @@
         {/each}
       </div>
 
-      <div class="cards-grid">
+      <div class="el-widget-grid">
         {#each filteredComponents as item (item.type)}
           {@const isFav = editor.favoriteComponents.includes(item.type)}
           <div
-            class="lib-card"
+            class="el-widget-tile"
             draggable="true"
             ondragstart={(e) => handleLibDragStart(e, item.type)}
-            role="listitem"
+            onclick={() => insertComponent(item.type)}
+            onkeydown={(e) => e.key === 'Enter' && insertComponent(item.type)}
+            role="button"
+            tabindex="0"
+            title="{item.description} — Click to insert or drag onto canvas"
           >
-            <div class="lib-card__header">
-              <div style="display: flex; align-items: center; gap: 0.375rem;">
-                <span class="drag-grip" title="Drag onto canvas">⋮⋮</span>
-                <span class="lib-card__title">{item.displayName}</span>
-              </div>
-              <div style="display: flex; align-items: center; gap: 0.25rem;">
-                <button
-                  type="button"
-                  onclick={() => editor.toggleFavorite(item.type)}
-                  aria-label="Toggle favorite"
-                  class="fav-btn {isFav ? 'fav-btn--active' : ''}"
-                >
-                  {isFav ? '★' : '☆'}
-                </button>
-                <span class="lib-card__category">{item.category}</span>
-              </div>
+            <div class="el-widget-tile__top">
+              <span class="drag-grip">⠿</span>
+              <button
+                type="button"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  editor.toggleFavorite(item.type);
+                }}
+                aria-label="Favorite widget"
+                class="fav-btn {isFav ? 'fav-btn--active' : ''}"
+              >
+                {isFav ? '★' : '☆'}
+              </button>
             </div>
-            <p class="lib-card__desc">{item.description}</p>
-            <button
-              type="button"
-              onclick={() => insertComponent(item.type)}
-              class="studio-btn studio-btn--primary lib-card__btn"
-            >
-              + Insert or Drag to Canvas
-            </button>
+            <div class="el-widget-tile__icon">
+              {widgetIcons[item.type] || '🧩'}
+            </div>
+            <div class="el-widget-tile__name">{item.displayName}</div>
+            <div class="el-widget-tile__cat">{item.category}</div>
           </div>
         {/each}
       </div>
+
+      <!-- Reusable Saved Blocks Section -->
+      {#if editor.customSymbols.length > 0 || editor.selectedNode}
+        <div class="symbols-box" style="margin-top: 0.5rem; padding-top: 0.625rem; border-top: 1px solid var(--md-sys-color-outline-variant);">
+          <div class="panel-header">
+            <span class="panel-title">Saved Blocks ({editor.customSymbols.length})</span>
+            {#if editor.selectedNode}
+              <button
+                type="button"
+                onclick={() => editor.saveSelectedNodeAsSymbol()}
+                class="studio-btn text-link"
+                title="Save current selection as reusable block"
+              >
+                + Save Selected
+              </button>
+            {/if}
+          </div>
+          {#if editor.customSymbols.length > 0}
+            <div class="symbol-list">
+              {#each editor.customSymbols as sym (sym.id)}
+                <div class="symbol-row">
+                  <span class="truncate" style="font-size: 0.75rem; font-weight: 600;">★ {sym.name}</span>
+                  <div style="display: flex; gap: 0.25rem;">
+                    <button
+                      type="button"
+                      onclick={() => editor.insertSymbol(sym.id)}
+                      class="studio-btn studio-btn--primary"
+                      style="padding: 0.15rem 0.5rem; font-size: 0.6875rem;"
+                    >
+                      Insert
+                    </button>
+                    <button
+                      type="button"
+                      onclick={() => editor.deleteSymbol(sym.id)}
+                      class="action-icon action-icon--danger"
+                    >✕</button>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
     </div>
 
   <!-- Tab Content: Assets & Media Manager -->
@@ -1091,6 +1137,64 @@
     background-color: var(--md-sys-color-primary);
     color: var(--md-sys-color-on-primary);
     font-weight: 600;
+  }
+  .el-quick-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.45rem;
+  }
+  .el-quick-btn {
+    padding: 0.45rem 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+  .el-widget-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+  .el-widget-tile {
+    background-color: var(--md-sys-color-surface-container);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: 10px;
+    padding: 0.5rem 0.45rem 0.65rem 0.45rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.25rem;
+    cursor: grab;
+    user-select: none;
+    transition: transform 140ms ease, border-color 140ms ease, background-color 140ms ease;
+  }
+  .el-widget-tile:hover {
+    border-color: var(--md-sys-color-primary);
+    background-color: var(--md-sys-color-surface-container-high);
+    transform: translateY(-2px);
+  }
+  .el-widget-tile__top {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    line-height: 1;
+  }
+  .el-widget-tile__icon {
+    font-size: 1.55rem;
+    line-height: 1.1;
+    margin: 0.1rem 0;
+  }
+  .el-widget-tile__name {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--md-sys-color-on-surface);
+    line-height: 1.25;
+  }
+  .el-widget-tile__cat {
+    font-size: 0.5625rem;
+    font-family: var(--md-sys-font-mono);
+    text-transform: uppercase;
+    color: var(--md-sys-color-outline);
   }
   .cards-grid {
     display: flex;

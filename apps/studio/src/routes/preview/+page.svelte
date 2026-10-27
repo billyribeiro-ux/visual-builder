@@ -27,6 +27,47 @@
   let activeDrawer = $state<{ title: string; body: string } | null>(null);
   let activeToast = $state<string | null>(null);
   let customAppState = $state<Record<string, string>>({});
+  let showStructurePicker = $state(false);
+
+  const quickStructurePresets = [
+    { type: 'hero/split-hero', icon: '🦸', label: 'Hero Banner' },
+    { type: 'marketing/feature-grid', icon: '✨', label: '3-Col Features' },
+    { type: 'marketing/pricing-table', icon: '💎', label: 'Pricing Table' },
+    { type: 'marketing/stats-bar', icon: '📈', label: 'Stats Counter' },
+    { type: 'app/kpi-grid', icon: '📊', label: 'KPI Metrics' },
+    { type: 'marketing/testimonials', icon: '💬', label: 'Testimonials' },
+    { type: 'marketing/faq-accordion', icon: '❓', label: 'FAQ Accordion' },
+    { type: 'marketing/cta-banner', icon: '📣', label: 'CTA Banner' },
+    { type: 'marketing/contact-form', icon: '📞', label: 'Contact Form' },
+    { type: 'structure/section', icon: '🧱', label: '1-Col Section' },
+    { type: 'structure/grid', icon: '▦', label: 'Multi-Col Grid' },
+    { type: 'ui/tabs', icon: '🗂️', label: 'Interactive Tabs' }
+  ];
+
+  function handleQuickInsertOnCanvas(componentType: string) {
+    if (!activePage) return;
+    showStructurePicker = false;
+    window.parent.postMessage(
+      {
+        type: 'DROP_ITEM',
+        componentType,
+        targetNodeId: activePage.rootNode.id,
+        position: 'inside'
+      },
+      window.location.origin
+    );
+  }
+
+  function handleOpenTemplateModal() {
+    window.parent.postMessage({ type: 'OPEN_BLOCK_LIBRARY' }, window.location.origin);
+  }
+
+  function handleOpenAiComposer() {
+    window.parent.postMessage(
+      { type: 'KEY_SHORTCUT', shortcut: 'command-palette' },
+      window.location.origin
+    );
+  }
 
   const activePage = $derived(
     blueprint.pages.find((p) => p.id === activePageId) || blueprint.pages[0]
@@ -281,6 +322,68 @@
         onTriggerInteraction={handleTriggerInteraction}
       />
     {/if}
+
+    {#if !isInteractiveMode}
+      <!-- Elementor Pro Signature On-Canvas "+ Add Section / Template / AI" Dropzone -->
+      <section class="el-canvas-add-zone" aria-label="Add new section to page">
+        {#if !showStructurePicker}
+          <div class="el-canvas-add-buttons">
+            <button
+              type="button"
+              onclick={() => (showStructurePicker = true)}
+              class="el-circle-btn el-circle-btn--primary"
+              title="Add New Section or Structure"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              onclick={handleOpenTemplateModal}
+              class="el-circle-btn el-circle-btn--secondary"
+              title="Browse Pre-Built Section & Page Library"
+            >
+              📁
+            </button>
+            <button
+              type="button"
+              onclick={handleOpenAiComposer}
+              class="el-circle-btn el-circle-btn--ai"
+              title="Compose Sections with AI Prompt (Cmd+K)"
+            >
+              ✨
+            </button>
+          </div>
+          <p class="el-canvas-add-hint">
+            Drag a widget here, click <strong>+</strong> to pick a section structure, or click <strong>📁</strong> for pre-built templates
+          </p>
+        {:else}
+          <div class="el-structure-picker">
+            <div class="el-structure-header">
+              <span>Select a Section or Structure to Insert</span>
+              <button
+                type="button"
+                onclick={() => (showStructurePicker = false)}
+                class="el-structure-close"
+              >
+                ✕
+              </button>
+            </div>
+            <div class="el-structure-grid">
+              {#each quickStructurePresets as preset (preset.type)}
+                <button
+                  type="button"
+                  onclick={() => handleQuickInsertOnCanvas(preset.type)}
+                  class="el-structure-card"
+                >
+                  <span class="el-structure-icon">{preset.icon}</span>
+                  <span class="el-structure-label">{preset.label}</span>
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/if}
+      </section>
+    {/if}
   {/if}
 
   {#if activeModal}
@@ -429,5 +532,111 @@
     height: 1px;
     background-color: #32353A;
     margin: 3px 0;
+  }
+  .el-canvas-add-zone {
+    max-width: 960px;
+    margin: 2.5rem auto 4rem auto;
+    padding: 2.25rem 1.5rem;
+    border: 2px dashed rgba(11, 87, 208, 0.35);
+    border-radius: 16px;
+    background: rgba(11, 87, 208, 0.03);
+    text-align: center;
+    transition: border-color 160ms ease, background-color 160ms ease;
+  }
+  .el-canvas-add-zone:hover {
+    border-color: #0B57D0;
+    background: rgba(11, 87, 208, 0.06);
+  }
+  .el-canvas-add-buttons {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+  }
+  .el-circle-btn {
+    width: 48px;
+    height: 48px;
+    border-radius: 9999px;
+    border: none;
+    font-size: 1.35rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+    transition: transform 140ms ease, box-shadow 140ms ease;
+  }
+  .el-circle-btn:hover {
+    transform: scale(1.08);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+  }
+  .el-circle-btn--primary {
+    background: #0B57D0;
+    color: #FFFFFF;
+  }
+  .el-circle-btn--secondary {
+    background: #1D2024;
+    color: #FFFFFF;
+  }
+  .el-circle-btn--ai {
+    background: #6750A4;
+    color: #FFFFFF;
+  }
+  .el-canvas-add-hint {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--md-sys-color-on-surface-variant, #444746);
+  }
+  .el-structure-picker {
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  .el-structure-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #0B57D0;
+  }
+  .el-structure-close {
+    background: transparent;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+    padding: 2px 8px;
+    cursor: pointer;
+  }
+  .el-structure-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+    gap: 0.625rem;
+  }
+  .el-structure-card {
+    background: #FFFFFF;
+    border: 1px solid rgba(11, 87, 208, 0.22);
+    border-radius: 10px;
+    padding: 0.75rem 0.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    cursor: pointer;
+    transition: transform 130ms ease, border-color 130ms ease;
+  }
+  .el-structure-card:hover {
+    border-color: #0B57D0;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(11, 87, 208, 0.12);
+  }
+  .el-structure-icon {
+    font-size: 1.5rem;
+  }
+  .el-structure-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #1B1B1F;
   }
 </style>

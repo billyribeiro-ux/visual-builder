@@ -102,14 +102,26 @@
     <button
       type="button"
       onclick={() => {
+        closeAllModals();
+        editor.showBlockLibraryModal = true;
+      }}
+      class="studio-btn top-pill-btn"
+      title="Open Elementor Pro Block & Page Library"
+    >
+      📁 Library
+    </button>
+
+    <button
+      type="button"
+      onclick={() => {
         const next = !showTemplateModal;
         closeAllModals();
         showTemplateModal = next;
       }}
       class="studio-btn top-pill-btn"
-      title="Switch starter template or import JSON"
+      title="Switch starter project or import JSON"
     >
-      Templates ▾
+      Starter ▾
     </button>
 
     <div class="divider"></div>
@@ -269,13 +281,13 @@
       &lt;/&gt; Code
     </button>
 
-    <!-- Interactive Mode Toggle -->
+    <!-- Interactive Mode Toggle (Full-Screen Preview like Elementor Eye Icon) -->
     <button
       type="button"
       onclick={() => editor.toggleInteractiveMode()}
       class="studio-btn mode-btn {editor.isInteractiveMode ? 'mode-btn--interactive' : ''}"
     >
-      <span>{editor.isInteractiveMode ? '▶ Interactive' : '✏️ Edit Mode'}</span>
+      <span>{editor.isInteractiveMode ? '✏️ Back to Editor' : '👁 Preview'}</span>
     </button>
 
     <!-- Export for AI Agents ZIP Button -->

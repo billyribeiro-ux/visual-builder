@@ -785,21 +785,22 @@
   }
   .preview-node__toolbar {
     position: absolute;
-    top: -26px;
-    left: 0;
+    top: -28px;
+    left: 50%;
+    transform: translateX(-50%);
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    background-color: var(--md-sys-color-primary, #0B57D0);
-    color: var(--md-sys-color-on-primary, #FFFFFF);
-    font-size: 0.6875rem;
-    font-family: var(--md-sys-font-mono, monospace);
-    padding: 2px 6px;
-    border-radius: 6px 6px 0 0;
+    gap: 6px;
+    background-color: #0B57D0;
+    color: #FFFFFF;
+    font-size: 0.72rem;
+    font-family: var(--md-sys-font-body, Roboto, sans-serif);
+    padding: 3px 10px;
+    border-radius: 8px 8px 0 0;
     font-weight: 600;
     z-index: 30;
     white-space: nowrap;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 -2px 10px rgba(11, 87, 208, 0.28);
   }
   .preview-node__badge-text {
     padding-right: 4px;

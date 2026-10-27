@@ -72,7 +72,8 @@ class EditorState {
   isInteractiveMode = $state<boolean>(false);
   canvasViewMode = $state<'canvas' | 'flow'>('canvas');
   showCommandPalette = $state<boolean>(false);
-  activeLeftTab = $state<'pages' | 'layers' | 'library' | 'assets' | 'tokens'>('layers');
+  showBlockLibraryModal = $state<boolean>(false);
+  activeLeftTab = $state<'pages' | 'layers' | 'library' | 'assets' | 'tokens'>('library');
   isSaving = $state<boolean>(false);
   lastSavedAt = $state<string>('Saved locally');
   snapshots = $state<ProjectSnapshot[]>([]);
