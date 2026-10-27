@@ -1,4 +1,4 @@
-import type { BlueprintNode, PageRoute, ProjectBlueprint } from '@app-viz/schema';
+import type { BlueprintNode, PageRoute, ProjectBlueprint, InteractionRule } from '@app-viz/schema';
 import { cssPropertiesToString } from '@app-viz/engine';
 
 function hasScopedStyles(node: BlueprintNode): boolean {
@@ -15,6 +15,22 @@ function hasScopedStyles(node: BlueprintNode): boolean {
   );
 }
 
+function collectNodeInteractions(
+  root: BlueprintNode | undefined,
+  out: Array<{ nodeId: string; rule: InteractionRule }> = []
+): Array<{ nodeId: string; rule: InteractionRule }> {
+  if (!root || root.hidden) return out;
+  for (const r of root.interactions || []) {
+    if (r.trigger === 'onClick' || r.trigger === 'click') {
+      out.push({ nodeId: root.id, rule: r });
+    }
+  }
+  for (const child of root.children || []) {
+    collectNodeInteractions(child, out);
+  }
+  return out;
+}
+
 function renderNodeToSvelte(
   node: BlueprintNode,
   indent = '  ',
@@ -26,9 +42,13 @@ function renderNodeToSvelte(
   }
 
   const scoped = hasScopedStyles(node);
-  const innerIndent = scoped ? indent + '  ' : indent;
+  const hasClickRule = (node.interactions || []).some(
+    (r: InteractionRule) => r.trigger === 'onClick' || r.trigger === 'click'
+  );
+  const needsWrapper = scoped || hasClickRule;
+  const innerIndent = needsWrapper ? indent + '  ' : indent;
   const rendered = renderNodeInner(node, innerIndent, slotNode);
-  if (scoped) {
+  if (needsWrapper) {
     return `${indent}<div data-node-id="${node.id}">\n${rendered}\n${indent}</div>`;
   }
   return rendered;
@@ -280,6 +300,106 @@ export function generatePageRoute(page: PageRoute, blueprint?: ProjectBlueprint)
     ? renderNodeToSvelte(layout.rootNode, '  ', page.rootNode)
     : renderNodeToSvelte(page.rootNode, '  ');
 
+  const pageInteractions = collectNodeInteractions(page.rootNode);
+  if (layout) collectNodeInteractions(layout.rootNode, pageInteractions);
+
+  const hasInteractiveRules = pageInteractions.length > 0;
+  const serializedRules = JSON.stringify(
+    pageInteractions.map(({ nodeId, rule }) => ({
+      nodeId,
+      actionType: rule.actionType || rule.action?.type || 'navigate',
+      payload: rule.payload || rule.action?.payload || {}
+    }))
+  );
+
+  const interactionScriptBlock = hasInteractiveRules
+    ? `
+  const interactionRules = ${serializedRules};
+  let activeModal = $state<{ title: string; body: string; ctaText: string } | null>(null);
+  let activeDrawer = $state<{ title: string; body: string } | null>(null);
+  let activeToast = $state<string | null>(null);
+  let customAppState = $state<Record<string, string>>({});
+
+  function handleMainClick(e: MouseEvent) {
+    const target = (e.target as HTMLElement | null)?.closest('[data-node-id]');
+    if (!target) return;
+    const nodeId = target.getAttribute('data-node-id');
+    const matched = interactionRules.find((r) => r.nodeId === nodeId);
+    if (!matched) return;
+    const p = matched.payload as Record<string, string>;
+    if (matched.actionType === 'navigate' && p.path) {
+      window.location.href = p.path;
+    } else if (matched.actionType === 'openModal' || matched.actionType === 'open_modal') {
+      e.preventDefault();
+      activeModal = {
+        title: p.modalTitle || 'Interactive Modal Dialog',
+        body: p.modalBody || 'This modal was triggered by a declarative interaction rule.',
+        ctaText: p.modalCta || 'Confirm'
+      };
+    } else if (matched.actionType === 'toggleDrawer') {
+      e.preventDefault();
+      activeDrawer = activeDrawer
+        ? null
+        : {
+            title: p.drawerTitle || 'Workspace Details Drawer',
+            body: p.drawerBody || 'Inspect contextual state and quick actions in this slide-over sheet.'
+          };
+    } else if (matched.actionType === 'showToast' || matched.actionType === 'show_toast') {
+      e.preventDefault();
+      activeToast = p.toastMessage || 'Action completed successfully';
+      setTimeout(() => (activeToast = null), 3500);
+    } else if (matched.actionType === 'setState' || matched.actionType === 'toggle_state') {
+      e.preventDefault();
+      const k = p.stateKey || 'status';
+      customAppState[k] = p.stateValue || 'active';
+      activeToast = \`State "\${k}" set to "\${customAppState[k]}"\`;
+      setTimeout(() => (activeToast = null), 2800);
+    }
+  }`
+    : '';
+
+  const interactionMarkupBlock = hasInteractiveRules
+    ? `
+{#if activeModal}
+  <div style="position: fixed; inset: 0; z-index: 90; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; padding: 1.5rem;">
+    <div class="md-card md-card-elevated" role="dialog" aria-modal="true" aria-label={activeModal.title} style="max-width: 28rem; width: 100%; padding: 1.75rem;">
+      <h3 class="md-headline-small" style="margin: 0 0 0.75rem 0;">{activeModal.title}</h3>
+      <p class="md-body-medium" style="color: var(--md-sys-color-on-surface-variant); margin: 0 0 1.5rem 0;">{activeModal.body}</p>
+      <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+        <button type="button" class="md-btn md-btn-outlined" onclick={() => (activeModal = null)}>Dismiss</button>
+        <button type="button" class="md-btn md-btn-filled" onclick={() => (activeModal = null)}>{activeModal.ctaText}</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if activeDrawer}
+  <div style="position: fixed; inset: 0; z-index: 85; background: rgba(0,0,0,0.4); display: flex; justify-content: flex-end;">
+    <aside class="md-card" aria-label={activeDrawer.title} style="width: min(24rem, 90vw); height: 100%; border-radius: 16px 0 0 16px; padding: 1.75rem; display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+          <h3 class="md-title-large" style="margin: 0;">{activeDrawer.title}</h3>
+          <button type="button" class="md-btn md-btn-text" onclick={() => (activeDrawer = null)}>✕</button>
+        </div>
+        <p class="md-body-medium" style="color: var(--md-sys-color-on-surface-variant);">{activeDrawer.body}</p>
+      </div>
+      <button type="button" class="md-btn md-btn-tonal" onclick={() => (activeDrawer = null)}>Close Drawer</button>
+    </aside>
+  </div>
+{/if}
+
+{#if activeToast}
+  <div role="status" aria-live="polite" style="position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 95; background: var(--md-sys-color-inverse-surface); color: var(--md-sys-color-inverse-on-surface); padding: 0.875rem 1.25rem; border-radius: 12px; box-shadow: var(--md-sys-elevation-level3); display: flex; align-items: center; gap: 0.75rem;">
+    <span>{activeToast}</span>
+    <button type="button" style="background: transparent; border: none; color: inherit; cursor: pointer; font-weight: 700;" onclick={() => (activeToast = null)}>✕</button>
+  </div>
+{/if}`
+    : '';
+
+  const windowListenerTag = hasInteractiveRules
+    ? `\n<svelte:window onclick={handleMainClick} />\n`
+    : '';
+
   return `<script lang="ts">
   import Container from '#lib/components/Container.svelte';
   import Section from '#lib/components/Section.svelte';
@@ -305,17 +425,16 @@ export function generatePageRoute(page: PageRoute, blueprint?: ProjectBlueprint)
   import KpiGrid from '#lib/components/KpiGrid.svelte';
   import DataTable from '#lib/components/DataTable.svelte';
   import SettingsForm from '#lib/components/SettingsForm.svelte';
-  import AuthCard from '#lib/components/AuthCard.svelte';
+  import AuthCard from '#lib/components/AuthCard.svelte';${interactionScriptBlock}
 </script>
 
 <svelte:head>
   <title>${page.title}</title>
   <meta name="description" content="${page.description || ''}" />
-</svelte:head>
-
+</svelte:head>${windowListenerTag}
 <main style="min-height: 100vh;">
 ${content}
-</main>
+</main>${interactionMarkupBlock}
 `;
 }
 

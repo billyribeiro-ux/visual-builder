@@ -4,9 +4,11 @@
   import {
     MD3_THEME_PRESETS,
     PAGE_TEMPLATE_CATALOG,
+    CURATED_PROJECT_ASSETS,
     createPageFromTemplate,
     type PageTemplateKey,
-    type BlueprintNode
+    type BlueprintNode,
+    type BlueprintAsset
   } from '@app-viz/schema';
 
   let searchQuery = $state('');
@@ -15,6 +17,12 @@
   let selectedPageTemplate = $state<PageTemplateKey>('saas-landing');
   let usePublicLayout = $state(true);
   let showAddPageModal = $state(false);
+  let showAddAssetModal = $state(false);
+  let customAssetName = $state('custom-banner.svg');
+  let customAssetAlt = $state('Custom product illustration');
+  let customAssetSvg = $state(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 140"><rect width="240" height="140" rx="14" fill="#D3E3FD"/><circle cx="120" cy="70" r="36" fill="#0B57D0"/></svg>'
+  );
   let dragOverLayerId = $state<string | null>(null);
   let dragOverPosition = $state<'before' | 'inside' | 'after'>('after');
 
@@ -114,6 +122,52 @@
         colors: { ...colors }
       }
     });
+  }
+
+  function handleCreateCustomAsset() {
+    const cleanFilename = customAssetName.trim() || 'asset.svg';
+    const svg = customAssetSvg.trim();
+    const asset: BlueprintAsset = {
+      id: crypto.randomUUID(),
+      filename: cleanFilename,
+      mimeType: 'image/svg+xml',
+      size: svg.length,
+      localPath: `/assets/${cleanFilename}`,
+      alt: customAssetAlt.trim() || cleanFilename,
+      category: 'illustration',
+      svgContent: svg,
+      dataUrl: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+    };
+    editor.addAsset(asset);
+    showAddAssetModal = false;
+  }
+
+  function handleUploadAssetFile(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const content = String(reader.result || '');
+      const isSvg = file.name.endsWith('.svg') || content.trim().startsWith('<svg');
+      const asset: BlueprintAsset = {
+        id: crypto.randomUUID(),
+        filename: file.name,
+        mimeType: file.type || (isSvg ? 'image/svg+xml' : 'image/png'),
+        size: file.size,
+        localPath: `/assets/${file.name}`,
+        alt: file.name.replace(/\.[^.]+$/, ''),
+        category: 'uploaded',
+        svgContent: isSvg ? content : undefined,
+        dataUrl: isSvg ? `data:image/svg+xml;utf8,${encodeURIComponent(content)}` : content
+      };
+      editor.addAsset(asset);
+    };
+    if (file.name.endsWith('.svg')) {
+      reader.readAsText(file);
+    } else {
+      reader.readAsDataURL(file);
+    }
   }
 
   function handleLibDragStart(e: DragEvent, componentType: string) {
@@ -284,6 +338,13 @@
       class="studio-tab {editor.activeLeftTab === 'library' ? 'studio-tab--active' : ''}"
     >
       Library
+    </button>
+    <button
+      type="button"
+      onclick={() => (editor.activeLeftTab = 'assets')}
+      class="studio-tab {editor.activeLeftTab === 'assets' ? 'studio-tab--active' : ''}"
+    >
+      Assets
     </button>
     <button
       type="button"
@@ -540,6 +601,125 @@
               + Insert or Drag to Canvas
             </button>
           </div>
+        {/each}
+      </div>
+    </div>
+
+  <!-- Tab Content: Assets & Media Manager -->
+  {:else if editor.activeLeftTab === 'assets'}
+    <div class="studio-panel-content flow-v">
+      <div class="panel-header">
+        <span class="panel-title">Project Assets ({(editor.blueprint.assets || []).length})</span>
+        <button
+          type="button"
+          onclick={() => (showAddAssetModal = !showAddAssetModal)}
+          class="studio-btn studio-btn--primary sm-btn"
+        >
+          + Add SVG
+        </button>
+      </div>
+
+      <p class="tpl-hint">
+        Assets are bundled into <code>generated-app/static/assets/</code> on export and can be applied directly to the selected component.
+      </p>
+
+      <label class="studio-btn sm-btn" style="text-align: center; cursor: pointer;">
+        📤 Upload SVG / Image File
+        <input
+          type="file"
+          accept=".svg,image/*"
+          onchange={handleUploadAssetFile}
+          style="display: none;"
+        />
+      </label>
+
+      {#if showAddAssetModal}
+        <div class="modal-card">
+          <div class="modal-title">Add Vector SVG Asset</div>
+          <div class="field-group">
+            <label class="field-label" for="asset-filename">Filename</label>
+            <input
+              id="asset-filename"
+              type="text"
+              bind:value={customAssetName}
+              class="studio-input"
+            />
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="asset-alt">Alt Description</label>
+            <input
+              id="asset-alt"
+              type="text"
+              bind:value={customAssetAlt}
+              class="studio-input"
+            />
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="asset-svg">SVG Markup</label>
+            <textarea
+              id="asset-svg"
+              rows="3"
+              bind:value={customAssetSvg}
+              class="studio-input"
+              style="font-family: var(--md-sys-font-mono); font-size: 0.6875rem;"
+            ></textarea>
+          </div>
+          <div class="modal-actions">
+            <button type="button" onclick={() => (showAddAssetModal = false)} class="studio-btn sm-btn">
+              Cancel
+            </button>
+            <button type="button" onclick={handleCreateCustomAsset} class="studio-btn studio-btn--primary sm-btn">
+              Save Asset
+            </button>
+          </div>
+        </div>
+      {/if}
+
+      <div class="list-stack" style="gap: 0.625rem;">
+        {#each editor.blueprint.assets || [] as asset (asset.id)}
+          <div class="lib-card" style="cursor: default;">
+            {#if asset.dataUrl}
+              <div style="background: var(--md-sys-color-surface-container-lowest); border-radius: 6px; padding: 0.375rem; margin-bottom: 0.375rem; display: flex; justify-content: center;">
+                <img
+                  src={asset.dataUrl}
+                  alt={asset.alt}
+                  style="max-height: 76px; width: auto; border-radius: 4px;"
+                />
+              </div>
+            {/if}
+            <div class="lib-card__header">
+              <span class="lib-card__title">{asset.filename}</span>
+              <button
+                type="button"
+                onclick={() => editor.deleteAsset(asset.id)}
+                class="delete-btn"
+                title="Remove asset"
+              >
+                ✕
+              </button>
+            </div>
+            <p class="lib-card__desc">{asset.alt} • <code>{asset.localPath}</code></p>
+            <button
+              type="button"
+              onclick={() => editor.applyAssetToSelectedNode(asset)}
+              class="studio-btn sm-btn"
+              style="width: 100%; margin-top: 0.375rem;"
+            >
+              {editor.selectedNode ? `Apply to ${editor.selectedNode.name}` : '+ Insert Asset Card'}
+            </button>
+          </div>
+        {:else}
+          <button
+            type="button"
+            onclick={() => {
+              for (const cur of CURATED_PROJECT_ASSETS) {
+                editor.addAsset({ ...cur });
+              }
+            }}
+            class="studio-btn sm-btn"
+          >
+            Restore 4 Curated MD3 Vector Assets
+          </button>
         {/each}
       </div>
     </div>

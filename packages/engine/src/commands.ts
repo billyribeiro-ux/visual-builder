@@ -6,7 +6,8 @@ import type {
   BreakpointKey,
   CSSProperties,
   ProjectMeta,
-  ProjectBlueprint
+  ProjectBlueprint,
+  BlueprintAsset
 } from '@app-viz/schema';
 
 export type EditorCommand =
@@ -97,6 +98,14 @@ export type EditorCommand =
       type: 'UPDATE_INTERACTIONS';
       nodeId: string;
       interactions: InteractionRule[];
+    }
+  | {
+      type: 'ADD_ASSET';
+      asset: BlueprintAsset;
+    }
+  | {
+      type: 'DELETE_ASSET';
+      assetId: string;
     }
   | {
       type: 'LOAD_BLUEPRINT';

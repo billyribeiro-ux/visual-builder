@@ -127,6 +127,14 @@ export function generateFullExport(blueprint: ProjectBlueprint): GeneratedProjec
     files[`${appPrefix}${compPath}`] = source;
   }
 
+  // Add bundled project SVG / media assets into generated-app/static/
+  for (const asset of blueprint.assets || []) {
+    if (asset.svgContent && asset.localPath) {
+      const cleanRel = asset.localPath.replace(/^\//, '');
+      files[`${appPrefix}static/${cleanRel}`] = asset.svgContent;
+    }
+  }
+
   // 5. Parity and Audit Report
   files['reference/preview-parity-report.json'] = JSON.stringify(
     {

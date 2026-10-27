@@ -360,6 +360,17 @@ export function executeCommand(
       return next;
     }
 
+    case 'ADD_ASSET': {
+      next.assets = next.assets || [];
+      next.assets.push(command.asset);
+      return next;
+    }
+
+    case 'DELETE_ASSET': {
+      next.assets = (next.assets || []).filter((a) => a.id !== command.assetId);
+      return next;
+    }
+
     case 'LOAD_BLUEPRINT': {
       return JSON.parse(JSON.stringify(command.blueprint));
     }

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { BlueprintNode } from '@app-viz/schema';
+  import type { BlueprintNode, InteractionRule } from '@app-viz/schema';
   import { cssPropertiesToString, resolveEffectiveStyles } from '@app-viz/engine';
   import Container from './preview-components/Container.svelte';
   import Section from './preview-components/Section.svelte';
@@ -56,6 +56,9 @@
       position: 'before' | 'inside' | 'after'
     ) => void;
     onContextMenuNode?: (node: BlueprintNode, x: number, y: number) => void;
+    onInlinePropEdit?: (nodeId: string, propKey: string, value: string) => void;
+    onResizeNodeStyle?: (nodeId: string, styles: Record<string, string>) => void;
+    onTriggerInteraction?: (rule: InteractionRule, sourceNode: BlueprintNode) => void;
   }
 
   let {
@@ -68,7 +71,10 @@
     onNavigate,
     onNodeAction,
     onDropItem,
-    onContextMenuNode
+    onContextMenuNode,
+    onInlinePropEdit,
+    onResizeNodeStyle,
+    onTriggerInteraction
   }: Props = $props();
 
   const isSelected = $derived(selectedNodeId === node.id);
@@ -81,7 +87,38 @@
       node.componentType === 'app/dashboard-shell'
   );
 
+  const editableTextProps = $derived.by<Array<{ key: string; val: string }>>(() => {
+    const entries: Array<{ key: string; val: string }> = [];
+    const skipKeys = new Set([
+      'variant',
+      'size',
+      'tone',
+      'mode',
+      'maxWidth',
+      'paddingY',
+      'gap',
+      'spacing',
+      'activeNav',
+      'primaryCtaHref',
+      'secondaryCtaHref',
+      'ctaHref',
+      'actionHref',
+      'redirectHref',
+      'href',
+      'logoUrl'
+    ]);
+    for (const [k, v] of Object.entries(node.props || {})) {
+      if (typeof v === 'string' && !skipKeys.has(k)) {
+        entries.push({ key: k, val: v });
+      }
+    }
+    return entries;
+  });
+
   let dropZone = $state<'before' | 'inside' | 'after' | null>(null);
+  let showInlineEditor = $state(false);
+  let isResizingPadding = $state(false);
+  let livePaddingPx = $state<number | null>(null);
 
   function handleClick(e: MouseEvent) {
     if (!isInteractiveMode) {
@@ -91,16 +128,63 @@
       return;
     }
 
-    const clickRule = (node.interactions || []).find((r) => r.trigger === 'onClick');
-    if (
-      clickRule &&
-      clickRule.actionType === 'navigate' &&
-      typeof clickRule.payload?.path === 'string'
-    ) {
+    const clickRule = (node.interactions || []).find(
+      (r) => r.trigger === 'onClick' || r.trigger === 'click'
+    );
+    if (clickRule) {
       e.preventDefault();
       e.stopPropagation();
-      onNavigate?.(clickRule.payload.path);
+      if (onTriggerInteraction) {
+        onTriggerInteraction(clickRule, node);
+      } else if (
+        clickRule.actionType === 'navigate' &&
+        typeof clickRule.payload?.path === 'string'
+      ) {
+        onNavigate?.(clickRule.payload.path);
+      }
     }
+  }
+
+  function handleDblClick(e: MouseEvent) {
+    if (isInteractiveMode || node.locked) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onSelectNode?.(node.id);
+    if (editableTextProps.length > 0) {
+      showInlineEditor = true;
+    }
+  }
+
+  function startPaddingResize(e: MouseEvent) {
+    if (isInteractiveMode || node.locked) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const startY = e.clientY;
+    const currentRaw = String(effectiveCss.paddingBottom || effectiveCss.paddingTop || '24px');
+    const parsedStart = parseInt(currentRaw, 10);
+    const startPx = Number.isFinite(parsedStart) ? parsedStart : 24;
+
+    isResizingPadding = true;
+    livePaddingPx = startPx;
+
+    function onMove(moveEvent: MouseEvent) {
+      const delta = Math.round((moveEvent.clientY - startY) / 2);
+      const nextPx = Math.max(0, Math.min(200, startPx + delta));
+      livePaddingPx = nextPx;
+      onResizeNodeStyle?.(node.id, {
+        paddingTop: `${nextPx}px`,
+        paddingBottom: `${nextPx}px`
+      });
+    }
+
+    function onUp() {
+      isResizingPadding = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    }
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
   }
 
   function handleContextMenu(e: MouseEvent) {
@@ -186,18 +270,22 @@
         {onNodeAction}
         {onDropItem}
         {onContextMenuNode}
+        {onInlinePropEdit}
+        {onResizeNodeStyle}
+        {onTriggerInteraction}
       />
     {/if}
   {:else}
     <div
       data-node-id={node.id}
       data-node-type={node.componentType}
-      draggable={!isInteractiveMode && !node.locked}
+      draggable={!isInteractiveMode && !node.locked && !showInlineEditor}
       ondragstart={handleDragStart}
       ondragover={handleDragOver}
       ondragleave={handleDragLeave}
       ondrop={handleDrop}
       onclick={handleClick}
+      ondblclick={handleDblClick}
       oncontextmenu={handleContextMenu}
       onkeydown={handleKeyDown}
       role="button"
@@ -217,6 +305,19 @@
           <span class="preview-node__badge-text">{node.name}</span>
           {#if onNodeAction && !node.locked}
             <div class="preview-node__actions">
+              {#if editableTextProps.length > 0}
+                <button
+                  type="button"
+                  class="preview-node__action-btn"
+                  title="Inline Text Edit (Double-Click)"
+                  aria-label="Inline edit text"
+                  onclick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    showInlineEditor = !showInlineEditor;
+                  }}
+                >✏️</button>
+              {/if}
               <button
                 type="button"
                 class="preview-node__action-btn"
@@ -255,6 +356,58 @@
             </div>
           {/if}
         </div>
+
+        {#if showInlineEditor && editableTextProps.length > 0}
+          <!-- On-Canvas Inline Quick Text Editor Popover -->
+          <div
+            class="inline-editor-popover"
+            role="region"
+            aria-label="Inline text editor"
+          >
+            <div class="inline-editor-header">
+              <span>✏️ Inline Copy Editor ({node.name})</span>
+              <button
+                type="button"
+                class="inline-editor-close"
+                onclick={(e) => {
+                  e.stopPropagation();
+                  showInlineEditor = false;
+                }}
+              >Done</button>
+            </div>
+            <div class="inline-editor-fields">
+              {#each editableTextProps as item (item.key)}
+                <label class="inline-editor-field">
+                  <span class="inline-editor-label">{item.key}</span>
+                  <input
+                    type="text"
+                    value={item.val}
+                    onclick={(e) => e.stopPropagation()}
+                    onkeydown={(e) => e.stopPropagation()}
+                    oninput={(e) =>
+                      onInlinePropEdit?.(node.id, item.key, (e.target as HTMLInputElement).value)}
+                    class="inline-editor-input"
+                  />
+                </label>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
+        {#if !node.locked}
+          <!-- Interactive On-Canvas Vertical Spacing Drag Handle -->
+          <button
+            type="button"
+            class="resize-padding-handle"
+            title="Drag vertically to resize top & bottom padding"
+            onmousedown={startPaddingResize}
+            onclick={(e) => e.stopPropagation()}
+          >
+            ↕ {isResizingPadding && livePaddingPx !== null
+              ? `Padding: ${livePaddingPx}px`
+              : effectiveCss.paddingBottom || 'Drag Padding'}
+          </button>
+        {/if}
       {/if}
 
       {#if node.componentType === 'structure/container'}
@@ -271,6 +424,9 @@
               {onNodeAction}
               {onDropItem}
               {onContextMenuNode}
+              {onInlinePropEdit}
+              {onResizeNodeStyle}
+              {onTriggerInteraction}
             />
           {/each}
         </Container>
@@ -292,6 +448,9 @@
               {onNodeAction}
               {onDropItem}
               {onContextMenuNode}
+              {onInlinePropEdit}
+              {onResizeNodeStyle}
+              {onTriggerInteraction}
             />
           {/each}
         </Section>
@@ -309,6 +468,9 @@
               {onNodeAction}
               {onDropItem}
               {onContextMenuNode}
+              {onInlinePropEdit}
+              {onResizeNodeStyle}
+              {onTriggerInteraction}
             />
           {/each}
         </Grid>
@@ -415,6 +577,9 @@
               {onNodeAction}
               {onDropItem}
               {onContextMenuNode}
+              {onInlinePropEdit}
+              {onResizeNodeStyle}
+              {onTriggerInteraction}
             />
           {/each}
         </DashboardShell>
@@ -485,6 +650,9 @@
               {onNodeAction}
               {onDropItem}
               {onContextMenuNode}
+              {onInlinePropEdit}
+              {onResizeNodeStyle}
+              {onTriggerInteraction}
             />
           {/each}
         </div>
@@ -494,6 +662,82 @@
 {/if}
 
 <style>
+  .inline-editor-popover {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 60;
+    width: min(24rem, 92vw);
+    background: #1D2024;
+    color: #E2E2E6;
+    border: 1px solid #0B57D0;
+    border-radius: 10px;
+    padding: 0.625rem;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    font-family: var(--md-sys-font-body, Roboto, sans-serif);
+  }
+  .inline-editor-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #A8C7FA;
+    margin-bottom: 0.5rem;
+  }
+  .inline-editor-close {
+    background: #0B57D0;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .inline-editor-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    max-height: 13rem;
+    overflow-y: auto;
+  }
+  .inline-editor-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .inline-editor-label {
+    font-size: 0.625rem;
+    font-family: var(--md-sys-font-mono, monospace);
+    color: #8E9199;
+    text-transform: uppercase;
+  }
+  .inline-editor-input {
+    background: #111316;
+    border: 1px solid #44474F;
+    color: #FFFFFF;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.75rem;
+  }
+  .resize-padding-handle {
+    position: absolute;
+    bottom: -11px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 35;
+    background: #0B57D0;
+    color: #FFFFFF;
+    border: 1px solid #FFFFFF;
+    border-radius: 9999px;
+    padding: 1px 10px;
+    font-size: 0.625rem;
+    font-family: var(--md-sys-font-mono, monospace);
+    font-weight: 600;
+    cursor: ns-resize;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  }
   .preview-node {
     position: relative;
     transition: outline 150ms cubic-bezier(0.2, 0, 0, 1);

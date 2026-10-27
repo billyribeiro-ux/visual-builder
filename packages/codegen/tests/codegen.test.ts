@@ -123,5 +123,39 @@ describe('Codegen Engine', () => {
     expect(appCss).toContain(`[data-node-id="${heroNodeId}"]:hover { opacity: 0.96 !important; }`);
     expect(appCss).toContain(`[data-node-id="${heroNodeId}"] { padding-bottom: 40px !important; }`);
     expect(result.files['generated-app/src/routes/+page.svelte']).toContain(`data-node-id="${heroNodeId}"`);
+
+    // Verify bundled static SVG assets are emitted into generated-app/static/assets/
+    expect(result.files['generated-app/static/assets/analytics-pulse.svg']).toContain('<svg');
+    expect(result.files['generated-app/static/assets/ai-agent-flow.svg']).toContain('<svg');
+  });
+
+  it('emits multi-state interactive runtime (openModal, toggleDrawer, showToast, setState) when rules exist', () => {
+    let project = createDefaultAcmeSaaSProject();
+    const heroNodeId = '30000000-0000-0000-0000-000000000002';
+
+    project = executeCommand(project, {
+      type: 'UPDATE_INTERACTIONS',
+      nodeId: heroNodeId,
+      interactions: [
+        {
+          id: '77777777-0000-4000-8000-000000000001',
+          name: 'Open Demo Modal',
+          trigger: 'onClick',
+          actionType: 'openModal',
+          payload: {
+            modalTitle: 'Live Product Walkthrough',
+            modalBody: 'Interactive modal emitted by codegen.',
+            modalCta: 'Launch Now'
+          }
+        }
+      ]
+    });
+
+    const result = generateFullExport(project);
+    const homeSvelte = result.files['generated-app/src/routes/+page.svelte'];
+    expect(homeSvelte).toContain('let activeModal = $state');
+    expect(homeSvelte).toContain('let activeDrawer = $state');
+    expect(homeSvelte).toContain('let activeToast = $state');
+    expect(homeSvelte).toContain('Live Product Walkthrough');
   });
 });

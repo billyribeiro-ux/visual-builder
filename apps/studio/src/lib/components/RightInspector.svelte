@@ -94,11 +94,20 @@
   }
 
   function setClickInteraction(
-    actionType: 'none' | 'navigate' | 'openModal' | 'submitForm',
-    path?: string
+    actionType:
+      | 'none'
+      | 'navigate'
+      | 'openModal'
+      | 'toggleDrawer'
+      | 'showToast'
+      | 'setState'
+      | 'submitForm',
+    payloadPatch: Record<string, string> = {}
   ) {
     if (!selectedNode) return;
-    const otherRules = (selectedNode.interactions || []).filter((r) => r.trigger !== 'onClick');
+    const otherRules = (selectedNode.interactions || []).filter(
+      (r) => r.trigger !== 'onClick' && r.trigger !== 'click'
+    );
     if (actionType === 'none') {
       editor.dispatch({
         type: 'UPDATE_INTERACTIONS',
@@ -108,16 +117,26 @@
       return;
     }
 
+    const existingPayload = (clickRule?.payload || {}) as Record<string, string>;
     const newRule: InteractionRule = {
       id: clickRule?.id || crypto.randomUUID(),
+      name: `${selectedNode.name} (${actionType})`,
       trigger: 'onClick',
       actionType,
       payload: {
-        path:
-          path ||
-          (clickRule?.payload?.path as string) ||
-          editor.blueprint.pages[0]?.path ||
-          '/'
+        path: existingPayload.path || editor.blueprint.pages[0]?.path || '/',
+        modalTitle: existingPayload.modalTitle || `${selectedNode.name} Details`,
+        modalBody:
+          existingPayload.modalBody ||
+          'Configure this Google MD3 modal dialog in the Interactions tab.',
+        modalCta: existingPayload.modalCta || 'Confirm',
+        drawerTitle: existingPayload.drawerTitle || 'Workspace Sheet',
+        drawerBody:
+          existingPayload.drawerBody || 'Contextual side drawer triggered via declarative rule.',
+        toastMessage: existingPayload.toastMessage || 'Action completed!',
+        stateKey: existingPayload.stateKey || 'planTier',
+        stateValue: existingPayload.stateValue || 'enterprise',
+        ...payloadPatch
       }
     };
 
@@ -511,7 +530,7 @@
           </button>
         </div>
 
-        <div class="section-title">Layout & Flex/Grid</div>
+        <div class="section-title">Layout & Flex/Grid Matrix</div>
         <div class="grid-2">
           <div class="field-item">
             <label for="style-display" class="field-label">Display</label>
@@ -540,9 +559,134 @@
               class="studio-input"
             />
           </div>
+          <div class="field-item">
+            <label for="style-justify" class="field-label">Justify Content</label>
+            <select
+              id="style-justify"
+              value={readStyle('justifyContent')}
+              onchange={(e) => updateStyle('justifyContent', (e.target as HTMLSelectElement).value)}
+              class="studio-select"
+            >
+              <option value="">(Default)</option>
+              <option value="flex-start">flex-start</option>
+              <option value="center">center</option>
+              <option value="flex-end">flex-end</option>
+              <option value="space-between">space-between</option>
+            </select>
+          </div>
+          <div class="field-item">
+            <label for="style-align-items" class="field-label">Align Items</label>
+            <select
+              id="style-align-items"
+              value={readStyle('alignItems')}
+              onchange={(e) => updateStyle('alignItems', (e.target as HTMLSelectElement).value)}
+              class="studio-select"
+            >
+              <option value="">(Default)</option>
+              <option value="stretch">stretch</option>
+              <option value="flex-start">flex-start</option>
+              <option value="center">center</option>
+              <option value="flex-end">flex-end</option>
+            </select>
+          </div>
         </div>
 
-        <div class="section-title">Spacing & Dimensions</div>
+        <div class="section-title">Visual CSS Box Model (Margin &amp; Padding)</div>
+        <div class="box-model-outer">
+          <span class="box-model-tag">MARGIN</span>
+          <input
+            type="text"
+            aria-label="Margin top"
+            placeholder="0"
+            value={readStyle('marginTop')}
+            onchange={(e) => updateStyle('marginTop', (e.target as HTMLInputElement).value)}
+            class="box-input box-input--top"
+          />
+          <div class="box-model-mid">
+            <input
+              type="text"
+              aria-label="Margin left"
+              placeholder="0"
+              value={readStyle('marginLeft')}
+              onchange={(e) => updateStyle('marginLeft', (e.target as HTMLInputElement).value)}
+              class="box-input"
+            />
+            <div class="box-model-inner">
+              <span class="box-model-tag box-model-tag--pad">PADDING</span>
+              <input
+                type="text"
+                aria-label="Padding top"
+                placeholder="24px"
+                value={readStyle('paddingTop')}
+                onchange={(e) => updateStyle('paddingTop', (e.target as HTMLInputElement).value)}
+                class="box-input"
+              />
+              <div class="box-model-core-row">
+                <input
+                  type="text"
+                  aria-label="Padding left"
+                  placeholder="24px"
+                  value={readStyle('paddingLeft')}
+                  onchange={(e) => updateStyle('paddingLeft', (e.target as HTMLInputElement).value)}
+                  class="box-input"
+                />
+                <span class="box-core-badge">{selectedNode.componentType.split('/')[1]}</span>
+                <input
+                  type="text"
+                  aria-label="Padding right"
+                  placeholder="24px"
+                  value={readStyle('paddingRight')}
+                  onchange={(e) => updateStyle('paddingRight', (e.target as HTMLInputElement).value)}
+                  class="box-input"
+                />
+              </div>
+              <input
+                type="text"
+                aria-label="Padding bottom"
+                placeholder="24px"
+                value={readStyle('paddingBottom')}
+                onchange={(e) => updateStyle('paddingBottom', (e.target as HTMLInputElement).value)}
+                class="box-input"
+              />
+            </div>
+            <input
+              type="text"
+              aria-label="Margin right"
+              placeholder="0"
+              value={readStyle('marginRight')}
+              onchange={(e) => updateStyle('marginRight', (e.target as HTMLInputElement).value)}
+              class="box-input"
+            />
+          </div>
+          <input
+            type="text"
+            aria-label="Margin bottom"
+            placeholder="0"
+            value={readStyle('marginBottom')}
+            onchange={(e) => updateStyle('marginBottom', (e.target as HTMLInputElement).value)}
+            class="box-input box-input--bottom"
+          />
+        </div>
+
+        <div class="spacing-Scale-pills">
+          <span class="sub-label">Quick Vertical Padding:</span>
+          <div class="spacing-pill-row">
+            {#each ['0px', '16px', '24px', '48px', '64px', '96px'] as sp (sp)}
+              <button
+                type="button"
+                onclick={() => {
+                  updateStyle('paddingTop', sp);
+                  updateStyle('paddingBottom', sp);
+                }}
+                class="spacing-pill"
+              >
+                {sp}
+              </button>
+            {/each}
+          </div>
+        </div>
+
+        <div class="section-title">Shorthand Spacing &amp; Dimensions</div>
         <div class="grid-2">
           <div class="field-item">
             <label for="style-padding" class="field-label">Padding</label>
@@ -687,13 +831,19 @@
                   | 'none'
                   | 'navigate'
                   | 'openModal'
+                  | 'toggleDrawer'
+                  | 'showToast'
+                  | 'setState'
                   | 'submitForm'
               )}
             class="studio-select"
           >
             <option value="none">None (Component Default)</option>
             <option value="navigate">Navigate to Page Route</option>
-            <option value="openModal">Open Modal Dialog</option>
+            <option value="openModal">Open MD3 Modal Dialog</option>
+            <option value="toggleDrawer">Toggle Slide-Over Sheet Drawer</option>
+            <option value="showToast">Show MD3 Snackbar Toast</option>
+            <option value="setState">Set Reactive App State</option>
             <option value="submitForm">Submit Form Action</option>
           </select>
         </div>
@@ -705,7 +855,9 @@
               id="target-route"
               value={(clickRule.payload?.path as string) || '/'}
               onchange={(e) =>
-                setClickInteraction('navigate', (e.target as HTMLSelectElement).value)}
+                setClickInteraction('navigate', {
+                  path: (e.target as HTMLSelectElement).value
+                })}
               class="studio-select"
             >
               {#each editor.blueprint.pages as p (p.id)}
@@ -713,6 +865,115 @@
               {/each}
             </select>
           </div>
+        {:else if clickRule?.actionType === 'openModal'}
+          <div class="field-item">
+            <label for="modal-title-in" class="field-label">Modal Headline</label>
+            <input
+              id="modal-title-in"
+              type="text"
+              value={(clickRule.payload?.modalTitle as string) || ''}
+              onchange={(e) =>
+                setClickInteraction('openModal', {
+                  modalTitle: (e.target as HTMLInputElement).value
+                })}
+              class="studio-input"
+            />
+          </div>
+          <div class="field-item">
+            <label for="modal-body-in" class="field-label">Modal Body Copy</label>
+            <textarea
+              id="modal-body-in"
+              rows="2"
+              value={(clickRule.payload?.modalBody as string) || ''}
+              onchange={(e) =>
+                setClickInteraction('openModal', {
+                  modalBody: (e.target as HTMLTextAreaElement).value
+                })}
+              class="studio-textarea"
+            ></textarea>
+          </div>
+        {:else if clickRule?.actionType === 'toggleDrawer'}
+          <div class="field-item">
+            <label for="drawer-title-in" class="field-label">Drawer Sheet Title</label>
+            <input
+              id="drawer-title-in"
+              type="text"
+              value={(clickRule.payload?.drawerTitle as string) || ''}
+              onchange={(e) =>
+                setClickInteraction('toggleDrawer', {
+                  drawerTitle: (e.target as HTMLInputElement).value
+                })}
+              class="studio-input"
+            />
+          </div>
+          <div class="field-item">
+            <label for="drawer-body-in" class="field-label">Drawer Sheet Content</label>
+            <textarea
+              id="drawer-body-in"
+              rows="2"
+              value={(clickRule.payload?.drawerBody as string) || ''}
+              onchange={(e) =>
+                setClickInteraction('toggleDrawer', {
+                  drawerBody: (e.target as HTMLTextAreaElement).value
+                })}
+              class="studio-textarea"
+            ></textarea>
+          </div>
+        {:else if clickRule?.actionType === 'showToast'}
+          <div class="field-item">
+            <label for="toast-msg-in" class="field-label">Toast Notification Message</label>
+            <input
+              id="toast-msg-in"
+              type="text"
+              value={(clickRule.payload?.toastMessage as string) || ''}
+              onchange={(e) =>
+                setClickInteraction('showToast', {
+                  toastMessage: (e.target as HTMLInputElement).value
+                })}
+              class="studio-input"
+            />
+          </div>
+        {:else if clickRule?.actionType === 'setState'}
+          <div class="grid-2">
+            <div class="field-item">
+              <label for="state-key-in" class="field-label">State Variable Key</label>
+              <input
+                id="state-key-in"
+                type="text"
+                value={(clickRule.payload?.stateKey as string) || 'planTier'}
+                onchange={(e) =>
+                  setClickInteraction('setState', {
+                    stateKey: (e.target as HTMLInputElement).value
+                  })}
+                class="studio-input font-mono"
+              />
+            </div>
+            <div class="field-item">
+              <label for="state-val-in" class="field-label">New Value</label>
+              <input
+                id="state-val-in"
+                type="text"
+                value={(clickRule.payload?.stateValue as string) || 'enterprise'}
+                onchange={(e) =>
+                  setClickInteraction('setState', {
+                    stateValue: (e.target as HTMLInputElement).value
+                  })}
+                class="studio-input font-mono"
+              />
+            </div>
+          </div>
+        {/if}
+
+        {#if clickRule}
+          <button
+            type="button"
+            onclick={() => {
+              editor.isInteractiveMode = true;
+            }}
+            class="studio-btn add-item-btn"
+          >
+            ▶ Switch to Interactive Mode to Test Rule
+          </button>
         {/if}
 
         <div class="section-title" style="margin-top: 0.5rem;">Visibility & Lock State</div>
@@ -1076,5 +1337,97 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .box-model-outer {
+    position: relative;
+    background: var(--md-sys-color-surface-container);
+    border: 1px dashed var(--md-sys-color-outline);
+    border-radius: 10px;
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .box-model-tag {
+    position: absolute;
+    top: 4px;
+    left: 6px;
+    font-size: 0.5625rem;
+    font-family: var(--md-sys-font-mono);
+    font-weight: 700;
+    color: var(--md-sys-color-outline);
+  }
+  .box-model-tag--pad {
+    color: var(--md-sys-color-primary);
+  }
+  .box-model-mid {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem;
+  }
+  .box-model-inner {
+    position: relative;
+    flex: 1;
+    background: var(--md-sys-color-surface-container-high);
+    border: 1px solid var(--md-sys-color-primary);
+    border-radius: 8px;
+    padding: 0.45rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .box-model-core-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25rem;
+  }
+  .box-core-badge {
+    font-size: 0.625rem;
+    font-family: var(--md-sys-font-mono);
+    background: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
+    padding: 0.125rem 0.375rem;
+    border-radius: 4px;
+    max-width: 72px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .box-input {
+    width: 44px;
+    text-align: center;
+    font-size: 0.625rem;
+    font-family: var(--md-sys-font-mono);
+    background: var(--md-sys-color-surface-container-lowest);
+    color: var(--md-sys-color-on-surface);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: 4px;
+    padding: 2px 3px;
+  }
+  .spacing-pill-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.25rem;
+  }
+  .spacing-pill {
+    font-size: 0.625rem;
+    font-family: var(--md-sys-font-mono);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    border: 1px solid var(--md-sys-color-outline-variant);
+    background: var(--md-sys-color-surface-container);
+    color: var(--md-sys-color-on-surface-variant);
+    cursor: pointer;
+  }
+  .spacing-pill:hover {
+    border-color: var(--md-sys-color-primary);
+    color: var(--md-sys-color-primary);
   }
 </style>

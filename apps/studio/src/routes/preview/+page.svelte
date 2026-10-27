@@ -3,6 +3,7 @@
   import {
     type ProjectBlueprint,
     type BlueprintNode,
+    type InteractionRule,
     createDefaultAcmeSaaSProject
   } from '@app-viz/schema';
   import { compileNodeScopedCss } from '@app-viz/engine';
@@ -21,6 +22,11 @@
     x: number;
     y: number;
   } | null>(null);
+
+  let activeModal = $state<{ title: string; body: string; ctaText: string } | null>(null);
+  let activeDrawer = $state<{ title: string; body: string } | null>(null);
+  let activeToast = $state<string | null>(null);
+  let customAppState = $state<Record<string, string>>({});
 
   const activePage = $derived(
     blueprint.pages.find((p) => p.id === activePageId) || blueprint.pages[0]
@@ -82,6 +88,15 @@
     }
 
     function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        window.parent.postMessage(
+          { type: 'KEY_SHORTCUT', shortcut: 'command-palette' },
+          window.location.origin
+        );
+        return;
+      }
+
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -173,6 +188,59 @@
     const safeY = Math.min(y, Math.max(20, window.innerHeight - 280));
     contextMenu = { node, x: safeX, y: safeY };
   }
+
+  function handleInlinePropEdit(nodeId: string, propKey: string, value: string) {
+    window.parent.postMessage(
+      { type: 'INLINE_PROP_EDIT', nodeId, propKey, value },
+      window.location.origin
+    );
+  }
+
+  function handleResizeNodeStyle(nodeId: string, styles: Record<string, string>) {
+    window.parent.postMessage(
+      { type: 'RESIZE_NODE_STYLE', nodeId, styles },
+      window.location.origin
+    );
+  }
+
+  function handleTriggerInteraction(rule: InteractionRule, sourceNode: BlueprintNode) {
+    const act = rule.actionType || rule.action?.type || 'navigate';
+    const p = (rule.payload || rule.action?.payload || {}) as Record<string, string>;
+
+    if (act === 'navigate') {
+      const targetPath = p.path || p.targetPath || '/';
+      handleNavigate(targetPath);
+    } else if (act === 'openModal' || act === 'open_modal') {
+      activeModal = {
+        title: p.modalTitle || `${sourceNode.name} Dialog`,
+        body:
+          p.modalBody ||
+          'This interactive MD3 modal was triggered by a declarative onClick rule.',
+        ctaText: p.modalCta || 'Confirm'
+      };
+    } else if (act === 'toggleDrawer') {
+      activeDrawer = activeDrawer
+        ? null
+        : {
+            title: p.drawerTitle || `${sourceNode.name} Details Drawer`,
+            body:
+              p.drawerBody ||
+              'Inspect contextual workspace details and quick actions in this slide-over sheet.'
+          };
+    } else if (act === 'showToast' || act === 'show_toast') {
+      activeToast = p.toastMessage || `Triggered action from ${sourceNode.name}`;
+      setTimeout(() => (activeToast = null), 3500);
+    } else if (act === 'setState' || act === 'toggle_state') {
+      const k = p.stateKey || 'status';
+      const v = p.stateValue || 'active';
+      customAppState[k] = v;
+      activeToast = `State "${k}" updated to "${v}"`;
+      setTimeout(() => (activeToast = null), 2800);
+    } else if (act === 'submitForm' || act === 'submit_mock_form') {
+      activeToast = p.toastMessage || 'Form submitted successfully!';
+      setTimeout(() => (activeToast = null), 3200);
+    }
+  }
 </script>
 
 <svelte:head>
@@ -193,6 +261,9 @@
         onNodeAction={handleNodeAction}
         onDropItem={handleDropItem}
         onContextMenuNode={handleContextMenuNode}
+        onInlinePropEdit={handleInlinePropEdit}
+        onResizeNodeStyle={handleResizeNodeStyle}
+        onTriggerInteraction={handleTriggerInteraction}
       />
     {:else}
       <PreviewRenderer
@@ -205,8 +276,46 @@
         onNodeAction={handleNodeAction}
         onDropItem={handleDropItem}
         onContextMenuNode={handleContextMenuNode}
+        onInlinePropEdit={handleInlinePropEdit}
+        onResizeNodeStyle={handleResizeNodeStyle}
+        onTriggerInteraction={handleTriggerInteraction}
       />
     {/if}
+  {/if}
+
+  {#if activeModal}
+    <div style="position: fixed; inset: 0; z-index: 9500; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; padding: 1.5rem;">
+      <div class="md-card md-card-elevated" role="dialog" aria-modal="true" aria-label={activeModal.title} style="max-width: 28rem; width: 100%; padding: 1.75rem;">
+        <h3 class="md-headline-small" style="margin: 0 0 0.75rem 0;">{activeModal.title}</h3>
+        <p class="md-body-medium" style="color: var(--md-sys-color-on-surface-variant); margin: 0 0 1.5rem 0;">{activeModal.body}</p>
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+          <button type="button" class="md-btn md-btn-outlined" onclick={() => (activeModal = null)}>Dismiss</button>
+          <button type="button" class="md-btn md-btn-filled" onclick={() => (activeModal = null)}>{activeModal.ctaText}</button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  {#if activeDrawer}
+    <div style="position: fixed; inset: 0; z-index: 9400; background: rgba(0,0,0,0.4); display: flex; justify-content: flex-end;">
+      <aside class="md-card" aria-label={activeDrawer.title} style="width: min(24rem, 90vw); height: 100%; border-radius: 16px 0 0 16px; padding: 1.75rem; display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+            <h3 class="md-title-large" style="margin: 0;">{activeDrawer.title}</h3>
+            <button type="button" class="md-btn md-btn-text" onclick={() => (activeDrawer = null)}>✕</button>
+          </div>
+          <p class="md-body-medium" style="color: var(--md-sys-color-on-surface-variant);">{activeDrawer.body}</p>
+        </div>
+        <button type="button" class="md-btn md-btn-tonal" onclick={() => (activeDrawer = null)}>Close Drawer</button>
+      </aside>
+    </div>
+  {/if}
+
+  {#if activeToast}
+    <div role="status" aria-live="polite" style="position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 9600; background: #1D2024; color: #E2E2E6; padding: 0.875rem 1.25rem; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.35); display: flex; align-items: center; gap: 0.75rem;">
+      <span>{activeToast}</span>
+      <button type="button" style="background: transparent; border: none; color: inherit; cursor: pointer; font-weight: 700;" onclick={() => (activeToast = null)}>✕</button>
+    </div>
   {/if}
 
   {#if contextMenu && !isInteractiveMode}

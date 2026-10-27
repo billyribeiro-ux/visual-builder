@@ -217,6 +217,30 @@
     <button
       type="button"
       onclick={() => {
+        closeAllModals();
+        editor.showCommandPalette = !editor.showCommandPalette;
+      }}
+      title="Open AI Section Composer & Quick Commands (Cmd/Ctrl+K)"
+      class="studio-btn json-btn"
+    >
+      ✨ ⌘K AI
+    </button>
+
+    <!-- Route & Interaction Flow Map Toggle -->
+    <button
+      type="button"
+      onclick={() => {
+        editor.canvasViewMode = editor.canvasViewMode === 'flow' ? 'canvas' : 'flow';
+      }}
+      title="Toggle App Route & Interaction Flow Map"
+      class="studio-btn {editor.canvasViewMode === 'flow' ? 'studio-btn--active' : 'json-btn'}"
+    >
+      🗺️ {editor.canvasViewMode === 'flow' ? 'Canvas' : 'Flow Map'}
+    </button>
+
+    <button
+      type="button"
+      onclick={() => {
         const next = !showPreflightModal;
         closeAllModals();
         showPreflightModal = next;

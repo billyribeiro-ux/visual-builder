@@ -46,12 +46,15 @@ export const LayoutDefinitionSchema = z.object({
 export type LayoutDefinition = z.infer<typeof LayoutDefinitionSchema>;
 
 export const BlueprintAssetSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string(),
   filename: z.string(),
   mimeType: z.string(),
   size: z.number().default(0),
   localPath: z.string(),
   alt: z.string().default(''),
+  category: z.string().optional(),
+  svgContent: z.string().optional(),
+  dataUrl: z.string().optional(),
   width: z.number().optional(),
   height: z.number().optional()
 });

@@ -1,4 +1,10 @@
-import { ProjectBlueprintSchema, type ProjectBlueprint, type BlueprintNode, type PageRoute } from './blueprint.js';
+import {
+  ProjectBlueprintSchema,
+  type ProjectBlueprint,
+  type BlueprintNode,
+  type PageRoute,
+  type BlueprintAsset
+} from './blueprint.js';
 import { DEFAULT_MD3_LIGHT_COLORS } from './tokens.js';
 
 export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
@@ -492,12 +498,67 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
         }
       }
     ],
-    assets: [],
+    assets: CURATED_PROJECT_ASSETS.map((a) => ({ ...a })),
     notes: {
       implementation: 'Preloaded production reference project implementing the complete 11-step user journey.'
     }
   };
 }
+
+export const CURATED_PROJECT_ASSETS: BlueprintAsset[] = [
+  {
+    id: '80000000-0000-4000-8000-000000000001',
+    filename: 'analytics-pulse.svg',
+    mimeType: 'image/svg+xml',
+    size: 642,
+    localPath: '/assets/analytics-pulse.svg',
+    alt: 'Real-time analytics velocity chart',
+    category: 'illustration',
+    width: 320,
+    height: 180,
+    svgContent: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" fill="none"><rect width="320" height="180" rx="16" fill="#EDF2FC"/><path d="M28 136L88 96L142 114L212 54L292 34" stroke="#0B57D0" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="212" cy="54" r="7" fill="#0B57D0"/><circle cx="292" cy="34" r="7" fill="#146C2E"/></svg>`,
+    dataUrl: `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" fill="none"><rect width="320" height="180" rx="16" fill="#EDF2FC"/><path d="M28 136L88 96L142 114L212 54L292 34" stroke="#0B57D0" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="212" cy="54" r="7" fill="#0B57D0"/><circle cx="292" cy="34" r="7" fill="#146C2E"/></svg>')}`
+  },
+  {
+    id: '80000000-0000-4000-8000-000000000002',
+    filename: 'ai-agent-flow.svg',
+    mimeType: 'image/svg+xml',
+    size: 718,
+    localPath: '/assets/ai-agent-flow.svg',
+    alt: 'Autonomous AI agent orchestration graph',
+    category: 'illustration',
+    width: 320,
+    height: 180,
+    svgContent: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" fill="none"><rect width="320" height="180" rx="16" fill="#F3E8FD"/><rect x="30" y="66" width="68" height="48" rx="12" fill="#6D28D9"/><rect x="126" y="34" width="68" height="44" rx="12" fill="#0B57D0"/><rect x="126" y="102" width="68" height="44" rx="12" fill="#0B57D0"/><rect x="222" y="66" width="68" height="48" rx="12" fill="#146C2E"/><path d="M98 90H126M194 56L222 90M194 124L222 90" stroke="#444746" stroke-width="3"/></svg>`,
+    dataUrl: `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" fill="none"><rect width="320" height="180" rx="16" fill="#F3E8FD"/><rect x="30" y="66" width="68" height="48" rx="12" fill="#6D28D9"/><rect x="126" y="34" width="68" height="44" rx="12" fill="#0B57D0"/><rect x="126" y="102" width="68" height="44" rx="12" fill="#0B57D0"/><rect x="222" y="66" width="68" height="48" rx="12" fill="#146C2E"/><path d="M98 90H126M194 56L222 90M194 124L222 90" stroke="#444746" stroke-width="3"/></svg>')}`
+  },
+  {
+    id: '80000000-0000-4000-8000-000000000003',
+    filename: 'security-vault.svg',
+    mimeType: 'image/svg+xml',
+    size: 590,
+    localPath: '/assets/security-vault.svg',
+    alt: 'Zero-trust security shield badge',
+    category: 'icon',
+    width: 240,
+    height: 180,
+    svgContent: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none"><rect width="240" height="180" rx="16" fill="#E6F4EA"/><path d="M120 32L172 54V98C172 130 149 152 120 162C91 152 68 130 68 98V54L120 32Z" fill="#146C2E"/><path d="M103 98L115 110L140 82" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    dataUrl: `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none"><rect width="240" height="180" rx="16" fill="#E6F4EA"/><path d="M120 32L172 54V98C172 130 149 152 120 162C91 152 68 130 68 98V54L120 32Z" fill="#146C2E"/><path d="M103 98L115 110L140 82" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>')}`
+  },
+  {
+    id: '80000000-0000-4000-8000-000000000004',
+    filename: 'brand-mark.svg',
+    mimeType: 'image/svg+xml',
+    size: 480,
+    localPath: '/assets/brand-mark.svg',
+    alt: 'Acme MD3 geometric logo mark',
+    category: 'logo',
+    width: 120,
+    height: 120,
+    svgContent: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none"><rect width="120" height="120" rx="28" fill="#0B57D0"/><path d="M60 24L92 88H28L60 24Z" fill="#D3E3FD"/><circle cx="60" cy="68" r="12" fill="#0B57D0"/></svg>`,
+    dataUrl: `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none"><rect width="120" height="120" rx="28" fill="#0B57D0"/><path d="M60 24L92 88H28L60 24Z" fill="#D3E3FD"/><circle cx="60" cy="68" r="12" fill="#0B57D0"/></svg>')}`
+  }
+];
 
 export function createBlankProject(name = 'Untitled App'): ProjectBlueprint {
   const base = createDefaultAcmeSaaSProject();
@@ -900,4 +961,450 @@ export function createPageFromTemplate(
     }
   };
 }
+
+export interface PromptCompositionResult {
+  summary: string;
+  nodes: BlueprintNode[];
+  suggestedThemeId?: string;
+}
+
+/**
+ * Deterministic Natural-Language Prompt-to-Blueprint Composer.
+ * Translates natural language specifications (e.g. "Add an AI hero, stats bar, and 3-tier pricing")
+ * into customized, ready-to-render BlueprintNode subtrees.
+ */
+export function composeNodesFromPrompt(prompt: string): PromptCompositionResult {
+  const q = prompt.trim().toLowerCase();
+  const nodes: BlueprintNode[] = [];
+  const addedLabels: string[] = [];
+
+  const isAi = /\b(ai|agent|llm|model|copilot|neural|automation)\b/.test(q);
+  const isFintech = /\b(fintech|bank|payment|revenue|finance|crypto|billing|treasury)\b/.test(q);
+  const isDark = /\b(dark|midnight|cyber|violet)\b/.test(q);
+
+  const suggestedThemeId = isFintech
+    ? 'emerald-light'
+    : isAi
+      ? 'violet-light'
+      : isDark
+        ? 'google-blue-dark'
+        : undefined;
+
+  const domainBrand = isFintech
+    ? 'FinPulse Treasury'
+    : isAi
+      ? 'Nexus AI Agents'
+      : 'Acme Cloud';
+
+  // 1. Hero detection
+  if (/\b(hero|banner|header|landing|intro)\b/.test(q)) {
+    nodes.push({
+      id: nextUuid(),
+      componentType: 'hero/split-hero',
+      name: `${domainBrand} Hero`,
+      props: {
+        badgeText: isFintech
+          ? 'INSTANT GLOBAL SETTLEMENT'
+          : isAi
+            ? 'AUTONOMOUS SVELTE 5 AGENTS'
+            : 'GOOGLE MD3 DESIGN SYSTEM',
+        title: isFintech
+          ? 'Programmable treasury and real-time liquidity at scale.'
+          : isAi
+            ? 'Deploy autonomous AI workflows in minutes, not quarters.'
+            : 'Ship production SvelteKit 3 web apps with visual precision.',
+        subtitle: isFintech
+          ? 'Automate multi-currency reconciliation, yield optimization, and enterprise spend controls from one unified ledger.'
+          : 'Combine visual Google Material Design 3 components with deterministic AI agent handoff.',
+        primaryCtaText: isFintech ? 'Open Treasury Account' : 'Start Free Trial',
+        primaryCtaHref: '/dashboard',
+        secondaryCtaText: 'View Pricing',
+        secondaryCtaHref: '/pricing',
+        previewMetricLabel: isFintech ? '24h Settlement Volume' : 'Deployment Velocity',
+        previewMetricValue: isFintech ? '$48.2M (+34.8%)' : '14.2x Faster'
+      },
+      styles: { base: {} },
+      interactions: [],
+      locked: false,
+      hidden: false,
+      customClasses: '',
+      children: []
+    });
+    addedLabels.push('Split Hero');
+  }
+
+  // 2. Stats / Metrics bar detection
+  if (/\b(stat|stats|metric|numbers|counter|proof)\b/.test(q)) {
+    nodes.push({
+      id: nextUuid(),
+      componentType: 'marketing/stats-bar',
+      name: `${domainBrand} Stats Bar`,
+      props: {
+        stats: [
+          { value: '99.99%', label: 'SLA Uptime Guarantee', change: '+0.04% YoY' },
+          { value: '18ms', label: 'Global Edge Latency', change: '-42% P99' },
+          { value: '42,000+', label: 'Active Engineering Teams', change: '+128% Growth' },
+          { value: 'SOC2 II', label: 'Zero-Trust Compliance', change: 'Verified' }
+        ]
+      },
+      styles: { base: {} },
+      interactions: [],
+      locked: false,
+      hidden: false,
+      customClasses: '',
+      children: []
+    });
+    addedLabels.push('Stats Bar');
+  }
+
+  // 3. KPI Grid detection
+  if (/\b(kpi|dashboard|analytics|overview)\b/.test(q)) {
+    nodes.push({
+      id: nextUuid(),
+      componentType: 'app/kpi-grid',
+      name: `${domainBrand} KPI Cards`,
+      props: {
+        cards: [
+          { label: 'Net Revenue Retention', value: '138.4%', delta: '+12.1%', trend: 'up' },
+          { label: 'Active Workspaces', value: '8,940', delta: '+19.4%', trend: 'up' },
+          { label: 'Avg Resolution Time', value: '1.4m', delta: '-38.0%', trend: 'up' }
+        ]
+      },
+      styles: { base: {} },
+      interactions: [],
+      locked: false,
+      hidden: false,
+      customClasses: '',
+      children: []
+    });
+    addedLabels.push('KPI Grid');
+  }
+
+  // 4. Feature Grid detection
+  if (/\b(feature|features|bento|capabilities|grid|benefits)\b/.test(q)) {
+    nodes.push({
+      id: nextUuid(),
+      componentType: 'marketing/feature-grid',
+      name: `${domainBrand} Feature Grid`,
+      props: {
+        sectionTitle: `Why leading teams run on ${domainBrand}`,
+        sectionSubtitle: 'Architected for speed, observability, and deterministic handoff.',
+        columns: 3,
+        features: [
+          {
+            icon: '⚡',
+            title: 'Real-Time Streaming Engine',
+            description: 'Sub-20ms state synchronization powered by Svelte 5 runes.'
+          },
+          {
+            icon: '🛡️',
+            title: 'Enterprise Role Controls',
+            description: 'Granular RBAC permissions, audit logs, and hardware key enforcement.'
+          },
+          {
+            icon: '🤖',
+            title: 'Deterministic AI Handoff',
+            description: 'Export self-contained SvelteKit 3 source and machine-verified specs.'
+          }
+        ]
+      },
+      styles: { base: {} },
+      interactions: [],
+      locked: false,
+      hidden: false,
+      customClasses: '',
+      children: []
+    });
+    addedLabels.push('Feature Grid');
+  }
+
+  // 5. Pricing Table detection
+  if (/\b(price|pricing|plan|plans|tier|tiers|billing|subscription)\b/.test(q)) {
+    nodes.push({
+      id: nextUuid(),
+      componentType: 'marketing/pricing-table',
+      name: `${domainBrand} Pricing Plans`,
+      props: {
+        headline: 'Transparent, predictable pricing for every stage',
+        subheadline: 'Start free in development. Upgrade when you scale to production.',
+        plans: [
+          {
+            name: 'Starter',
+            price: '$0',
+            period: '/month',
+            description: 'For solo founders and rapid prototyping.',
+            features: ['Up to 3 active projects', 'SvelteKit 3 source export', 'Community support'],
+            ctaText: 'Start Free',
+            highlighted: false
+          },
+          {
+            name: 'Growth Pro',
+            price: '$79',
+            period: '/month',
+            description: 'For product teams shipping weekly.',
+            features: [
+              'Unlimited routes & symbols',
+              'Full AI Agent handoff ZIP',
+              'Custom MD3 design tokens',
+              'Priority Slack support'
+            ],
+            ctaText: 'Start 14-Day Trial',
+            highlighted: true
+          },
+          {
+            name: 'Enterprise',
+            price: 'Custom',
+            period: 'annual',
+            description: 'Dedicated infrastructure and custom SLAs.',
+            features: ['SSO / SAML 2.0', 'Dedicated solutions engineer', '99.99% uptime SLA'],
+            ctaText: 'Contact Sales',
+            highlighted: false
+          }
+        ]
+      },
+      styles: { base: {} },
+      interactions: [],
+      locked: false,
+      hidden: false,
+      customClasses: '',
+      children: []
+    });
+    addedLabels.push('Pricing Table');
+  }
+
+  // 6. Data Table detection (avoid matching "pricing table")
+  if (
+    /\b(datatable|data table|rows|logs|transactions|records)\b/.test(q) ||
+    (/\btable\b/.test(q) && !/\bpricing\s+table\b/.test(q))
+  ) {
+    nodes.push({
+      id: nextUuid(),
+      componentType: 'app/data-table',
+      name: `${domainBrand} Activity Table`,
+      props: {
+        title: 'Live Production Deployments & Events',
+        searchable: true,
+        columns: ['Deployment ID', 'Service', 'Status', 'Latency'],
+        rows: [
+          ['dep-9482a', 'auth-edge-gateway', 'Healthy', '12ms'],
+          ['dep-9481f', 'ai-inference-worker', 'Healthy', '44ms'],
+          ['dep-9479c', 'billing-webhook-sync', 'Warning', '168ms']
+        ]
+      },
+      styles: { base: {} },
+      interactions: [],
+      locked: false,
+      hidden: false,
+      customClasses: '',
+      children: []
+    });
+    addedLabels.push('Data Table');
+  }
+
+  // 7. Testimonials detection
+  if (/\b(testimonial|testimonials|review|reviews|quote|quotes|customer|social proof)\b/.test(q)) {
+    nodes.push({
+      id: nextUuid(),
+      componentType: 'marketing/testimonials',
+      name: 'Customer Testimonials',
+      props: {
+        headline: 'Trusted by staff engineers and design leaders',
+        items: [
+          {
+            quote: 'We cut our design-to-SvelteKit implementation cycle from 3 weeks to 20 minutes.',
+            author: 'Elena Rostova',
+            role: 'VP Engineering, LinearFlow'
+          },
+          {
+            quote: 'The exported AGENTS.md and blueprint JSON let our coding agents implement features with zero guesswork.',
+            author: 'Marcus Vance',
+            role: 'Principal Architect, RaycastCloud'
+          }
+        ]
+      },
+      styles: { base: {} },
+      interactions: [],
+      locked: false,
+      hidden: false,
+      customClasses: '',
+      children: []
+    });
+    addedLabels.push('Testimonials');
+  }
+
+  // 8. FAQ Accordion detection
+  if (/\b(faq|faqs|question|questions|accordion|help)\b/.test(q)) {
+    nodes.push({
+      id: nextUuid(),
+      componentType: 'marketing/faq-accordion',
+      name: 'FAQ Accordion',
+      props: {
+        headline: 'Frequently Asked Questions',
+        items: [
+          {
+            question: 'Does the exported app use genuine Svelte 5 runes and SvelteKit 3?',
+            answer: 'Yes. Every component uses $props(), $state(), and $derived() with zero legacy syntax.'
+          },
+          {
+            question: 'Is Tailwind CSS required?',
+            answer: 'No. All styling uses pure Vanilla CSS with Google Material Design 3 system variables.'
+          }
+        ]
+      },
+      styles: { base: {} },
+      interactions: [],
+      locked: false,
+      hidden: false,
+      customClasses: '',
+      children: []
+    });
+    addedLabels.push('FAQ Accordion');
+  }
+
+  // 9. Contact / Lead Form detection
+  if (/\b(contact|form|lead|inquire|support|sales)\b/.test(q)) {
+    nodes.push({
+      id: nextUuid(),
+      componentType: 'marketing/contact-form',
+      name: 'Contact & Inquiry Form',
+      props: {
+        sectionEyebrow: 'GET IN TOUCH',
+        sectionTitle: 'Talk to our engineering team',
+        sectionSubtitle: 'Tell us about your architecture and timeline.',
+        submitText: 'Send Message'
+      },
+      styles: { base: {} },
+      interactions: [],
+      locked: false,
+      hidden: false,
+      customClasses: '',
+      children: []
+    });
+    addedLabels.push('Contact Form');
+  }
+
+  // 10. Auth / Login detection
+  if (/\b(auth|login|signin|sign-in|signup|register)\b/.test(q)) {
+    nodes.push({
+      id: nextUuid(),
+      componentType: 'app/auth-card',
+      name: 'Authentication Card',
+      props: {
+        mode: 'signin',
+        brandName: domainBrand,
+        title: `Sign in to ${domainBrand}`,
+        subtitle: 'Use your workspace SSO or email credentials.',
+        redirectHref: '/dashboard'
+      },
+      styles: { base: {} },
+      interactions: [],
+      locked: false,
+      hidden: false,
+      customClasses: '',
+      children: []
+    });
+    addedLabels.push('Auth Card');
+  }
+
+  // 11. CTA Banner or Newsletter detection
+  if (/\b(cta|call to action|newsletter|subscribe)\b/.test(q)) {
+    if (/\b(newsletter|subscribe)\b/.test(q)) {
+      nodes.push({
+        id: nextUuid(),
+        componentType: 'marketing/newsletter',
+        name: 'Newsletter Signup',
+        props: {
+          title: 'Get monthly architecture deep-dives',
+          subtitle: 'Zero spam. Unsubscribe in one click.',
+          placeholder: 'you@company.com',
+          buttonText: 'Subscribe'
+        },
+        styles: { base: {} },
+        interactions: [],
+        locked: false,
+        hidden: false,
+        customClasses: '',
+        children: []
+      });
+      addedLabels.push('Newsletter');
+    } else {
+      nodes.push({
+        id: nextUuid(),
+        componentType: 'marketing/cta-banner',
+        name: 'Conversion CTA Banner',
+        props: {
+          title: `Ready to build with ${domainBrand}?`,
+          subtitle: 'Export a self-contained SvelteKit 3 repository and AI handoff package today.',
+          primaryCtaText: 'Launch Studio',
+          primaryCtaHref: '/dashboard',
+          secondaryCtaText: 'Compare Plans',
+          secondaryCtaHref: '/pricing'
+        },
+        styles: { base: {} },
+        interactions: [],
+        locked: false,
+        hidden: false,
+        customClasses: '',
+        children: []
+      });
+      addedLabels.push('CTA Banner');
+    }
+  }
+
+  // Fallback if prompt was generic: compose a complete Hero + Feature Grid section
+  if (nodes.length === 0) {
+    nodes.push(
+      {
+        id: nextUuid(),
+        componentType: 'hero/split-hero',
+        name: `${prompt.slice(0, 28) || 'Custom'} Hero`,
+        props: {
+          badgeText: 'AI COMPOSER GENERATED',
+          title: prompt.length > 8 ? prompt : 'Build modern responsive web apps at 10x speed.',
+          subtitle:
+            'Crafted with Google Material Design 3 tokens and live Svelte 5 runes.',
+          primaryCtaText: 'Get Started',
+          primaryCtaHref: '/dashboard',
+          secondaryCtaText: 'Learn More',
+          secondaryCtaHref: '/features',
+          previewMetricLabel: 'System Status',
+          previewMetricValue: '99.99% Online'
+        },
+        styles: { base: {} },
+        interactions: [],
+        locked: false,
+        hidden: false,
+        customClasses: '',
+        children: []
+      },
+      {
+        id: nextUuid(),
+        componentType: 'marketing/cta-banner',
+        name: 'Follow-up CTA Banner',
+        props: {
+          title: 'Take your project to production',
+          subtitle: 'Click Export for AI Agents to download the full SvelteKit 3 package.',
+          primaryCtaText: 'Open Dashboard',
+          primaryCtaHref: '/dashboard',
+          secondaryCtaText: 'Pricing',
+          secondaryCtaHref: '/pricing'
+        },
+        styles: { base: {} },
+        interactions: [],
+        locked: false,
+        hidden: false,
+        customClasses: '',
+        children: []
+      }
+    );
+    addedLabels.push('Split Hero', 'CTA Banner');
+  }
+
+  return {
+    summary: `Composed ${nodes.length} section(s): ${addedLabels.join(' + ')}`,
+    nodes,
+    suggestedThemeId
+  };
+}
+
 

@@ -2,10 +2,13 @@ import {
   type ProjectBlueprint,
   type BreakpointKey,
   type BlueprintNode,
+  type BlueprintAsset,
   ProjectBlueprintSchema,
   createDefaultAcmeSaaSProject,
   createBlankProject,
-  validateBlueprintPreflight
+  validateBlueprintPreflight,
+  composeNodesFromPrompt,
+  MD3_THEME_PRESETS
 } from '@app-viz/schema';
 import {
   HistoryManager,
@@ -67,7 +70,9 @@ class EditorState {
   activeBreakpoint = $state<BreakpointKey>('desktop');
   zoom = $state<number>(100);
   isInteractiveMode = $state<boolean>(false);
-  activeLeftTab = $state<'pages' | 'layers' | 'library' | 'tokens'>('layers');
+  canvasViewMode = $state<'canvas' | 'flow'>('canvas');
+  showCommandPalette = $state<boolean>(false);
+  activeLeftTab = $state<'pages' | 'layers' | 'library' | 'assets' | 'tokens'>('layers');
   isSaving = $state<boolean>(false);
   lastSavedAt = $state<string>('Saved locally');
   snapshots = $state<ProjectSnapshot[]>([]);
@@ -467,6 +472,100 @@ class EditorState {
       } catch {
         // Ignore quota error
       }
+    }
+  }
+
+  // Prompt-to-Blueprint AI Section Composer
+  composeFromPrompt(prompt: string, applySuggestedTheme = false): { summary: string; count: number } {
+    if (!this.activePage || !prompt.trim()) {
+      return { summary: 'No active page', count: 0 };
+    }
+    const result = composeNodesFromPrompt(prompt);
+    const selected = this.selectedNode;
+    const targetParentId =
+      selected && isContainerComponent(selected.componentType)
+        ? selected.id
+        : this.activePage.rootNode.id;
+
+    for (const node of result.nodes) {
+      this.dispatch({
+        type: 'INSERT_NODE',
+        targetParentId,
+        node
+      });
+    }
+
+    if (applySuggestedTheme && result.suggestedThemeId) {
+      const preset = MD3_THEME_PRESETS[result.suggestedThemeId];
+      if (preset) {
+        this.dispatch({
+          type: 'UPDATE_TOKENS',
+          tokens: { colors: { ...preset.colors } }
+        });
+      }
+    }
+
+    if (result.nodes.length > 0) {
+      this.selectNode(result.nodes[result.nodes.length - 1].id);
+    }
+
+    return { summary: result.summary, count: result.nodes.length };
+  }
+
+  // Project Asset & Media Management
+  addAsset(asset: BlueprintAsset) {
+    this.dispatch({ type: 'ADD_ASSET', asset });
+  }
+
+  deleteAsset(assetId: string) {
+    this.dispatch({ type: 'DELETE_ASSET', assetId });
+  }
+
+  applyAssetToSelectedNode(asset: BlueprintAsset) {
+    const urlValue = asset.dataUrl || asset.localPath;
+    if (this.selectedNode) {
+      const ct = this.selectedNode.componentType;
+      if (ct === 'navigation/navbar') {
+        this.dispatch({
+          type: 'UPDATE_PROPS',
+          nodeId: this.selectedNode.id,
+          props: { logoUrl: urlValue }
+        });
+        return;
+      }
+      // For any other selected node, set backgroundImage or imageUrl prop
+      this.dispatch({
+        type: 'UPDATE_PROPS',
+        nodeId: this.selectedNode.id,
+        props: { imageUrl: urlValue, imageAlt: asset.alt }
+      });
+    } else if (this.activePage) {
+      // Insert a Card showcasing the asset
+      const cardNode: BlueprintNode = {
+        id: crypto.randomUUID(),
+        componentType: 'ui/card',
+        name: `${asset.filename} Card`,
+        props: {
+          variant: 'outlined',
+          eyebrow: asset.category?.toUpperCase() || 'ASSET',
+          title: asset.alt || asset.filename,
+          body: `Bundled static path: ${asset.localPath}`,
+          actionText: 'Explore',
+          actionHref: '#'
+        },
+        styles: { base: {} },
+        interactions: [],
+        children: [],
+        locked: false,
+        hidden: false,
+        customClasses: ''
+      };
+      this.dispatch({
+        type: 'INSERT_NODE',
+        targetParentId: this.activePage.rootNode.id,
+        node: cardNode
+      });
+      this.selectNode(cardNode.id);
     }
   }
 

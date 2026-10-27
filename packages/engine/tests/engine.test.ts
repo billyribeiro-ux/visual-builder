@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createDefaultAcmeSaaSProject } from '@app-viz/schema';
+import { createDefaultAcmeSaaSProject, composeNodesFromPrompt } from '@app-viz/schema';
 import {
   HistoryManager,
   executeCommand,
@@ -152,5 +152,41 @@ describe('Editor Engine & Reducer', () => {
     expect(css).toContain(`[data-node-id="${heroNodeId}"]:hover { background-color: #EDF2FC !important; }`);
     expect(css).toContain(`@media (max-width: 767px)`);
     expect(css).toContain(`[data-node-id="${heroNodeId}"] { padding-top: 24px !important; }`);
+  });
+
+  it('supports ADD_ASSET, DELETE_ASSET, and composeNodesFromPrompt AI section composer', () => {
+    let project = createDefaultAcmeSaaSProject();
+    const initialAssetCount = project.assets.length;
+    expect(initialAssetCount).toBeGreaterThanOrEqual(4);
+
+    project = executeCommand(project, {
+      type: 'ADD_ASSET',
+      asset: {
+        id: '88888888-0000-4000-8000-000000000099',
+        filename: 'custom-diagram.svg',
+        mimeType: 'image/svg+xml',
+        size: 120,
+        localPath: '/assets/custom-diagram.svg',
+        alt: 'Custom architecture diagram',
+        category: 'illustration',
+        svgContent: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"></svg>'
+      }
+    });
+    expect(project.assets.length).toBe(initialAssetCount + 1);
+
+    project = executeCommand(project, {
+      type: 'DELETE_ASSET',
+      assetId: '88888888-0000-4000-8000-000000000099'
+    });
+    expect(project.assets.length).toBe(initialAssetCount);
+
+    const composed = composeNodesFromPrompt(
+      'Add an AI agent hero, stats bar, and 3-tier pricing table'
+    );
+    expect(composed.nodes.length).toBe(3);
+    expect(composed.nodes[0].componentType).toBe('hero/split-hero');
+    expect(composed.nodes[1].componentType).toBe('marketing/stats-bar');
+    expect(composed.nodes[2].componentType).toBe('marketing/pricing-table');
+    expect(composed.suggestedThemeId).toBe('violet-light');
   });
 });

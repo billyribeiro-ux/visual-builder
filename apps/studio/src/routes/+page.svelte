@@ -3,6 +3,7 @@
   import LeftSidebar from '#lib/components/LeftSidebar.svelte';
   import CanvasArea from '#lib/components/CanvasArea.svelte';
   import RightInspector from '#lib/components/RightInspector.svelte';
+  import CommandPalette from '#lib/components/CommandPalette.svelte';
   import { editor } from '#lib/state/editor.svelte.js';
   import { onMount } from 'svelte';
 
@@ -19,6 +20,18 @@
 
   onMount(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        editor.showCommandPalette = !editor.showCommandPalette;
+        return;
+      }
+
+      if (e.key === 'Escape' && editor.showCommandPalette) {
+        e.preventDefault();
+        editor.showCommandPalette = false;
+        return;
+      }
+
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
         if (isFormInputFocused(e.target)) return;
         e.preventDefault();
@@ -88,4 +101,7 @@
     <!-- Right Property & Event Inspector -->
     <RightInspector />
   </div>
+
+  <!-- Universal Cmd+K Command Palette & AI Section Composer -->
+  <CommandPalette />
 </div>
