@@ -3,6 +3,19 @@ import { DesignTokensSchema } from './tokens.js';
 import { ResponsiveStyleSchema } from './styles.js';
 import { InteractionRuleSchema } from './interactions.js';
 
+export const MotionEffectsSchema = z.object({
+  entranceAnimation: z
+    .enum(['none', 'fadeIn', 'fadeInUp', 'fadeInDown', 'zoomIn', 'slideInLeft', 'slideInRight'])
+    .default('none'),
+  animationDuration: z.enum(['fast', 'normal', 'slow']).default('normal'),
+  hoverTransform: z.enum(['none', 'lift', 'scale', 'glow', 'tilt']).default('none'),
+  sticky: z.enum(['none', 'top', 'bottom']).default('none'),
+  hideOnDesktop: z.boolean().default(false),
+  hideOnTablet: z.boolean().default(false),
+  hideOnMobile: z.boolean().default(false)
+});
+export type MotionEffects = z.infer<typeof MotionEffectsSchema>;
+
 export const BlueprintNodeSchema: z.ZodType<any> = z.lazy(() =>
   z.object({
     id: z.string().uuid(),
@@ -15,7 +28,9 @@ export const BlueprintNodeSchema: z.ZodType<any> = z.lazy(() =>
     children: z.array(BlueprintNodeSchema).default([]),
     locked: z.boolean().default(false),
     hidden: z.boolean().default(false),
-    customClasses: z.string().default('')
+    customClasses: z.string().default(''),
+    customCss: z.string().default(''),
+    motionEffects: MotionEffectsSchema.optional()
   })
 );
 export type BlueprintNode = z.infer<typeof BlueprintNodeSchema>;

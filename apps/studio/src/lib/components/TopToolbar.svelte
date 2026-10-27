@@ -114,6 +114,29 @@
     <button
       type="button"
       onclick={() => {
+        editor.showNavigator = !editor.showNavigator;
+      }}
+      class="studio-btn {editor.showNavigator ? 'studio-btn--active' : 'top-pill-btn'}"
+      title="Toggle Floating Structure Navigator (⌘I)"
+    >
+      📑 Structure
+    </button>
+
+    <button
+      type="button"
+      onclick={() => {
+        editor.isInteractiveMode = false;
+        editor.activeLeftTab = 'tokens';
+      }}
+      class="studio-btn {editor.activeLeftTab === 'tokens' && !editor.isInteractiveMode ? 'studio-btn--active' : 'top-pill-btn'}"
+      title="Global Colors, Fonts & MD3 Design System (Site Settings)"
+    >
+      🎨 Site Settings
+    </button>
+
+    <button
+      type="button"
+      onclick={() => {
         const next = !showTemplateModal;
         closeAllModals();
         showTemplateModal = next;

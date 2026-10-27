@@ -37,6 +37,29 @@
     { label: 'Pure White', val: '#FFFFFF' }
   ];
 
+  const atomicV4Classes = [
+    { cls: 'el-glass', label: 'Glass Blur' },
+    { cls: 'el-gradient-border', label: 'Primary Border' },
+    { cls: 'el-shadow-float', label: 'Float Shadow' },
+    { cls: 'el-surface-tint', label: 'Primary Tint' },
+    { cls: 'el-border-glow', label: 'Glow Ring' }
+  ];
+
+  const customCssSnippets = [
+    {
+      label: 'Glass Card',
+      code: 'selector {\n  backdrop-filter: blur(16px);\n  border: 1px solid rgba(11, 87, 208, 0.25);\n  border-radius: 16px;\n}'
+    },
+    {
+      label: 'Hover Float',
+      code: 'selector {\n  transition: transform 0.25s ease;\n}\nselector:hover {\n  transform: translateY(-6px);\n}'
+    },
+    {
+      label: 'Accent Bar',
+      code: 'selector {\n  border-left: 4px solid var(--md-sys-color-primary);\n  padding-left: 1rem;\n}'
+    }
+  ];
+
   const selectedNode = $derived(editor.selectedNode);
   const manifest = $derived(selectedNode ? getManifest(selectedNode.componentType) : null);
   const effectiveStyleBucket = $derived<
@@ -121,6 +144,53 @@
       | undefined;
     const baseBucket = selectedNode.styles?.base as Record<string, string> | undefined;
     return bucket?.[propName] ?? (effectiveStyleBucket === 'base' ? '' : baseBucket?.[propName] ?? '');
+  }
+
+  function hasBucketOverrides(
+    bucketKey: 'base' | BreakpointKey | 'hover' | 'focus' | 'active'
+  ): boolean {
+    if (!selectedNode?.styles) return false;
+    const bucket = selectedNode.styles[bucketKey] as Record<string, unknown> | undefined;
+    return Boolean(bucket && Object.values(bucket).some((v) => v !== undefined && v !== ''));
+  }
+
+  function toggleAtomicClass(clsName: string) {
+    if (!selectedNode) return;
+    const current = (selectedNode.customClasses || '')
+      .split(/\s+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const next = current.includes(clsName)
+      ? current.filter((c) => c !== clsName)
+      : [...current, clsName];
+    editor.dispatch({
+      type: 'UPDATE_NODE_META',
+      nodeId: selectedNode.id,
+      meta: { customClasses: next.join(' ') }
+    });
+  }
+
+  function updateMotionEffect(patch: Record<string, unknown>) {
+    if (!selectedNode) return;
+    const prev = selectedNode.motionEffects || {
+      entranceAnimation: 'none',
+      animationDuration: 'normal',
+      hoverTransform: 'none',
+      sticky: 'none',
+      hideOnDesktop: false,
+      hideOnTablet: false,
+      hideOnMobile: false
+    };
+    editor.dispatch({
+      type: 'UPDATE_NODE_META',
+      nodeId: selectedNode.id,
+      meta: {
+        motionEffects: {
+          ...prev,
+          ...patch
+        } as NonNullable<typeof selectedNode.motionEffects>
+      }
+    });
   }
 
   function setClickInteraction(
@@ -522,41 +592,101 @@
     <!-- Tab 2: Visual Styles (MD3, Responsive Cascade & Stateful Variants) -->
     {:else if activeTab === 'style'}
       <div class="studio-panel-content flow-v">
+        <!-- Elementor Pro Copy / Paste / Reset Style Toolbar -->
+        <div class="spacing-pill-row" style="margin-top: 0;">
+          <button
+            type="button"
+            onclick={() => editor.copyNodeStyle(selectedNode.id)}
+            class="spacing-pill"
+            title="Copy Element Style (⌘⇧C)"
+          >
+            🎨 Copy Style
+          </button>
+          <button
+            type="button"
+            disabled={!editor.clipboardStyles}
+            onclick={() => editor.pasteNodeStyle(selectedNode.id)}
+            class="spacing-pill"
+            title="Paste Copied Style (⌘⇧V)"
+          >
+            🖌️ Paste Style
+          </button>
+          <button
+            type="button"
+            onclick={() => editor.resetNodeStyle(selectedNode.id)}
+            class="spacing-pill"
+            title="Reset All Styles on Element"
+          >
+            ↺ Reset
+          </button>
+        </div>
+
+        <!-- Elementor V4 Atomic Classes & Global Class Chips -->
+        <div class="field-item">
+          <label for="el-v4-classes" class="field-label">Elementor V4 Classes (Local &amp; Global)</label>
+          <div class="spacing-pill-row" style="margin-bottom: 0.25rem;">
+            {#each atomicV4Classes as item (item.cls)}
+              {@const isApplied = (selectedNode.customClasses || '').split(/\s+/).includes(item.cls)}
+              <button
+                type="button"
+                onclick={() => toggleAtomicClass(item.cls)}
+                class="spacing-pill"
+                style={isApplied ? 'background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); border-color: var(--md-sys-color-primary); font-weight: 700;' : ''}
+              >
+                .{item.cls}
+              </button>
+            {/each}
+          </div>
+          <input
+            id="el-v4-classes"
+            type="text"
+            placeholder="e.g. el-glass el-shadow-float"
+            value={selectedNode.customClasses || ''}
+            onchange={(e) =>
+              editor.dispatch({
+                type: 'UPDATE_NODE_META',
+                nodeId: selectedNode.id,
+                meta: { customClasses: (e.target as HTMLInputElement).value }
+              })}
+            class="studio-input font-mono"
+          />
+        </div>
+
         <div class="bp-target-bar">
           <button
             type="button"
             onclick={() => (styleTargetMode = 'base')}
             class="bp-target-btn {styleTargetMode === 'base' ? 'bp-target-btn--active' : ''}"
           >
-            Base
+            Normal{hasBucketOverrides('base') ? ' •' : ''}
           </button>
           <button
             type="button"
             onclick={() => (styleTargetMode = 'breakpoint')}
             class="bp-target-btn {styleTargetMode === 'breakpoint' ? 'bp-target-btn--active' : ''}"
           >
-            @{editor.activeBreakpoint}
+            @{editor.activeBreakpoint}{hasBucketOverrides(editor.activeBreakpoint) ? ' •' : ''}
           </button>
           <button
             type="button"
             onclick={() => (styleTargetMode = 'hover')}
             class="bp-target-btn {styleTargetMode === 'hover' ? 'bp-target-btn--active' : ''}"
           >
-            :hover
+            :hover{hasBucketOverrides('hover') ? ' •' : ''}
           </button>
           <button
             type="button"
             onclick={() => (styleTargetMode = 'focus')}
             class="bp-target-btn {styleTargetMode === 'focus' ? 'bp-target-btn--active' : ''}"
           >
-            :focus
+            :focus{hasBucketOverrides('focus') ? ' •' : ''}
           </button>
           <button
             type="button"
             onclick={() => (styleTargetMode = 'active')}
             class="bp-target-btn {styleTargetMode === 'active' ? 'bp-target-btn--active' : ''}"
           >
-            :active
+            :active{hasBucketOverrides('active') ? ' •' : ''}
           </button>
         </div>
 
@@ -886,12 +1016,175 @@
         </div>
       </div>
 
-    <!-- Tab 3: Declarative Interactions & Routing -->
+    <!-- Tab 3: Elementor Pro Advanced (Motion Effects, Sticky, Device Visibility, Custom CSS & Interactions) -->
     {:else if activeTab === 'interactions'}
       <div class="studio-panel-content flow-v">
-        <div class="section-title">Declarative Event Rules</div>
+        <div class="section-title">✨ Motion Effects &amp; Sticky (Elementor Pro)</div>
+        <div class="grid-2">
+          <div class="field-item">
+            <label for="adv-entrance" class="field-label">Entrance Animation</label>
+            <select
+              id="adv-entrance"
+              value={selectedNode.motionEffects?.entranceAnimation || 'none'}
+              onchange={(e) =>
+                updateMotionEffect({
+                  entranceAnimation: (e.target as HTMLSelectElement).value
+                })}
+              class="studio-select"
+            >
+              <option value="none">None</option>
+              <option value="fadeIn">Fade In</option>
+              <option value="fadeInUp">Fade In Up</option>
+              <option value="fadeInDown">Fade In Down</option>
+              <option value="zoomIn">Zoom In</option>
+              <option value="slideInLeft">Slide In Left</option>
+              <option value="slideInRight">Slide In Right</option>
+            </select>
+          </div>
+          <div class="field-item">
+            <label for="adv-duration" class="field-label">Animation Speed</label>
+            <select
+              id="adv-duration"
+              value={selectedNode.motionEffects?.animationDuration || 'normal'}
+              onchange={(e) =>
+                updateMotionEffect({
+                  animationDuration: (e.target as HTMLSelectElement).value
+                })}
+              class="studio-select"
+            >
+              <option value="fast">Fast (220ms)</option>
+              <option value="normal">Normal (460ms)</option>
+              <option value="slow">Slow (760ms)</option>
+            </select>
+          </div>
+          <div class="field-item">
+            <label for="adv-hover-fx" class="field-label">Hover Transform</label>
+            <select
+              id="adv-hover-fx"
+              value={selectedNode.motionEffects?.hoverTransform || 'none'}
+              onchange={(e) =>
+                updateMotionEffect({
+                  hoverTransform: (e.target as HTMLSelectElement).value
+                })}
+              class="studio-select"
+            >
+              <option value="none">None</option>
+              <option value="lift">Float Up (-5px)</option>
+              <option value="scale">Scale (1.02x)</option>
+              <option value="glow">Primary Glow</option>
+              <option value="tilt">3D Tilt</option>
+            </select>
+          </div>
+          <div class="field-item">
+            <label for="adv-sticky" class="field-label">Sticky Position</label>
+            <select
+              id="adv-sticky"
+              value={selectedNode.motionEffects?.sticky || 'none'}
+              onchange={(e) =>
+                updateMotionEffect({
+                  sticky: (e.target as HTMLSelectElement).value
+                })}
+              class="studio-select"
+            >
+              <option value="none">None</option>
+              <option value="top">Sticky Top</option>
+              <option value="bottom">Sticky Bottom</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="section-title" style="margin-top: 0.25rem;">📱 Responsive Device Visibility</div>
+        <div class="repeater-card">
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={Boolean(selectedNode.motionEffects?.hideOnDesktop)}
+              onchange={(e) =>
+                updateMotionEffect({
+                  hideOnDesktop: (e.target as HTMLInputElement).checked
+                })}
+              class="studio-checkbox"
+            />
+            <span class="checkbox-text">🖥️ Hide on Desktop (≥1024px)</span>
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={Boolean(selectedNode.motionEffects?.hideOnTablet)}
+              onchange={(e) =>
+                updateMotionEffect({
+                  hideOnTablet: (e.target as HTMLInputElement).checked
+                })}
+              class="studio-checkbox"
+            />
+            <span class="checkbox-text">💻 Hide on Tablet (768px–1023px)</span>
+          </label>
+          <label class="checkbox-row">
+            <input
+              type="checkbox"
+              checked={Boolean(selectedNode.motionEffects?.hideOnMobile)}
+              onchange={(e) =>
+                updateMotionEffect({
+                  hideOnMobile: (e.target as HTMLInputElement).checked
+                })}
+              class="studio-checkbox"
+            />
+            <span class="checkbox-text">📱 Hide on Mobile (&lt;768px)</span>
+          </label>
+        </div>
+
+        <div class="section-title" style="margin-top: 0.25rem;">💻 Custom CSS (Elementor Pro `selector`)</div>
+        <div class="field-item">
+          <div class="spacing-pill-row" style="margin-top: 0; margin-bottom: 0.25rem;">
+            {#each customCssSnippets as snip (snip.label)}
+              <button
+                type="button"
+                onclick={() =>
+                  editor.dispatch({
+                    type: 'UPDATE_NODE_META',
+                    nodeId: selectedNode.id,
+                    meta: { customCss: snip.code }
+                  })}
+                class="spacing-pill"
+              >
+                + {snip.label}
+              </button>
+            {/each}
+            {#if selectedNode.customCss}
+              <button
+                type="button"
+                onclick={() =>
+                  editor.dispatch({
+                    type: 'UPDATE_NODE_META',
+                    nodeId: selectedNode.id,
+                    meta: { customCss: '' }
+                  })}
+                class="spacing-pill"
+              >
+                Clear
+              </button>
+            {/if}
+          </div>
+          <textarea
+            id="adv-custom-css"
+            aria-label="Elementor Pro Scoped Custom CSS"
+            rows={4}
+            placeholder={"selector {\n  border-radius: 16px;\n}"}
+            value={selectedNode.customCss || ''}
+            onchange={(e) =>
+              editor.dispatch({
+                type: 'UPDATE_NODE_META',
+                nodeId: selectedNode.id,
+                meta: { customCss: (e.target as HTMLTextAreaElement).value }
+              })}
+            class="studio-textarea font-mono"
+          ></textarea>
+          <span class="sub-label">Use <code>selector</code> to target this specific element cleanly.</span>
+        </div>
+
+        <div class="section-title" style="margin-top: 0.25rem;">⚡ Popup, Off-Canvas &amp; Click Actions</div>
         <p class="panel-sub">
-          Rules defined here are stored in `node.interactions`, executed in Interactive Mode, and exported to `blueprint/interaction-graph.json`.
+          Trigger Popups, Off-Canvas Drawers, Route Navigation, or Reactive State changes on click.
         </p>
 
         <div class="field-item">

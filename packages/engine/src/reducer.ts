@@ -355,6 +355,52 @@ export function executeCommand(
       return next;
     }
 
+    case 'PASTE_NODE_STYLE': {
+      let target: BlueprintNode | null = null;
+      for (const page of next.pages) {
+        target = findNodeById(page.rootNode, command.nodeId);
+        if (target) break;
+      }
+      if (!target) {
+        for (const layout of next.layouts) {
+          target = findNodeById(layout.rootNode, command.nodeId);
+          if (target) break;
+        }
+      }
+      if (target) {
+        target.styles = JSON.parse(JSON.stringify(command.styles || { base: {} }));
+        if (command.customClasses !== undefined) target.customClasses = command.customClasses;
+        if (command.customCss !== undefined) target.customCss = command.customCss;
+        if (command.motionEffects !== undefined) {
+          target.motionEffects = command.motionEffects
+            ? JSON.parse(JSON.stringify(command.motionEffects))
+            : undefined;
+        }
+      }
+      return next;
+    }
+
+    case 'RESET_NODE_STYLE': {
+      let target: BlueprintNode | null = null;
+      for (const page of next.pages) {
+        target = findNodeById(page.rootNode, command.nodeId);
+        if (target) break;
+      }
+      if (!target) {
+        for (const layout of next.layouts) {
+          target = findNodeById(layout.rootNode, command.nodeId);
+          if (target) break;
+        }
+      }
+      if (target) {
+        target.styles = { base: {} };
+        target.customClasses = '';
+        target.customCss = '';
+        target.motionEffects = undefined;
+      }
+      return next;
+    }
+
     case 'UPDATE_PROJECT_META': {
       next.meta = { ...next.meta, ...command.meta };
       return next;

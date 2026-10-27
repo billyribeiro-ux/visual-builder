@@ -44,7 +44,24 @@ export type EditorCommand =
   | {
       type: 'UPDATE_NODE_META';
       nodeId: string;
-      meta: Partial<Pick<BlueprintNode, 'name' | 'locked' | 'hidden'>>;
+      meta: Partial<
+        Pick<
+          BlueprintNode,
+          'name' | 'locked' | 'hidden' | 'customClasses' | 'customCss' | 'motionEffects'
+        >
+      >;
+    }
+  | {
+      type: 'PASTE_NODE_STYLE';
+      nodeId: string;
+      styles: BlueprintNode['styles'];
+      customClasses?: string;
+      customCss?: string;
+      motionEffects?: BlueprintNode['motionEffects'];
+    }
+  | {
+      type: 'RESET_NODE_STYLE';
+      nodeId: string;
     }
   | {
       type: 'UPDATE_PROPS';

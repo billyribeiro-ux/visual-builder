@@ -73,11 +73,18 @@ class EditorState {
   canvasViewMode = $state<'canvas' | 'flow'>('canvas');
   showCommandPalette = $state<boolean>(false);
   showBlockLibraryModal = $state<boolean>(false);
+  showNavigator = $state<boolean>(false);
   activeLeftTab = $state<'pages' | 'layers' | 'library' | 'assets' | 'tokens'>('library');
   isSaving = $state<boolean>(false);
   lastSavedAt = $state<string>('Saved locally');
   snapshots = $state<ProjectSnapshot[]>([]);
   clipboardNode = $state<BlueprintNode | null>(null);
+  clipboardStyles = $state<{
+    styles: BlueprintNode['styles'];
+    customClasses?: string;
+    customCss?: string;
+    motionEffects?: BlueprintNode['motionEffects'];
+  } | null>(null);
   favoriteComponents = $state<string[]>([
     'hero/split-hero',
     'marketing/feature-grid',
@@ -237,6 +244,259 @@ class EditorState {
   copySelectedNode() {
     if (!this.selectedNode) return;
     this.clipboardNode = structuredClone($state.snapshot(this.selectedNode));
+  }
+
+  copyNodeStyle(nodeId?: string) {
+    const target = nodeId ? this.findNodeAnywhere(nodeId) : this.selectedNode;
+    if (!target) return;
+    this.clipboardStyles = structuredClone({
+      styles: $state.snapshot(target.styles || { base: {} }),
+      customClasses: target.customClasses || '',
+      customCss: target.customCss || '',
+      motionEffects: target.motionEffects
+        ? $state.snapshot(target.motionEffects)
+        : undefined
+    });
+  }
+
+  pasteNodeStyle(targetNodeId?: string) {
+    const id = targetNodeId || this.selectedNodeId;
+    if (!id || !this.clipboardStyles) return;
+    this.dispatch({
+      type: 'PASTE_NODE_STYLE',
+      nodeId: id,
+      styles: this.clipboardStyles.styles,
+      customClasses: this.clipboardStyles.customClasses,
+      customCss: this.clipboardStyles.customCss,
+      motionEffects: this.clipboardStyles.motionEffects
+    });
+  }
+
+  resetNodeStyle(targetNodeId?: string) {
+    const id = targetNodeId || this.selectedNodeId;
+    if (!id) return;
+    this.dispatch({
+      type: 'RESET_NODE_STYLE',
+      nodeId: id
+    });
+  }
+
+  insertContainerStructure(structureId: string, targetNodeId?: string) {
+    if (!this.activePage) return;
+    const parentId = targetNodeId || this.activePage.rootNode.id;
+
+    const makeCol = (name: string, widthPct?: string): BlueprintNode => ({
+      id: crypto.randomUUID(),
+      componentType: 'structure/container',
+      name,
+      props: { maxWidth: 'full' },
+      styles: {
+        base: {
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1rem',
+          padding: '1.25rem',
+          borderRadius: '12px',
+          ...(widthPct ? { flex: `1 1 ${widthPct}` } : { flex: '1 1 0%' })
+        }
+      },
+      interactions: [],
+      children: [],
+      locked: false,
+      hidden: false,
+      customClasses: '',
+      customCss: ''
+    });
+
+    let rootSection: BlueprintNode;
+
+    if (structureId === 'flex-1col') {
+      rootSection = {
+        id: crypto.randomUUID(),
+        componentType: 'structure/section',
+        name: '1-Column Flexbox Section',
+        props: { variant: 'surface', paddingY: 'lg', maxWidth: 'xl' },
+        styles: {
+          base: {
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.5rem'
+          }
+        },
+        interactions: [],
+        children: [makeCol('Main Column (100%)', '100%')],
+        locked: false,
+        hidden: false,
+        customClasses: '',
+        customCss: ''
+      };
+    } else if (structureId === 'flex-2col-50-50') {
+      rootSection = {
+        id: crypto.randomUUID(),
+        componentType: 'structure/section',
+        name: '2-Column Flexbox (50% / 50%)',
+        props: { variant: 'surface', paddingY: 'lg', maxWidth: 'xl' },
+        styles: { base: {} },
+        interactions: [],
+        children: [
+          {
+            id: crypto.randomUUID(),
+            componentType: 'structure/grid',
+            name: '2-Col Row (50/50)',
+            props: { columns: 2, gap: 'lg' },
+            styles: { base: {} },
+            interactions: [],
+            children: [makeCol('Left Column (50%)'), makeCol('Right Column (50%)')],
+            locked: false,
+            hidden: false,
+            customClasses: '',
+            customCss: ''
+          }
+        ],
+        locked: false,
+        hidden: false,
+        customClasses: '',
+        customCss: ''
+      };
+    } else if (structureId === 'flex-2col-33-67') {
+      rootSection = {
+        id: crypto.randomUUID(),
+        componentType: 'structure/section',
+        name: '2-Column Flexbox (33% / 67%)',
+        props: { variant: 'surface', paddingY: 'lg', maxWidth: 'xl' },
+        styles: { base: {} },
+        interactions: [],
+        children: [
+          {
+            id: crypto.randomUUID(),
+            componentType: 'structure/container',
+            name: 'Asymmetric Row (33/67)',
+            props: { maxWidth: 'xl' },
+            styles: {
+              base: {
+                display: 'grid',
+                gridTemplateColumns: '1fr 2fr',
+                gap: '1.5rem',
+                alignItems: 'stretch'
+              }
+            },
+            interactions: [],
+            children: [makeCol('Sidebar Column (33%)'), makeCol('Content Column (67%)')],
+            locked: false,
+            hidden: false,
+            customClasses: '',
+            customCss: ''
+          }
+        ],
+        locked: false,
+        hidden: false,
+        customClasses: '',
+        customCss: ''
+      };
+    } else if (structureId === 'flex-2col-67-33') {
+      rootSection = {
+        id: crypto.randomUUID(),
+        componentType: 'structure/section',
+        name: '2-Column Flexbox (67% / 33%)',
+        props: { variant: 'surface', paddingY: 'lg', maxWidth: 'xl' },
+        styles: { base: {} },
+        interactions: [],
+        children: [
+          {
+            id: crypto.randomUUID(),
+            componentType: 'structure/container',
+            name: 'Asymmetric Row (67/33)',
+            props: { maxWidth: 'xl' },
+            styles: {
+              base: {
+                display: 'grid',
+                gridTemplateColumns: '2fr 1fr',
+                gap: '1.5rem',
+                alignItems: 'stretch'
+              }
+            },
+            interactions: [],
+            children: [makeCol('Content Column (67%)'), makeCol('Sidebar Column (33%)')],
+            locked: false,
+            hidden: false,
+            customClasses: '',
+            customCss: ''
+          }
+        ],
+        locked: false,
+        hidden: false,
+        customClasses: '',
+        customCss: ''
+      };
+    } else if (structureId === 'flex-3col') {
+      rootSection = {
+        id: crypto.randomUUID(),
+        componentType: 'structure/section',
+        name: '3-Column Container (33% / 33% / 33%)',
+        props: { variant: 'surface', paddingY: 'lg', maxWidth: 'xl' },
+        styles: { base: {} },
+        interactions: [],
+        children: [
+          {
+            id: crypto.randomUUID(),
+            componentType: 'structure/grid',
+            name: '3-Col Grid',
+            props: { columns: 3, gap: 'md' },
+            styles: { base: {} },
+            interactions: [],
+            children: [makeCol('Column 1'), makeCol('Column 2'), makeCol('Column 3')],
+            locked: false,
+            hidden: false,
+            customClasses: '',
+            customCss: ''
+          }
+        ],
+        locked: false,
+        hidden: false,
+        customClasses: '',
+        customCss: ''
+      };
+    } else {
+      rootSection = {
+        id: crypto.randomUUID(),
+        componentType: 'structure/section',
+        name: '4-Column Container (25% × 4)',
+        props: { variant: 'surface', paddingY: 'lg', maxWidth: 'xl' },
+        styles: { base: {} },
+        interactions: [],
+        children: [
+          {
+            id: crypto.randomUUID(),
+            componentType: 'structure/grid',
+            name: '4-Col Grid',
+            props: { columns: 4, gap: 'md' },
+            styles: { base: {} },
+            interactions: [],
+            children: [
+              makeCol('Column 1'),
+              makeCol('Column 2'),
+              makeCol('Column 3'),
+              makeCol('Column 4')
+            ],
+            locked: false,
+            hidden: false,
+            customClasses: '',
+            customCss: ''
+          }
+        ],
+        locked: false,
+        hidden: false,
+        customClasses: '',
+        customCss: ''
+      };
+    }
+
+    this.dispatch({
+      type: 'INSERT_NODE',
+      targetParentId: parentId,
+      node: rootSection
+    });
+    this.selectNode(rootSection.id);
   }
 
   pasteNode(targetNodeId?: string) {

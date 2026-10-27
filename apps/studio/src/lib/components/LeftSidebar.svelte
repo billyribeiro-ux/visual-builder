@@ -571,6 +571,31 @@
         {/each}
       </div>
 
+      <!-- Elementor Pro Flexbox & Grid Container Structure Presets -->
+      <div class="symbol-box" style="margin-bottom: 0.75rem;">
+        <div class="symbol-box__title">Flexbox &amp; Grid Containers</div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.35rem;">
+          {#each [
+            { id: 'flex-1col', label: '1 Col (100%)' },
+            { id: 'flex-2col-50-50', label: '2 Col (50/50)' },
+            { id: 'flex-2col-33-67', label: '2 Col (33/67)' },
+            { id: 'flex-2col-67-33', label: '2 Col (67/33)' },
+            { id: 'flex-3col', label: '3 Columns' },
+            { id: 'flex-4col', label: '4 Columns' }
+          ] as st (st.id)}
+            <button
+              type="button"
+              onclick={() => editor.insertContainerStructure(st.id)}
+              class="pill-btn"
+              style="text-align: center; font-weight: 600;"
+              title="Insert {st.label} Flexbox/Grid Structure"
+            >
+              + {st.label}
+            </button>
+          {/each}
+        </div>
+      </div>
+
       <div class="el-widget-grid">
         {#each filteredComponents as item (item.type)}
           {@const isFav = editor.favoriteComponents.includes(item.type)}

@@ -189,4 +189,47 @@ describe('Editor Engine & Reducer', () => {
     expect(composed.nodes[2].componentType).toBe('marketing/pricing-table');
     expect(composed.suggestedThemeId).toBe('violet-light');
   });
+
+  it('supports Elementor Pro PASTE_NODE_STYLE, RESET_NODE_STYLE, Motion Effects, Sticky, Device Visibility & Scoped Custom CSS', () => {
+    let project = createDefaultAcmeSaaSProject();
+    const heroNodeId = '30000000-0000-0000-0000-000000000002';
+
+    project = executeCommand(project, {
+      type: 'PASTE_NODE_STYLE',
+      nodeId: heroNodeId,
+      styles: {
+        base: { borderRadius: '20px', paddingTop: '48px' },
+        hover: { backgroundColor: '#F3E8FD' }
+      },
+      customClasses: 'el-glass el-shadow-float',
+      customCss: 'selector { border-left: 4px solid #0B57D0; }',
+      motionEffects: {
+        entranceAnimation: 'fadeInUp',
+        animationDuration: 'fast',
+        hoverTransform: 'lift',
+        sticky: 'top',
+        hideOnDesktop: false,
+        hideOnTablet: false,
+        hideOnMobile: true
+      }
+    });
+
+    const css = compileNodeScopedCss([project.pages[0].rootNode]);
+    expect(css).toContain(`@keyframes el-fadeInUp`);
+    expect(css).toContain(`[data-node-id="${heroNodeId}"] { position: sticky !important; top: 0 !important; z-index: 45 !important; }`);
+    expect(css).toContain(`[data-node-id="${heroNodeId}"] { animation: el-fadeInUp 220ms cubic-bezier(0.2, 0, 0, 1) both; }`);
+    expect(css).toContain(`[data-node-id="${heroNodeId}"]:hover { transform: translateY(-5px) !important;`);
+    expect(css).toContain(`[data-node-id="${heroNodeId}"] { display: none !important; }`);
+    expect(css).toContain(`[data-node-id="${heroNodeId}"] { border-left: 4px solid #0B57D0; }`);
+
+    // Now test RESET_NODE_STYLE
+    project = executeCommand(project, {
+      type: 'RESET_NODE_STYLE',
+      nodeId: heroNodeId
+    });
+    const resetHero = findNodeById(project.pages[0].rootNode, heroNodeId);
+    expect(resetHero?.customClasses).toBe('');
+    expect(resetHero?.customCss).toBe('');
+    expect(resetHero?.motionEffects).toBeUndefined();
+  });
 });

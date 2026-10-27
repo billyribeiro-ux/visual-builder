@@ -29,6 +29,15 @@
   let customAppState = $state<Record<string, string>>({});
   let showStructurePicker = $state(false);
 
+  const containerStructurePresets = [
+    { id: 'flex-1col', label: '1 Col (100%)', cols: ['100%'] },
+    { id: 'flex-2col-50-50', label: '2 Cols (50 / 50)', cols: ['50%', '50%'] },
+    { id: 'flex-2col-33-67', label: 'Sidebar Left (33 / 67)', cols: ['33%', '67%'] },
+    { id: 'flex-2col-67-33', label: 'Sidebar Right (67 / 33)', cols: ['67%', '33%'] },
+    { id: 'flex-3col', label: '3 Cols (33 × 3)', cols: ['33%', '33%', '33%'] },
+    { id: 'flex-4col', label: '4 Cols (25 × 4)', cols: ['25%', '25%', '25%', '25%'] }
+  ];
+
   const quickStructurePresets = [
     { type: 'hero/split-hero', icon: '🦸', label: 'Hero Banner' },
     { type: 'marketing/feature-grid', icon: '✨', label: '3-Col Features' },
@@ -39,10 +48,21 @@
     { type: 'marketing/faq-accordion', icon: '❓', label: 'FAQ Accordion' },
     { type: 'marketing/cta-banner', icon: '📣', label: 'CTA Banner' },
     { type: 'marketing/contact-form', icon: '📞', label: 'Contact Form' },
-    { type: 'structure/section', icon: '🧱', label: '1-Col Section' },
-    { type: 'structure/grid', icon: '▦', label: 'Multi-Col Grid' },
-    { type: 'ui/tabs', icon: '🗂️', label: 'Interactive Tabs' }
+    { type: 'ui/tabs', icon: '🗂️', label: 'Nested Tabs' }
   ];
+
+  function handleInsertStructure(structureId: string) {
+    if (!activePage) return;
+    showStructurePicker = false;
+    window.parent.postMessage(
+      {
+        type: 'INSERT_STRUCTURE',
+        structureId,
+        targetNodeId: activePage.rootNode.id
+      },
+      window.location.origin
+    );
+  }
 
   function handleQuickInsertOnCanvas(componentType: string) {
     if (!activePage) return;
@@ -138,6 +158,15 @@
         return;
       }
 
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'i') {
+        e.preventDefault();
+        window.parent.postMessage(
+          { type: 'KEY_SHORTCUT', shortcut: 'navigator' },
+          window.location.origin
+        );
+        return;
+      }
+
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -159,10 +188,16 @@
         window.parent.postMessage({ type: 'KEY_SHORTCUT', shortcut: 'duplicate' }, window.location.origin);
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c') {
         e.preventDefault();
-        window.parent.postMessage({ type: 'KEY_SHORTCUT', shortcut: 'copy' }, window.location.origin);
+        window.parent.postMessage(
+          { type: 'KEY_SHORTCUT', shortcut: e.shiftKey ? 'copy-style' : 'copy' },
+          window.location.origin
+        );
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'v') {
         e.preventDefault();
-        window.parent.postMessage({ type: 'KEY_SHORTCUT', shortcut: 'paste' }, window.location.origin);
+        window.parent.postMessage(
+          { type: 'KEY_SHORTCUT', shortcut: e.shiftKey ? 'paste-style' : 'paste' },
+          window.location.origin
+        );
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         if (!isInteractiveMode && selectedNodeId) {
           e.preventDefault();
@@ -359,7 +394,7 @@
         {:else}
           <div class="el-structure-picker">
             <div class="el-structure-header">
-              <span>Select a Section or Structure to Insert</span>
+              <span>1. Select Flexbox / Grid Container Structure</span>
               <button
                 type="button"
                 onclick={() => (showStructurePicker = false)}
@@ -367,6 +402,26 @@
               >
                 ✕
               </button>
+            </div>
+            <div class="el-structure-grid" style="margin-bottom: 1.25rem;">
+              {#each containerStructurePresets as st (st.id)}
+                <button
+                  type="button"
+                  onclick={() => handleInsertStructure(st.id)}
+                  class="el-structure-card"
+                >
+                  <div class="el-col-wireframe">
+                    {#each st.cols as w, cIdx (cIdx)}
+                      <span class="el-col-bar" style="width: {w};"></span>
+                    {/each}
+                  </div>
+                  <span class="el-structure-label">{st.label}</span>
+                </button>
+              {/each}
+            </div>
+
+            <div class="el-structure-header" style="margin-bottom: 0.65rem;">
+              <span>2. Or Insert a Pre-Built Ready Section</span>
             </div>
             <div class="el-structure-grid">
               {#each quickStructurePresets as preset (preset.type)}
@@ -456,6 +511,17 @@
       <button type="button" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'paste')}>
         <span>📌 Paste After</span><span class="ctx-kbd">⌘V</span>
       </button>
+      <div class="ctx-sep"></div>
+      <button type="button" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'copy-style')}>
+        <span>🎨 Copy Style</span><span class="ctx-kbd">⌘⇧C</span>
+      </button>
+      <button type="button" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'paste-style')}>
+        <span>🖌️ Paste Style</span><span class="ctx-kbd">⌘⇧V</span>
+      </button>
+      <button type="button" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'reset-style')}>
+        <span>↺ Reset Style</span>
+      </button>
+      <div class="ctx-sep"></div>
       <button type="button" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'save-symbol')}>
         <span>★ Save as Reusable Symbol</span>
       </button>
@@ -638,5 +704,18 @@
     font-size: 0.72rem;
     font-weight: 600;
     color: #1B1B1F;
+  }
+  .el-col-wireframe {
+    width: 100%;
+    height: 28px;
+    display: flex;
+    gap: 3px;
+    padding: 2px;
+  }
+  .el-col-bar {
+    height: 100%;
+    background: rgba(11, 87, 208, 0.22);
+    border: 1.5px solid #0B57D0;
+    border-radius: 4px;
   }
 </style>

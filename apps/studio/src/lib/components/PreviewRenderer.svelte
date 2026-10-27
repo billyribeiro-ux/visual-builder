@@ -38,6 +38,9 @@
     | 'unwrap'
     | 'copy'
     | 'paste'
+    | 'copy-style'
+    | 'paste-style'
+    | 'reset-style'
     | 'save-symbol'
     | 'hide';
 
@@ -291,7 +294,7 @@
       role="button"
       tabindex="0"
       aria-label={node.name}
-      class="preview-node {!isInteractiveMode ? 'preview-node--editable' : ''} {isSelected && !isInteractiveMode ? 'preview-node--selected' : ''} {dropZone ? `preview-node--drop-${dropZone}` : ''}"
+      class="preview-node {!isInteractiveMode ? 'preview-node--editable' : ''} {isSelected && !isInteractiveMode ? 'preview-node--selected' : ''} {dropZone ? `preview-node--drop-${dropZone}` : ''} {node.customClasses || ''}"
       style={inlineStyle}
     >
       {#if dropZone && !isInteractiveMode}
@@ -412,23 +415,30 @@
 
       {#if node.componentType === 'structure/container'}
         <Container maxWidth={node.props.maxWidth || 'xl'}>
-          {#each node.children || [] as child (child.id)}
-            <PreviewRenderer
-              node={child}
-              {slotNode}
-              {activeBreakpoint}
-              {selectedNodeId}
-              {isInteractiveMode}
-              {onSelectNode}
-              {onNavigate}
-              {onNodeAction}
-              {onDropItem}
-              {onContextMenuNode}
-              {onInlinePropEdit}
-              {onResizeNodeStyle}
-              {onTriggerInteraction}
-            />
-          {/each}
+          {#if (!node.children || node.children.length === 0) && !isInteractiveMode}
+            <div class="el-empty-column-slot">
+              <span class="el-empty-column-plus">+</span>
+              <span class="el-empty-column-text">{node.name} — Drag widget here</span>
+            </div>
+          {:else}
+            {#each node.children || [] as child (child.id)}
+              <PreviewRenderer
+                node={child}
+                {slotNode}
+                {activeBreakpoint}
+                {selectedNodeId}
+                {isInteractiveMode}
+                {onSelectNode}
+                {onNavigate}
+                {onNodeAction}
+                {onDropItem}
+                {onContextMenuNode}
+                {onInlinePropEdit}
+                {onResizeNodeStyle}
+                {onTriggerInteraction}
+              />
+            {/each}
+          {/if}
         </Container>
       {:else if node.componentType === 'structure/section'}
         <Section
@@ -436,43 +446,57 @@
           paddingY={node.props.paddingY}
           maxWidth={node.props.maxWidth}
         >
-          {#each node.children || [] as child (child.id)}
-            <PreviewRenderer
-              node={child}
-              {slotNode}
-              {activeBreakpoint}
-              {selectedNodeId}
-              {isInteractiveMode}
-              {onSelectNode}
-              {onNavigate}
-              {onNodeAction}
-              {onDropItem}
-              {onContextMenuNode}
-              {onInlinePropEdit}
-              {onResizeNodeStyle}
-              {onTriggerInteraction}
-            />
-          {/each}
+          {#if (!node.children || node.children.length === 0) && !isInteractiveMode}
+            <div class="el-empty-column-slot">
+              <span class="el-empty-column-plus">+</span>
+              <span class="el-empty-column-text">{node.name} — Drag widget here</span>
+            </div>
+          {:else}
+            {#each node.children || [] as child (child.id)}
+              <PreviewRenderer
+                node={child}
+                {slotNode}
+                {activeBreakpoint}
+                {selectedNodeId}
+                {isInteractiveMode}
+                {onSelectNode}
+                {onNavigate}
+                {onNodeAction}
+                {onDropItem}
+                {onContextMenuNode}
+                {onInlinePropEdit}
+                {onResizeNodeStyle}
+                {onTriggerInteraction}
+              />
+            {/each}
+          {/if}
         </Section>
       {:else if node.componentType === 'structure/grid'}
         <Grid columns={node.props.columns} gap={node.props.gap}>
-          {#each node.children || [] as child (child.id)}
-            <PreviewRenderer
-              node={child}
-              {slotNode}
-              {activeBreakpoint}
-              {selectedNodeId}
-              {isInteractiveMode}
-              {onSelectNode}
-              {onNavigate}
-              {onNodeAction}
-              {onDropItem}
-              {onContextMenuNode}
-              {onInlinePropEdit}
-              {onResizeNodeStyle}
-              {onTriggerInteraction}
-            />
-          {/each}
+          {#if (!node.children || node.children.length === 0) && !isInteractiveMode}
+            <div class="el-empty-column-slot">
+              <span class="el-empty-column-plus">+</span>
+              <span class="el-empty-column-text">{node.name} — Drag widget here</span>
+            </div>
+          {:else}
+            {#each node.children || [] as child (child.id)}
+              <PreviewRenderer
+                node={child}
+                {slotNode}
+                {activeBreakpoint}
+                {selectedNodeId}
+                {isInteractiveMode}
+                {onSelectNode}
+                {onNavigate}
+                {onNodeAction}
+                {onDropItem}
+                {onContextMenuNode}
+                {onInlinePropEdit}
+                {onResizeNodeStyle}
+                {onTriggerInteraction}
+              />
+            {/each}
+          {/if}
         </Grid>
       {:else if node.componentType === 'structure/divider'}
         <Divider spacing={node.props.spacing} label={node.props.label} />
@@ -828,5 +852,40 @@
   .preview-node__action-btn--danger:hover {
     background: #B3261E;
     color: #FFFFFF;
+  }
+  .el-empty-column-slot {
+    min-height: 92px;
+    border: 1.5px dashed rgba(11, 87, 208, 0.45);
+    border-radius: 10px;
+    background: rgba(11, 87, 208, 0.03);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 1rem;
+    color: #0B57D0;
+    transition: background-color 140ms ease, border-color 140ms ease;
+  }
+  .el-empty-column-slot:hover {
+    border-color: #0B57D0;
+    background: rgba(11, 87, 208, 0.07);
+  }
+  .el-empty-column-plus {
+    width: 28px;
+    height: 28px;
+    border-radius: 9999px;
+    background: rgba(11, 87, 208, 0.12);
+    color: #0B57D0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
+  .el-empty-column-text {
+    font-size: 0.72rem;
+    font-weight: 600;
+    opacity: 0.85;
   }
 </style>

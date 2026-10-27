@@ -5,6 +5,7 @@
   import RightInspector from '#lib/components/RightInspector.svelte';
   import CommandPalette from '#lib/components/CommandPalette.svelte';
   import TemplateLibraryModal from '#lib/components/TemplateLibraryModal.svelte';
+  import NavigatorModal from '#lib/components/NavigatorModal.svelte';
   import { editor } from '#lib/state/editor.svelte.js';
   import { onMount } from 'svelte';
 
@@ -24,6 +25,12 @@
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         editor.showCommandPalette = !editor.showCommandPalette;
+        return;
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'i') {
+        e.preventDefault();
+        editor.showNavigator = !editor.showNavigator;
         return;
       }
 
@@ -59,10 +66,18 @@
         editor.duplicateSelectedNode();
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c') {
         e.preventDefault();
-        editor.copySelectedNode();
+        if (e.shiftKey) {
+          editor.copyNodeStyle();
+        } else {
+          editor.copySelectedNode();
+        }
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'v') {
         e.preventDefault();
-        editor.pasteNode();
+        if (e.shiftKey) {
+          editor.pasteNodeStyle();
+        } else {
+          editor.pasteNode();
+        }
       } else if (e.altKey && e.key === 'ArrowUp') {
         e.preventDefault();
         editor.reorderSelectedNode('up');
@@ -116,4 +131,7 @@
 
   <!-- Elementor Pro Block & Page Template Library Modal -->
   <TemplateLibraryModal />
+
+  <!-- Elementor Pro Floating Structure Navigator (Cmd+I) -->
+  <NavigatorModal />
 </div>

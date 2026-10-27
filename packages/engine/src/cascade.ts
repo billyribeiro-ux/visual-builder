@@ -71,10 +71,19 @@ export function compileNodeScopedCss(
   const desktopRules: string[] = [];
   const wideRules: string[] = [];
   const stateRules: string[] = [];
+  const customCssBlocks: string[] = [];
+  let hasEntranceAnimations = false;
+
+  const durationMap: Record<string, string> = {
+    fast: '220ms',
+    normal: '460ms',
+    slow: '760ms'
+  };
 
   function walk(node: BlueprintNode | undefined) {
     if (!node || node.hidden) return;
     const s = node.styles;
+    const m = node.motionEffects;
     const sel = `[data-node-id="${node.id}"]`;
 
     if (s) {
@@ -116,6 +125,56 @@ export function compileNodeScopedCss(
       }
     }
 
+    // Elementor Pro Motion Effects, Sticky & Device Visibility
+    if (m) {
+      if (m.sticky === 'top') {
+        baseRules.push(`${sel} { position: sticky !important; top: 0 !important; z-index: 45 !important; }`);
+      } else if (m.sticky === 'bottom') {
+        baseRules.push(`${sel} { position: sticky !important; bottom: 0 !important; z-index: 45 !important; }`);
+      }
+
+      if (m.entranceAnimation && m.entranceAnimation !== 'none') {
+        hasEntranceAnimations = true;
+        const dur = durationMap[m.animationDuration || 'normal'] || '460ms';
+        baseRules.push(
+          `${sel} { animation: el-${m.entranceAnimation} ${dur} cubic-bezier(0.2, 0, 0, 1) both; }`
+        );
+      }
+
+      if (m.hoverTransform && m.hoverTransform !== 'none' && options.includeStates !== false) {
+        baseRules.push(`${sel} { transition: transform 220ms cubic-bezier(0.2, 0, 0, 1), box-shadow 220ms cubic-bezier(0.2, 0, 0, 1); }`);
+        if (m.hoverTransform === 'lift') {
+          stateRules.push(`${sel}:hover { transform: translateY(-5px) !important; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14) !important; }`);
+        } else if (m.hoverTransform === 'scale') {
+          stateRules.push(`${sel}:hover { transform: scale(1.02) !important; }`);
+        } else if (m.hoverTransform === 'glow') {
+          stateRules.push(`${sel}:hover { box-shadow: 0 0 0 2px var(--md-sys-color-primary, #0B57D0), 0 10px 28px rgba(11, 87, 208, 0.22) !important; }`);
+        } else if (m.hoverTransform === 'tilt') {
+          stateRules.push(`${sel}:hover { transform: perspective(800px) rotateX(2deg) translateY(-3px) !important; }`);
+        }
+      }
+
+      if (options.includeMediaQueries !== false) {
+        if (m.hideOnMobile) {
+          mobileRules.push(`  ${sel} { display: none !important; }`);
+        }
+        if (m.hideOnTablet) {
+          tabletRules.push(`  ${sel} { display: none !important; }`);
+        }
+        if (m.hideOnDesktop) {
+          desktopRules.push(`  ${sel} { display: none !important; }`);
+        }
+      }
+    }
+
+    // Elementor Pro Scoped Custom CSS (`selector { ... }`)
+    if (node.customCss && node.customCss.trim()) {
+      const scopedCustom = node.customCss
+        .trim()
+        .replace(/\bselector\b/g, sel);
+      customCssBlocks.push(scopedCustom);
+    }
+
     for (const child of node.children || []) {
       walk(child);
     }
@@ -126,12 +185,33 @@ export function compileNodeScopedCss(
   }
 
   const blocks: string[] = [];
+
+  // Elementor V4 Global Atomic Utility Classes
+  blocks.push(
+    `.el-glass { background: rgba(255, 255, 255, 0.72) !important; backdrop-filter: blur(16px); border: 1px solid rgba(11, 87, 208, 0.16) !important; }`,
+    `.el-gradient-border { border: 2px solid var(--md-sys-color-primary, #0B57D0) !important; border-radius: 16px !important; }`,
+    `.el-shadow-float { box-shadow: 0 16px 36px rgba(0, 0, 0, 0.12) !important; }`,
+    `.el-surface-tint { background-color: var(--md-sys-color-primary-container, #D3E3FD) !important; color: var(--md-sys-color-on-primary-container, #041E49) !important; }`,
+    `.el-border-glow { box-shadow: 0 0 0 1px var(--md-sys-color-primary, #0B57D0), 0 8px 24px rgba(11, 87, 208, 0.15) !important; }`
+  );
+
+  if (hasEntranceAnimations) {
+    blocks.push(
+      `@keyframes el-fadeIn { from { opacity: 0; } to { opacity: 1; } }`,
+      `@keyframes el-fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }`,
+      `@keyframes el-fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }`,
+      `@keyframes el-zoomIn { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }`,
+      `@keyframes el-slideInLeft { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: translateX(0); } }`,
+      `@keyframes el-slideInRight { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: translateX(0); } }`
+    );
+  }
+
   if (baseRules.length > 0) blocks.push(...baseRules);
   if (mobileRules.length > 0) {
     blocks.push(`@media (max-width: 767px) {\n${mobileRules.join('\n')}\n}`);
   }
   if (tabletRules.length > 0) {
-    blocks.push(`@media (min-width: 768px) {\n${tabletRules.join('\n')}\n}`);
+    blocks.push(`@media (min-width: 768px) and (max-width: 1023px) {\n${tabletRules.join('\n')}\n}`);
   }
   if (desktopRules.length > 0) {
     blocks.push(`@media (min-width: 1024px) {\n${desktopRules.join('\n')}\n}`);
@@ -141,6 +221,9 @@ export function compileNodeScopedCss(
   }
   if (stateRules.length > 0) {
     blocks.push(...stateRules);
+  }
+  if (customCssBlocks.length > 0) {
+    blocks.push(...customCssBlocks);
   }
 
   return blocks.join('\n');

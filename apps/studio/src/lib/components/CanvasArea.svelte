@@ -175,11 +175,25 @@
           editor.copySelectedNode();
         } else if (action === 'paste') {
           editor.pasteNode(nodeId);
+        } else if (action === 'copy-style') {
+          editor.selectNode(nodeId);
+          editor.copyNodeStyle(nodeId);
+        } else if (action === 'paste-style') {
+          editor.selectNode(nodeId);
+          editor.pasteNodeStyle(nodeId);
+        } else if (action === 'reset-style') {
+          editor.selectNode(nodeId);
+          editor.resetNodeStyle(nodeId);
         } else if (action === 'save-symbol') {
           editor.selectNode(nodeId);
           editor.saveSelectedNodeAsSymbol();
         } else if (action === 'hide') {
           editor.dispatch({ type: 'UPDATE_NODE_META', nodeId, meta: { hidden: true } });
+        }
+      } else if (data.type === 'INSERT_STRUCTURE') {
+        const { structureId, targetNodeId } = data;
+        if (structureId) {
+          editor.insertContainerStructure(structureId, targetNodeId);
         }
       } else if (data.type === 'DROP_ITEM') {
         const { componentType, draggedNodeId, targetNodeId, position } = data;
@@ -195,6 +209,9 @@
         else if (shortcut === 'duplicate') editor.duplicateSelectedNode();
         else if (shortcut === 'copy') editor.copySelectedNode();
         else if (shortcut === 'paste') editor.pasteNode();
+        else if (shortcut === 'copy-style') editor.copyNodeStyle();
+        else if (shortcut === 'paste-style') editor.pasteNodeStyle();
+        else if (shortcut === 'navigator') editor.showNavigator = !editor.showNavigator;
         else if (shortcut === 'delete') editor.deleteSelectedNode();
         else if (shortcut === 'escape') editor.selectNode(null);
         else if (shortcut === 'command-palette') {

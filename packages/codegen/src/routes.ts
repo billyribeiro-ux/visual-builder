@@ -3,16 +3,31 @@ import { cssPropertiesToString } from '@app-viz/engine';
 
 function hasScopedStyles(node: BlueprintNode): boolean {
   const s = node.styles;
-  if (!s) return false;
-  return Boolean(
-    (s.mobile && Object.keys(s.mobile).length > 0) ||
-      (s.tablet && Object.keys(s.tablet).length > 0) ||
-      (s.desktop && Object.keys(s.desktop).length > 0) ||
-      (s.wide && Object.keys(s.wide).length > 0) ||
-      (s.hover && Object.keys(s.hover).length > 0) ||
-      (s.focus && Object.keys(s.focus).length > 0) ||
-      (s.active && Object.keys(s.active).length > 0)
+  const m = node.motionEffects;
+  const hasStyleBuckets = Boolean(
+    s &&
+      ((s.mobile && Object.keys(s.mobile).length > 0) ||
+        (s.tablet && Object.keys(s.tablet).length > 0) ||
+        (s.desktop && Object.keys(s.desktop).length > 0) ||
+        (s.wide && Object.keys(s.wide).length > 0) ||
+        (s.hover && Object.keys(s.hover).length > 0) ||
+        (s.focus && Object.keys(s.focus).length > 0) ||
+        (s.active && Object.keys(s.active).length > 0))
   );
+  const hasMotion = Boolean(
+    m &&
+      ((m.entranceAnimation && m.entranceAnimation !== 'none') ||
+        (m.hoverTransform && m.hoverTransform !== 'none') ||
+        (m.sticky && m.sticky !== 'none') ||
+        m.hideOnDesktop ||
+        m.hideOnTablet ||
+        m.hideOnMobile)
+  );
+  const hasCustom = Boolean(
+    (node.customClasses && node.customClasses.trim()) ||
+      (node.customCss && node.customCss.trim())
+  );
+  return hasStyleBuckets || hasMotion || hasCustom;
 }
 
 function collectNodeInteractions(
@@ -49,7 +64,8 @@ function renderNodeToSvelte(
   const innerIndent = needsWrapper ? indent + '  ' : indent;
   const rendered = renderNodeInner(node, innerIndent, slotNode);
   if (needsWrapper) {
-    return `${indent}<div data-node-id="${node.id}">\n${rendered}\n${indent}</div>`;
+    const clsAttr = node.customClasses?.trim() ? ` class="${node.customClasses.trim()}"` : '';
+    return `${indent}<div data-node-id="${node.id}"${clsAttr}>\n${rendered}\n${indent}</div>`;
   }
   return rendered;
 }
