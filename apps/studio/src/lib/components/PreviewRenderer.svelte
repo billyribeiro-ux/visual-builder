@@ -692,12 +692,12 @@
     left: 8px;
     z-index: 60;
     width: min(24rem, 92vw);
-    background: #1D2024;
-    color: #E2E2E6;
-    border: 1px solid #0B57D0;
-    border-radius: 10px;
-    padding: 0.625rem;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    background: var(--md-sys-color-surface-container-lowest, #FFFFFF);
+    color: var(--md-sys-color-on-surface, #1B1B1F);
+    border: 1px solid var(--md-sys-color-outline-variant, #C4C6D0);
+    border-radius: 16px;
+    padding: 0.75rem 0.875rem;
+    box-shadow: 0 8px 28px rgba(11, 87, 208, 0.14), 0 2px 6px rgba(0, 0, 0, 0.08);
     font-family: var(--md-sys-font-body, Roboto, sans-serif);
   }
   .inline-editor-header {
@@ -706,15 +706,15 @@
     justify-content: space-between;
     font-size: 0.75rem;
     font-weight: 700;
-    color: #A8C7FA;
+    color: var(--md-sys-color-primary, #0B57D0);
     margin-bottom: 0.5rem;
   }
   .inline-editor-close {
-    background: #0B57D0;
-    color: #FFFFFF;
+    background: var(--md-sys-color-primary, #0B57D0);
+    color: var(--md-sys-color-on-primary, #FFFFFF);
     border: none;
-    border-radius: 4px;
-    padding: 2px 8px;
+    border-radius: 9999px;
+    padding: 3px 10px;
     font-size: 0.6875rem;
     font-weight: 600;
     cursor: pointer;
@@ -734,15 +734,15 @@
   .inline-editor-label {
     font-size: 0.625rem;
     font-family: var(--md-sys-font-mono, monospace);
-    color: #8E9199;
+    color: var(--md-sys-color-on-surface-variant, #444746);
     text-transform: uppercase;
   }
   .inline-editor-input {
-    background: #111316;
-    border: 1px solid #44474F;
-    color: #FFFFFF;
-    border-radius: 6px;
-    padding: 4px 8px;
+    background: var(--md-sys-color-surface-container-low, #F8FAFD);
+    border: 1px solid var(--md-sys-color-outline-variant, #C4C6D0);
+    color: var(--md-sys-color-on-surface, #1B1B1F);
+    border-radius: 8px;
+    padding: 5px 8px;
     font-size: 0.75rem;
   }
   .resize-padding-handle {

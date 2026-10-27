@@ -74,6 +74,7 @@ class EditorState {
   showCommandPalette = $state<boolean>(false);
   showBlockLibraryModal = $state<boolean>(false);
   showNavigator = $state<boolean>(false);
+  studioTheme = $state<'light' | 'dark'>('light');
   activeLeftTab = $state<'pages' | 'layers' | 'library' | 'assets' | 'tokens'>('library');
   isSaving = $state<boolean>(false);
   lastSavedAt = $state<string>('Saved locally');
@@ -238,6 +239,10 @@ class EditorState {
     if (this.isInteractiveMode) {
       this.selectedNodeId = null;
     }
+  }
+
+  toggleStudioTheme() {
+    this.studioTheme = this.studioTheme === 'light' ? 'dark' : 'light';
   }
 
   // Structural & Clipboard Operations

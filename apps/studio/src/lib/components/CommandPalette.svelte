@@ -302,9 +302,9 @@
   }
   .cmd-modal {
     width: min(40rem, 94vw);
-    background: var(--md-sys-color-surface-container);
+    background: var(--md-sys-color-surface-container-lowest);
     border: 1px solid var(--md-sys-color-outline-variant);
-    border-radius: 16px;
+    border-radius: var(--md-sys-shape-corner-extra-large, 28px);
     box-shadow: var(--md-sys-elevation-level4);
     overflow: hidden;
   }

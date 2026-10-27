@@ -85,7 +85,15 @@
   <!-- Left: Brand, Editable Project Name, Templates, Save Status & History -->
   <div class="studio-topbar__left">
     <div class="brand">
-      <div class="brand-icon">⚡</div>
+      <div class="brand-icon" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <rect x="2" y="2" width="9" height="9" rx="3" fill="#4285F4" />
+          <rect x="13" y="2" width="9" height="9" rx="4.5" fill="#EA4335" />
+          <rect x="2" y="13" width="9" height="9" rx="4.5" fill="#FBBC04" />
+          <rect x="13" y="13" width="9" height="9" rx="3" fill="#34A853" />
+        </svg>
+      </div>
+      <span class="google-md3-pill">MD3</span>
       <input
         type="text"
         aria-label="Project name"
@@ -302,6 +310,17 @@
       class="studio-btn json-btn"
     >
       &lt;/&gt; Code
+    </button>
+
+    <!-- Google MD3 Light / Dark Studio Theme Toggle -->
+    <button
+      type="button"
+      onclick={() => editor.toggleStudioTheme()}
+      title="Switch Google MD3 Studio Chrome ({editor.studioTheme === 'light' ? 'Dark' : 'Light'} Mode)"
+      class="studio-btn json-btn"
+      aria-label="Toggle Studio Light or Dark Theme"
+    >
+      {editor.studioTheme === 'light' ? '🌙' : '☀️'}
     </button>
 
     <!-- Interactive Mode Toggle (Full-Screen Preview like Elementor Eye Icon) -->
@@ -522,51 +541,62 @@
   .brand {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.45rem;
   }
   .brand-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: var(--md-sys-shape-corner-extra-small, 4px);
-    background-color: var(--md-sys-color-primary);
-    color: var(--md-sys-color-on-primary);
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background-color: var(--md-sys-color-surface-container-lowest);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    box-shadow: var(--md-sys-elevation-level1);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: 700;
-    font-size: 0.875rem;
+  }
+  .google-md3-pill {
+    font-family: var(--md-sys-font-heading);
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    padding: 0.15rem 0.45rem;
+    border-radius: var(--md-sys-shape-corner-full);
+    background-color: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
   }
   .brand-name-input {
+    font-family: var(--md-sys-font-heading);
     font-weight: 700;
     font-size: 0.875rem;
     letter-spacing: -0.01em;
     color: var(--md-sys-color-on-surface);
     background: transparent;
     border: 1px solid transparent;
-    border-radius: 4px;
-    padding: 0.125rem 0.375rem;
+    border-radius: 8px;
+    padding: 0.2rem 0.45rem;
     width: 9rem;
   }
   .brand-name-input:hover,
   .brand-name-input:focus {
     border-color: var(--md-sys-color-outline-variant);
-    background-color: var(--md-sys-color-surface-container);
+    background-color: var(--md-sys-color-surface-container-lowest);
     outline: none;
   }
   .top-pill-btn {
     border: 1px solid var(--md-sys-color-outline-variant);
-    background-color: var(--md-sys-color-surface-container-high);
+    background-color: var(--md-sys-color-surface-container-lowest);
     font-size: 0.75rem;
   }
   .divider {
     width: 1px;
-    height: 16px;
+    height: 18px;
     background-color: var(--md-sys-color-outline-variant);
   }
   .status-indicator {
     display: flex;
     align-items: center;
     font-size: 0.75rem;
+    font-weight: 600;
   }
   .status {
     display: flex;
@@ -577,7 +607,7 @@
     color: var(--md-sys-color-success);
   }
   .status--saving {
-    color: #FBBF24;
+    color: var(--md-sys-color-primary);
   }
   .status-dot {
     width: 6px;
@@ -609,20 +639,23 @@
     width: auto;
     min-width: 135px;
     max-width: 180px;
+    border-radius: var(--md-sys-shape-corner-full);
+    background-color: var(--md-sys-color-surface-container-lowest);
   }
   .preflight-btn {
     font-size: 0.6875rem;
     border: 1px solid var(--md-sys-color-outline-variant);
+    background-color: var(--md-sys-color-surface-container-lowest);
   }
   .preflight-btn--ok {
     color: var(--md-sys-color-success);
   }
   .preflight-btn--warn {
-    color: #FBBF24;
+    color: var(--md-sys-color-error);
   }
   .mode-btn {
     border: 1px solid var(--md-sys-color-outline-variant);
-    background-color: var(--md-sys-color-surface-container-high);
+    background-color: var(--md-sys-color-surface-container-lowest);
   }
   .mode-btn--interactive {
     background-color: var(--md-sys-color-success-container) !important;
@@ -631,23 +664,23 @@
   }
   .json-btn {
     border: 1px solid var(--md-sys-color-outline-variant);
-    background-color: var(--md-sys-color-surface-container-high);
+    background-color: var(--md-sys-color-surface-container-lowest);
   }
   .export-btn {
     font-size: 0.8125rem;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
   }
   .topbar-modal {
     position: fixed;
-    top: 56px;
+    top: 64px;
     left: 50%;
     transform: translateX(-50%);
-    width: 540px;
+    width: 560px;
     max-width: 94vw;
-    background-color: var(--md-sys-color-surface-container-high);
+    background-color: var(--md-sys-color-surface-container-lowest);
     border: 1px solid var(--md-sys-color-outline-variant);
-    border-radius: var(--md-sys-shape-corner-medium);
-    box-shadow: var(--md-sys-elevation-level3);
+    border-radius: var(--md-sys-shape-corner-extra-large, 28px);
+    box-shadow: var(--md-sys-elevation-level4);
     z-index: 100;
     overflow: hidden;
   }

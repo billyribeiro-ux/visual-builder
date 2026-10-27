@@ -279,10 +279,10 @@
   .el-lib-modal {
     width: min(64rem, 95vw);
     max-height: 86vh;
-    background: var(--md-sys-color-surface-container);
+    background: var(--md-sys-color-surface-container-lowest);
     border: 1px solid var(--md-sys-color-outline-variant);
-    border-radius: 16px;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+    border-radius: var(--md-sys-shape-corner-extra-large, 28px);
+    box-shadow: var(--md-sys-elevation-level4);
     display: flex;
     flex-direction: column;
     overflow: hidden;

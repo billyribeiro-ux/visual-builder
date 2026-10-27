@@ -988,19 +988,19 @@
     align-items: center;
     justify-content: space-between;
     padding: 0.625rem 0.75rem;
-    border-radius: var(--md-sys-shape-corner-extra-small, 4px);
+    border-radius: 12px;
     border: 1px solid transparent;
     cursor: pointer;
     background-color: transparent;
     transition: all var(--md-sys-motion-duration-short);
   }
   .route-item:hover {
-    background-color: rgba(255, 255, 255, 0.04);
+    background-color: var(--md-sys-color-surface-container);
   }
   .route-item--active {
-    background-color: rgba(168, 199, 250, 0.12);
-    border-color: var(--md-sys-color-primary);
-    color: var(--md-sys-color-primary);
+    background-color: var(--md-sys-color-secondary-container);
+    color: var(--md-sys-color-on-secondary-container);
+    font-weight: 600;
   }
   .route-item__info {
     display: flex;
@@ -1044,15 +1044,15 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.4rem 0.5rem;
-    border-radius: var(--md-sys-shape-corner-extra-small, 4px);
+    padding: 0.4rem 0.55rem;
+    border-radius: 8px;
     cursor: pointer;
     background-color: transparent;
     transition: background-color var(--md-sys-motion-duration-short);
     color: var(--md-sys-color-on-surface);
   }
   .layer-item:hover {
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: var(--md-sys-color-surface-container);
   }
   .layer-item--selected {
     background-color: var(--md-sys-color-primary-container) !important;
@@ -1105,7 +1105,7 @@
   }
   .action-icon:hover {
     color: var(--md-sys-color-on-surface);
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: var(--md-sys-color-surface-container-highest);
   }
   .action-icon--danger:hover {
     color: var(--md-sys-color-error);
@@ -1176,25 +1176,29 @@
   .el-widget-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 0.5rem;
+    gap: 0.55rem;
   }
   .el-widget-tile {
-    background-color: var(--md-sys-color-surface-container);
+    background-color: var(--md-sys-color-surface-container-low);
     border: 1px solid var(--md-sys-color-outline-variant);
-    border-radius: 10px;
-    padding: 0.5rem 0.45rem 0.65rem 0.45rem;
+    border-radius: var(--md-sys-shape-corner-large, 16px);
+    padding: 0.55rem 0.5rem 0.7rem 0.5rem;
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
-    gap: 0.25rem;
+    gap: 0.3rem;
     cursor: grab;
     user-select: none;
-    transition: transform 140ms ease, border-color 140ms ease, background-color 140ms ease;
+    transition: transform 150ms cubic-bezier(0.2, 0, 0, 1),
+      border-color 150ms cubic-bezier(0.2, 0, 0, 1),
+      background-color 150ms cubic-bezier(0.2, 0, 0, 1),
+      box-shadow 150ms cubic-bezier(0.2, 0, 0, 1);
   }
   .el-widget-tile:hover {
     border-color: var(--md-sys-color-primary);
-    background-color: var(--md-sys-color-surface-container-high);
+    background-color: var(--md-sys-color-surface-container-lowest);
+    box-shadow: var(--md-sys-elevation-level1);
     transform: translateY(-2px);
   }
   .el-widget-tile__top {
@@ -1205,13 +1209,26 @@
     line-height: 1;
   }
   .el-widget-tile__icon {
-    font-size: 1.55rem;
-    line-height: 1.1;
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    background-color: var(--md-sys-color-secondary-container);
+    color: var(--md-sys-color-on-secondary-container);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
     margin: 0.1rem 0;
+    transition: background-color 150ms ease;
+  }
+  .el-widget-tile:hover .el-widget-tile__icon {
+    background-color: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
   }
   .el-widget-tile__name {
-    font-size: 0.72rem;
-    font-weight: 600;
+    font-family: var(--md-sys-font-heading);
+    font-size: 0.73rem;
+    font-weight: 700;
     color: var(--md-sys-color-on-surface);
     line-height: 1.25;
   }

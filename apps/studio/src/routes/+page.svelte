@@ -100,10 +100,10 @@
 </script>
 
 <svelte:head>
-  <title>Svelte Visual Studio — {editor.blueprint.meta.name}</title>
+  <title>Google MD3 Studio — {editor.blueprint.meta.name}</title>
 </svelte:head>
 
-<div class="studio-app">
+<div class="studio-app studio-app--{editor.studioTheme}">
   <!-- Top Control Bar -->
   <TopToolbar />
 

@@ -547,13 +547,13 @@
   .canvas-context-menu {
     position: fixed;
     z-index: 9999;
-    width: 210px;
-    background-color: #1D2024;
-    color: #E2E2E6;
-    border: 1px solid #44474F;
-    border-radius: 8px;
-    padding: 4px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    width: 224px;
+    background-color: var(--md-sys-color-surface-container-lowest, #FFFFFF);
+    color: var(--md-sys-color-on-surface, #1B1B1F);
+    border: 1px solid var(--md-sys-color-outline-variant, #C4C6D0);
+    border-radius: 16px;
+    padding: 6px;
+    box-shadow: 0 8px 28px rgba(11, 87, 208, 0.14), 0 2px 6px rgba(0, 0, 0, 0.08);
     display: flex;
     flex-direction: column;
     font-family: var(--md-sys-font-body, Roboto, sans-serif);
@@ -562,9 +562,9 @@
     padding: 6px 10px;
     font-size: 0.6875rem;
     font-weight: 700;
-    color: #A8C7FA;
-    border-bottom: 1px solid #32353A;
-    margin-bottom: 2px;
+    color: var(--md-sys-color-primary, #0B57D0);
+    border-bottom: 1px solid var(--md-sys-color-outline-variant, #E0E2EC);
+    margin-bottom: 3px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -573,45 +573,48 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 6px 10px;
+    padding: 7px 10px;
     font-size: 0.75rem;
-    color: #E2E2E6;
-    border-radius: 4px;
+    font-weight: 500;
+    color: var(--md-sys-color-on-surface, #1B1B1F);
+    border-radius: 8px;
     text-align: left;
+    transition: background-color 120ms ease;
   }
   .ctx-item:hover {
-    background-color: #32353A;
+    background-color: var(--md-sys-color-secondary-container, #C2E7FF);
+    color: var(--md-sys-color-on-secondary-container, #001D35);
   }
   .ctx-item--danger {
-    color: #FFB4AB;
+    color: var(--md-sys-color-error, #B3261E);
   }
   .ctx-item--danger:hover {
-    background-color: #93000A;
-    color: #FFDAD6;
+    background-color: var(--md-sys-color-error-container, #F9DEDC);
+    color: var(--md-sys-color-on-error-container, #410E0B);
   }
   .ctx-kbd {
     font-family: var(--md-sys-font-mono, monospace);
     font-size: 0.625rem;
-    color: #8E9199;
+    color: var(--md-sys-color-outline, #747775);
   }
   .ctx-sep {
     height: 1px;
-    background-color: #32353A;
-    margin: 3px 0;
+    background-color: var(--md-sys-color-outline-variant, #E0E2EC);
+    margin: 4px 0;
   }
   .el-canvas-add-zone {
     max-width: 960px;
     margin: 2.5rem auto 4rem auto;
     padding: 2.25rem 1.5rem;
-    border: 2px dashed rgba(11, 87, 208, 0.35);
-    border-radius: 16px;
-    background: rgba(11, 87, 208, 0.03);
+    border: 2px dashed rgba(11, 87, 208, 0.32);
+    border-radius: 24px;
+    background: var(--md-sys-color-surface-container-low, #F8FAFD);
     text-align: center;
     transition: border-color 160ms ease, background-color 160ms ease;
   }
   .el-canvas-add-zone:hover {
     border-color: #0B57D0;
-    background: rgba(11, 87, 208, 0.06);
+    background: #F0F4F9;
   }
   .el-canvas-add-buttons {
     display: flex;
@@ -623,7 +626,7 @@
   .el-circle-btn {
     width: 48px;
     height: 48px;
-    border-radius: 9999px;
+    border-radius: 16px;
     border: none;
     font-size: 1.35rem;
     font-weight: 700;
@@ -631,24 +634,24 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
-    transition: transform 140ms ease, box-shadow 140ms ease;
+    box-shadow: 0 2px 6px rgba(11, 87, 208, 0.14);
+    transition: transform 150ms cubic-bezier(0.2, 0, 0, 1), box-shadow 150ms cubic-bezier(0.2, 0, 0, 1);
   }
   .el-circle-btn:hover {
-    transform: scale(1.08);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(11, 87, 208, 0.22);
   }
   .el-circle-btn--primary {
     background: #0B57D0;
     color: #FFFFFF;
   }
   .el-circle-btn--secondary {
-    background: #1D2024;
-    color: #FFFFFF;
+    background: #C2E7FF;
+    color: #001D35;
   }
   .el-circle-btn--ai {
-    background: #6750A4;
-    color: #FFFFFF;
+    background: #D3E3FD;
+    color: #041E49;
   }
   .el-canvas-add-hint {
     margin: 0;

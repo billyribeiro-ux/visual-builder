@@ -1520,7 +1520,7 @@
   }
   .action-btn:hover {
     color: var(--md-sys-color-on-surface);
-    background-color: rgba(255, 255, 255, 0.08);
+    background-color: var(--md-sys-color-surface-container-high);
   }
   .action-btn--danger:hover {
     color: var(--md-sys-color-error);

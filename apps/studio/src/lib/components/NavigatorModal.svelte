@@ -205,12 +205,12 @@
     position: fixed;
     bottom: 20px;
     right: 348px;
-    width: 310px;
+    width: 316px;
     max-height: 72vh;
-    background-color: var(--md-sys-color-surface-container-high);
+    background-color: var(--md-sys-color-surface-container-lowest);
     border: 1px solid var(--md-sys-color-outline-variant);
-    border-radius: 14px;
-    box-shadow: 0 16px 42px rgba(0, 0, 0, 0.45);
+    border-radius: 20px;
+    box-shadow: var(--md-sys-elevation-level4);
     z-index: 95;
     display: flex;
     flex-direction: column;
@@ -220,8 +220,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.65rem 0.85rem;
-    background-color: var(--md-sys-color-surface-container-highest);
+    padding: 0.75rem 0.95rem;
+    background-color: var(--md-sys-color-surface-container-low);
     border-bottom: 1px solid var(--md-sys-color-outline-variant);
   }
   .el-navigator-title-row {
@@ -346,7 +346,7 @@
     color: inherit;
   }
   .nav-act-btn:hover {
-    background-color: rgba(255, 255, 255, 0.12);
+    background-color: var(--md-sys-color-surface-container-high);
   }
   .nav-act-btn--active {
     color: var(--md-sys-color-primary);
