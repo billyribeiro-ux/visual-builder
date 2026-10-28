@@ -483,6 +483,18 @@
       role="menu"
     >
       <div class="ctx-header">{contextMenu.node.name}</div>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 2px 4px 4px 4px;">
+        <button type="button" class="ctx-item" style="justify-content: center; font-weight: 700;" onclick={() => handleNodeAction(contextMenu!.node.id, 'align-left')} title="Align Left">
+          ⬅ Left
+        </button>
+        <button type="button" class="ctx-item" style="justify-content: center; font-weight: 700; background: var(--md-sys-color-primary-container, #D3E3FD); color: var(--md-sys-color-on-primary-container, #041E49);" onclick={() => handleNodeAction(contextMenu!.node.id, 'align-center')} title="Center Content / Element">
+          ⬌ Center
+        </button>
+        <button type="button" class="ctx-item" style="justify-content: center; font-weight: 700;" onclick={() => handleNodeAction(contextMenu!.node.id, 'align-right')} title="Align Right">
+          ➡ Right
+        </button>
+      </div>
+      <div class="ctx-sep"></div>
       <button type="button" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'up')}>
         <span>↑ Move Up</span><span class="ctx-kbd">Alt+↑</span>
       </button>

@@ -10,6 +10,11 @@ export function getComponentSources(): Record<string, string> {
 
   interface Props {
     maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full';
+    direction?: string;
+    justify?: string;
+    align?: string;
+    textAlign?: string;
+    gap?: string;
     class?: string;
     style?: string;
     children?: Snippet;
@@ -17,13 +22,32 @@ export function getComponentSources(): Record<string, string> {
 
   let {
     maxWidth = 'xl',
+    direction = '',
+    justify = '',
+    align = '',
+    textAlign = '',
+    gap = '',
     class: customClass = '',
     style = '',
     children
   }: Props = $props();
+
+  const computedFlexStyle = $derived.by(() => {
+    const parts: string[] = [];
+    if (direction || justify || align || gap) {
+      parts.push('display: flex');
+      parts.push(\`flex-direction: \${direction || 'column'}\`);
+    }
+    if (justify) parts.push(\`justify-content: \${justify}\`);
+    if (align) parts.push(\`align-items: \${align}\`);
+    if (gap) parts.push(\`gap: \${gap}\`);
+    if (textAlign) parts.push(\`text-align: \${textAlign}\`);
+    if (style) parts.push(style);
+    return parts.join('; ');
+  });
 </script>
 
-<div class="md-container md-container--{maxWidth} {customClass}" {style}>
+<div class="md-container md-container--{maxWidth} {customClass}" style={computedFlexStyle}>
   {@render children?.()}
 </div>
 `,
@@ -779,17 +803,29 @@ export function getComponentSources(): Record<string, string> {
   import Container from './Container.svelte';
 
   interface Props {
-    surfaceTone?: 'surface' | 'low' | 'container' | 'high' | 'primary-container';
+    variant?: string;
+    surfaceTone?: 'surface' | 'low' | 'container' | 'high' | 'primary-container' | string;
     paddingY?: 'sm' | 'md' | 'lg' | 'xl';
     maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full';
+    direction?: string;
+    justify?: string;
+    align?: string;
+    textAlign?: string;
+    gap?: string;
     style?: string;
     children?: Snippet;
   }
 
   let {
+    variant = '',
     surfaceTone = 'low',
     paddingY = 'lg',
     maxWidth = 'xl',
+    direction = '',
+    justify = '',
+    align = '',
+    textAlign = '',
+    gap = '',
     style = '',
     children
   }: Props = $props();
@@ -797,8 +833,10 @@ export function getComponentSources(): Record<string, string> {
   const bgMap: Record<string, string> = {
     surface: 'var(--md-sys-color-surface)',
     low: 'var(--md-sys-color-surface-container-low)',
+    'surface-low': 'var(--md-sys-color-surface-container-low)',
     container: 'var(--md-sys-color-surface-container)',
     high: 'var(--md-sys-color-surface-container-high)',
+    'surface-high': 'var(--md-sys-color-surface-container-high)',
     'primary-container': 'var(--md-sys-color-primary-container)'
   };
 
@@ -810,8 +848,8 @@ export function getComponentSources(): Record<string, string> {
   };
 </script>
 
-<section style="background-color: {bgMap[surfaceTone] || bgMap.surface}; padding: {padMap[paddingY] || padMap.lg}; {style}">
-  <Container {maxWidth}>
+<section style="background-color: {bgMap[variant || surfaceTone] || bgMap.surface}; padding: {padMap[paddingY] || padMap.lg}; {style}">
+  <Container {maxWidth} {direction} {justify} {align} {textAlign} {gap}>
     {@render children?.()}
   </Container>
 </section>
@@ -823,7 +861,9 @@ export function getComponentSources(): Record<string, string> {
   interface Props {
     columns?: number;
     gap?: string;
-    alignItems?: 'stretch' | 'start' | 'center' | 'end';
+    alignItems?: 'stretch' | 'start' | 'center' | 'end' | string;
+    justifyItems?: 'stretch' | 'start' | 'center' | 'end' | string;
+    textAlign?: string;
     style?: string;
     children?: Snippet;
   }
@@ -832,12 +872,14 @@ export function getComponentSources(): Record<string, string> {
     columns = 2,
     gap = '1.5rem',
     alignItems = 'stretch',
+    justifyItems = 'stretch',
+    textAlign = '',
     style = '',
     children
   }: Props = $props();
 </script>
 
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: {gap}; align-items: {alignItems}; {style}" data-cols={columns}>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: {gap}; align-items: {alignItems}; justify-items: {justifyItems}; {textAlign ? \`text-align: \${textAlign};\` : ''} {style}" data-cols={columns}>
   {@render children?.()}
 </div>
 `,

@@ -45,6 +45,80 @@
     { cls: 'el-border-glow', label: 'Glow Ring' }
   ];
 
+  const ENUM_PROP_OPTIONS: Record<string, Array<{ value: string; label: string }>> = {
+    maxWidth: [
+      { value: 'sm', label: 'Small (640px)' },
+      { value: 'md', label: 'Medium (768px)' },
+      { value: 'lg', label: 'Large (1024px)' },
+      { value: 'xl', label: 'Extra Large (1280px)' },
+      { value: '2xl', label: '2XL Wide (1536px)' },
+      { value: 'full', label: 'Full Bleed (100%)' }
+    ],
+    paddingY: [
+      { value: 'sm', label: 'Small (2rem)' },
+      { value: 'md', label: 'Medium (3.5rem)' },
+      { value: 'lg', label: 'Large (5rem)' },
+      { value: 'xl', label: 'Extra Large (7rem)' }
+    ],
+    surfaceTone: [
+      { value: 'surface', label: 'Default Surface' },
+      { value: 'low', label: 'Surface Container Low' },
+      { value: 'container', label: 'Surface Container' },
+      { value: 'high', label: 'Surface Container High' },
+      { value: 'primary-container', label: 'MD3 Primary Container' }
+    ],
+    direction: [
+      { value: 'column', label: '↓ Column (Vertical Stack)' },
+      { value: 'row', label: '→ Row (Horizontal)' },
+      { value: 'column-reverse', label: '↑ Column Reverse' },
+      { value: 'row-reverse', label: '← Row Reverse' }
+    ],
+    justify: [
+      { value: 'flex-start', label: 'Start (flex-start)' },
+      { value: 'center', label: '⬌ Center (center)' },
+      { value: 'flex-end', label: 'End (flex-end)' },
+      { value: 'space-between', label: 'Space Between' },
+      { value: 'space-around', label: 'Space Around' },
+      { value: 'space-evenly', label: 'Space Evenly' }
+    ],
+    align: [
+      { value: 'stretch', label: 'Stretch Full Width' },
+      { value: 'flex-start', label: '⬅ Start (Left / Top)' },
+      { value: 'center', label: '⬌ Center' },
+      { value: 'flex-end', label: '➡ End (Right / Bottom)' }
+    ],
+    alignItems: [
+      { value: 'stretch', label: 'Stretch' },
+      { value: 'start', label: 'Start' },
+      { value: 'center', label: '⬌ Center' },
+      { value: 'end', label: 'End' }
+    ],
+    justifyItems: [
+      { value: 'stretch', label: 'Stretch' },
+      { value: 'start', label: 'Start' },
+      { value: 'center', label: '⬌ Center' },
+      { value: 'end', label: 'End' }
+    ],
+    textAlign: [
+      { value: 'left', label: '⬅ Left' },
+      { value: 'center', label: '⬌ Center' },
+      { value: 'right', label: '➡ Right' }
+    ],
+    size: [
+      { value: 'sm', label: 'Small (sm)' },
+      { value: 'md', label: 'Medium (md)' },
+      { value: 'lg', label: 'Large (lg)' }
+    ],
+    tone: [
+      { value: 'primary', label: 'Primary' },
+      { value: 'secondary', label: 'Secondary' },
+      { value: 'success', label: 'Success' },
+      { value: 'error', label: 'Error' },
+      { value: 'info', label: 'Info' },
+      { value: 'outline', label: 'Outline' }
+    ]
+  };
+
   const customCssSnippets = [
     {
       label: 'Glass Card',
@@ -362,8 +436,132 @@
     <!-- Tab 1: Content & Schema Props (With Visual Array Repeaters) -->
     {#if activeTab === 'props'}
       <div class="studio-panel-content flow-v">
+        <!-- Elementor Flexbox Container & Quick Centering Controls -->
+        <div class="repeater-card" style="background: var(--md-sys-color-surface-container-low); border-color: var(--md-sys-color-primary);">
+          <div class="field-label-row">
+            <span class="field-label" style="color: var(--md-sys-color-primary); font-weight: 700;">
+              🎯 {selectedNode.componentType === 'structure/container' || selectedNode.componentType === 'structure/section' || selectedNode.componentType === 'structure/grid' ? 'Container Content Alignment' : 'Element Alignment & Centering'}
+            </span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;">
+            <button
+              type="button"
+              onclick={() => editor.alignNode(selectedNode.id, 'left')}
+              class="bp-target-btn {(selectedNode.props?.textAlign === 'left' || readStyle('textAlign') === 'left') && readStyle('alignItems') === 'flex-start' ? 'bp-target-btn--active' : ''}"
+              title="Align Left"
+            >
+              ⬅ Left
+            </button>
+            <button
+              type="button"
+              onclick={() => editor.alignNode(selectedNode.id, 'center')}
+              class="bp-target-btn {selectedNode.props?.align === 'center' || selectedNode.props?.textAlign === 'center' || readStyle('alignItems') === 'center' || readStyle('textAlign') === 'center' ? 'bp-target-btn--active' : ''}"
+              title="Center Everything Inside Container / Parent"
+            >
+              ⬌ Center
+            </button>
+            <button
+              type="button"
+              onclick={() => editor.alignNode(selectedNode.id, 'right')}
+              class="bp-target-btn {selectedNode.props?.align === 'flex-end' || selectedNode.props?.textAlign === 'right' || readStyle('alignItems') === 'flex-end' || readStyle('textAlign') === 'right' ? 'bp-target-btn--active' : ''}"
+              title="Align Right"
+            >
+              ➡ Right
+            </button>
+            <button
+              type="button"
+              onclick={() => editor.alignNode(selectedNode.id, 'stretch')}
+              class="bp-target-btn {selectedNode.props?.align === 'stretch' && readStyle('alignItems') === 'stretch' ? 'bp-target-btn--active' : ''}"
+              title="Stretch Full Width"
+            >
+              ↔ Stretch
+            </button>
+          </div>
+
+          {#if selectedNode.componentType === 'structure/container' || selectedNode.componentType === 'structure/section'}
+            <div class="sub-field" style="margin-top: 0.25rem;">
+              <span class="sub-label">Flex Direction (Items Flow)</span>
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;">
+                {#each [
+                  { val: 'column', label: '↓ Col' },
+                  { val: 'row', label: '→ Row' },
+                  { val: 'column-reverse', label: '↑ Col Rev' },
+                  { val: 'row-reverse', label: '← Row Rev' }
+                ] as dir (dir.val)}
+                  <button
+                    type="button"
+                    onclick={() => {
+                      updateProp('direction', dir.val);
+                      updateStyle('display', 'flex');
+                      updateStyle('flexDirection', dir.val);
+                    }}
+                    class="bp-target-btn {(selectedNode.props?.direction || readStyle('flexDirection') || 'column') === dir.val ? 'bp-target-btn--active' : ''}"
+                  >
+                    {dir.label}
+                  </button>
+                {/each}
+              </div>
+            </div>
+
+            <div class="sub-field">
+              <span class="sub-label">Align Items (Cross Axis / Horizontal in Column)</span>
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;">
+                {#each [
+                  { val: 'flex-start', label: 'Start' },
+                  { val: 'center', label: '⬌ Center' },
+                  { val: 'flex-end', label: 'End' },
+                  { val: 'stretch', label: 'Stretch' }
+                ] as al (al.val)}
+                  <button
+                    type="button"
+                    onclick={() => {
+                      updateProp('align', al.val);
+                      updateStyle('display', 'flex');
+                      updateStyle('alignItems', al.val);
+                      if (al.val === 'center') {
+                        updateProp('textAlign', 'center');
+                        updateStyle('textAlign', 'center');
+                      }
+                    }}
+                    class="bp-target-btn {(selectedNode.props?.align || readStyle('alignItems') || 'stretch') === al.val ? 'bp-target-btn--active' : ''}"
+                  >
+                    {al.label}
+                  </button>
+                {/each}
+              </div>
+            </div>
+
+            <div class="sub-field">
+              <span class="sub-label">Justify Content (Main Axis / Distribution)</span>
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;">
+                {#each [
+                  { val: 'flex-start', label: 'Start' },
+                  { val: 'center', label: '⬌ Center' },
+                  { val: 'flex-end', label: 'End' },
+                  { val: 'space-between', label: 'Between' },
+                  { val: 'space-around', label: 'Around' },
+                  { val: 'space-evenly', label: 'Evenly' }
+                ] as jc (jc.val)}
+                  <button
+                    type="button"
+                    onclick={() => {
+                      updateProp('justify', jc.val);
+                      updateStyle('display', 'flex');
+                      updateStyle('justifyContent', jc.val);
+                    }}
+                    class="bp-target-btn {(selectedNode.props?.justify || readStyle('justifyContent') || 'flex-start') === jc.val ? 'bp-target-btn--active' : ''}"
+                  >
+                    {jc.label}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/if}
+        </div>
+
         {#each Object.entries(selectedNode.props || {}) as [propKey, propVal] (propKey)}
           {@const controlMeta = manifest?.propControls?.[propKey]}
+          {@const enumOptions = controlMeta?.options || ENUM_PROP_OPTIONS[propKey]}
           <div class="field-item">
             <div class="field-label-row">
               <label for="prop-{propKey}" class="field-label">
@@ -384,14 +582,29 @@
               {/if}
             </div>
 
-            {#if controlMeta?.type === 'select' && controlMeta.options}
+            {#if enumOptions}
               <select
                 id="prop-{propKey}"
                 value={String(propVal ?? '')}
-                onchange={(e) => updateProp(propKey, (e.target as HTMLSelectElement).value)}
+                onchange={(e) => {
+                  const val = (e.target as HTMLSelectElement).value;
+                  updateProp(propKey, val);
+                  if (propKey === 'direction') {
+                    updateStyle('display', 'flex');
+                    updateStyle('flexDirection', val);
+                  } else if (propKey === 'align') {
+                    updateStyle('display', 'flex');
+                    updateStyle('alignItems', val);
+                  } else if (propKey === 'justify') {
+                    updateStyle('display', 'flex');
+                    updateStyle('justifyContent', val);
+                  } else if (propKey === 'textAlign') {
+                    updateStyle('textAlign', val);
+                  }
+                }}
                 class="studio-select"
               >
-                {#each controlMeta.options as opt (opt.value)}
+                {#each enumOptions as opt (opt.value)}
                   <option value={opt.value}>{opt.label}</option>
                 {/each}
               </select>
@@ -690,7 +903,37 @@
           </button>
         </div>
 
-        <div class="section-title">Layout & Flex/Grid Matrix</div>
+        <div class="section-title">Layout, Centering &amp; Flex/Grid Matrix</div>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;">
+          <button
+            type="button"
+            onclick={() => editor.alignNode(selectedNode.id, 'left')}
+            class="bp-target-btn {readStyle('textAlign') === 'left' && readStyle('alignItems') === 'flex-start' ? 'bp-target-btn--active' : ''}"
+          >
+            ⬅ Left
+          </button>
+          <button
+            type="button"
+            onclick={() => editor.alignNode(selectedNode.id, 'center')}
+            class="bp-target-btn {readStyle('alignItems') === 'center' || readStyle('textAlign') === 'center' ? 'bp-target-btn--active' : ''}"
+          >
+            ⬌ Center
+          </button>
+          <button
+            type="button"
+            onclick={() => editor.alignNode(selectedNode.id, 'right')}
+            class="bp-target-btn {readStyle('alignItems') === 'flex-end' || readStyle('textAlign') === 'right' ? 'bp-target-btn--active' : ''}"
+          >
+            ➡ Right
+          </button>
+          <button
+            type="button"
+            onclick={() => editor.alignNode(selectedNode.id, 'stretch')}
+            class="bp-target-btn {readStyle('alignItems') === 'stretch' ? 'bp-target-btn--active' : ''}"
+          >
+            ↔ Stretch
+          </button>
+        </div>
         <div class="grid-2">
           <div class="field-item">
             <label for="style-display" class="field-label">Display</label>
@@ -709,29 +952,49 @@
             </select>
           </div>
           <div class="field-item">
-            <label for="style-gap" class="field-label">Gap</label>
-            <input
-              id="style-gap"
-              type="text"
-              placeholder="e.g. 1.5rem"
-              value={readStyle('gap')}
-              onchange={(e) => updateStyle('gap', (e.target as HTMLInputElement).value)}
-              class="studio-input"
-            />
+            <label for="style-direction" class="field-label">Flex Direction</label>
+            <select
+              id="style-direction"
+              value={readStyle('flexDirection')}
+              onchange={(e) => {
+                const val = (e.target as HTMLSelectElement).value;
+                updateStyle('display', 'flex');
+                updateStyle('flexDirection', val);
+                if (selectedNode.componentType === 'structure/container' || selectedNode.componentType === 'structure/section') {
+                  updateProp('direction', val);
+                }
+              }}
+              class="studio-select"
+            >
+              <option value="">(Default)</option>
+              <option value="column">↓ column</option>
+              <option value="row">→ row</option>
+              <option value="column-reverse">↑ column-reverse</option>
+              <option value="row-reverse">← row-reverse</option>
+            </select>
           </div>
           <div class="field-item">
             <label for="style-justify" class="field-label">Justify Content</label>
             <select
               id="style-justify"
               value={readStyle('justifyContent')}
-              onchange={(e) => updateStyle('justifyContent', (e.target as HTMLSelectElement).value)}
+              onchange={(e) => {
+                const val = (e.target as HTMLSelectElement).value;
+                updateStyle('display', 'flex');
+                updateStyle('justifyContent', val);
+                if (selectedNode.componentType === 'structure/container' || selectedNode.componentType === 'structure/section') {
+                  updateProp('justify', val);
+                }
+              }}
               class="studio-select"
             >
               <option value="">(Default)</option>
               <option value="flex-start">flex-start</option>
-              <option value="center">center</option>
+              <option value="center">⬌ center</option>
               <option value="flex-end">flex-end</option>
               <option value="space-between">space-between</option>
+              <option value="space-around">space-around</option>
+              <option value="space-evenly">space-evenly</option>
             </select>
           </div>
           <div class="field-item">
@@ -739,15 +1002,39 @@
             <select
               id="style-align-items"
               value={readStyle('alignItems')}
-              onchange={(e) => updateStyle('alignItems', (e.target as HTMLSelectElement).value)}
+              onchange={(e) => {
+                const val = (e.target as HTMLSelectElement).value;
+                updateStyle('display', 'flex');
+                updateStyle('alignItems', val);
+                if (selectedNode.componentType === 'structure/container' || selectedNode.componentType === 'structure/section') {
+                  updateProp('align', val);
+                }
+              }}
               class="studio-select"
             >
               <option value="">(Default)</option>
               <option value="stretch">stretch</option>
               <option value="flex-start">flex-start</option>
-              <option value="center">center</option>
+              <option value="center">⬌ center</option>
               <option value="flex-end">flex-end</option>
             </select>
+          </div>
+          <div class="field-item">
+            <label for="style-gap" class="field-label">Gap</label>
+            <input
+              id="style-gap"
+              type="text"
+              placeholder="e.g. 1.5rem"
+              value={readStyle('gap')}
+              onchange={(e) => {
+                const val = (e.target as HTMLInputElement).value;
+                updateStyle('gap', val);
+                if (selectedNode.componentType === 'structure/container' || selectedNode.componentType === 'structure/section') {
+                  updateProp('gap', val);
+                }
+              }}
+              class="studio-input"
+            />
           </div>
         </div>
 

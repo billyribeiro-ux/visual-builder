@@ -286,6 +286,112 @@ class EditorState {
     });
   }
 
+  alignNode(
+    targetNodeId: string | undefined,
+    alignment: 'left' | 'center' | 'right' | 'stretch'
+  ) {
+    const id = targetNodeId || this.selectedNodeId;
+    if (!id) return;
+    const node = this.findNodeAnywhere(id);
+    if (!node) return;
+
+    const flexAlign =
+      alignment === 'center'
+        ? 'center'
+        : alignment === 'right'
+          ? 'flex-end'
+          : alignment === 'stretch'
+            ? 'stretch'
+            : 'flex-start';
+    const gridAlign =
+      alignment === 'center'
+        ? 'center'
+        : alignment === 'right'
+          ? 'end'
+          : alignment === 'stretch'
+            ? 'stretch'
+            : 'start';
+    const textAlignVal =
+      alignment === 'center' ? 'center' : alignment === 'right' ? 'right' : 'left';
+
+    if (
+      node.componentType === 'structure/container' ||
+      node.componentType === 'structure/section'
+    ) {
+      const currentDir =
+        (node.props?.direction as string) ||
+        (node.styles?.base?.flexDirection as string) ||
+        'column';
+      this.dispatch({
+        type: 'UPDATE_PROPS',
+        nodeId: node.id,
+        props: {
+          direction: currentDir,
+          align: flexAlign,
+          justify: alignment === 'center' ? 'center' : flexAlign === 'stretch' ? 'flex-start' : flexAlign,
+          textAlign: textAlignVal
+        }
+      });
+      this.dispatch({
+        type: 'UPDATE_STYLES',
+        nodeId: node.id,
+        breakpoint: 'base',
+        styles: {
+          display: 'flex',
+          flexDirection: currentDir,
+          alignItems: flexAlign,
+          justifyContent:
+            alignment === 'center' ? 'center' : flexAlign === 'stretch' ? 'flex-start' : flexAlign,
+          textAlign: textAlignVal
+        }
+      });
+    } else if (node.componentType === 'structure/grid') {
+      this.dispatch({
+        type: 'UPDATE_PROPS',
+        nodeId: node.id,
+        props: {
+          alignItems: gridAlign,
+          justifyItems: gridAlign,
+          textAlign: textAlignVal
+        }
+      });
+      this.dispatch({
+        type: 'UPDATE_STYLES',
+        nodeId: node.id,
+        breakpoint: 'base',
+        styles: {
+          alignItems: gridAlign,
+          justifyItems: gridAlign,
+          textAlign: textAlignVal
+        }
+      });
+    } else {
+      if (node.componentType === 'hero/split-hero' || node.componentType === 'ui/card') {
+        this.dispatch({
+          type: 'UPDATE_PROPS',
+          nodeId: node.id,
+          props: { align: textAlignVal }
+        });
+      }
+      this.dispatch({
+        type: 'UPDATE_STYLES',
+        nodeId: node.id,
+        breakpoint: 'base',
+        styles: {
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: flexAlign,
+          justifyContent: alignment === 'center' ? 'center' : flexAlign,
+          textAlign: textAlignVal,
+          alignSelf: flexAlign,
+          marginLeft: alignment === 'center' || alignment === 'right' ? 'auto' : '0',
+          marginRight: alignment === 'center' || alignment === 'left' ? 'auto' : '0',
+          ...(alignment === 'stretch' ? { width: '100%' } : {})
+        }
+      });
+    }
+  }
+
   insertContainerStructure(structureId: string, targetNodeId?: string) {
     if (!this.activePage) return;
     const parentId = targetNodeId || this.activePage.rootNode.id;
@@ -294,7 +400,14 @@ class EditorState {
       id: crypto.randomUUID(),
       componentType: 'structure/container',
       name,
-      props: { maxWidth: 'full' },
+      props: {
+        maxWidth: 'full',
+        direction: 'column',
+        justify: 'flex-start',
+        align: 'stretch',
+        textAlign: 'left',
+        gap: '1rem'
+      },
       styles: {
         base: {
           display: 'flex',

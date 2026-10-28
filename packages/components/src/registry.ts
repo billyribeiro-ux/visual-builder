@@ -6,13 +6,23 @@ export const COMPONENT_REGISTRY: Record<string, ComponentManifest<any>> = {
     type: 'structure/container',
     displayName: 'Container',
     category: 'structure',
-    description: 'Responsive centered container with standard screen margins and max width.',
+    description: 'Responsive Flexbox container with configurable direction, content centering, gap, and max width.',
     icon: 'Box',
     propsSchema: z.object({
-      maxWidth: z.enum(['sm', 'md', 'lg', 'xl', '2xl', 'full']).default('xl')
+      maxWidth: z.enum(['sm', 'md', 'lg', 'xl', '2xl', 'full']).default('xl'),
+      direction: z.enum(['column', 'row', 'column-reverse', 'row-reverse']).default('column'),
+      justify: z.enum(['flex-start', 'center', 'flex-end', 'space-between', 'space-around', 'space-evenly']).default('flex-start'),
+      align: z.enum(['stretch', 'flex-start', 'center', 'flex-end']).default('stretch'),
+      textAlign: z.enum(['left', 'center', 'right']).default('left'),
+      gap: z.string().default('1rem')
     }),
     defaultProps: {
-      maxWidth: 'xl'
+      maxWidth: 'xl',
+      direction: 'column',
+      justify: 'flex-start',
+      align: 'stretch',
+      textAlign: 'left',
+      gap: '1rem'
     },
     slots: [{ name: 'children', displayName: 'Container Content' }]
   },
@@ -352,18 +362,28 @@ export const COMPONENT_REGISTRY: Record<string, ComponentManifest<any>> = {
     type: 'structure/section',
     displayName: 'MD3 Surface Section',
     category: 'structure',
-    description: 'Semantic page section with configurable MD3 surface container tone and vertical spacing.',
+    description: 'Semantic page section with configurable MD3 surface tone, vertical spacing, and Flexbox alignment.',
     icon: 'Layout',
     isSection: true,
     propsSchema: z.object({
       surfaceTone: z.enum(['surface', 'low', 'container', 'high', 'primary-container']).default('surface'),
       paddingY: z.enum(['sm', 'md', 'lg', 'xl']).default('lg'),
-      maxWidth: z.enum(['sm', 'md', 'lg', 'xl', '2xl', 'full']).default('xl')
+      maxWidth: z.enum(['sm', 'md', 'lg', 'xl', '2xl', 'full']).default('xl'),
+      direction: z.enum(['column', 'row', 'column-reverse', 'row-reverse']).default('column'),
+      justify: z.enum(['flex-start', 'center', 'flex-end', 'space-between', 'space-around', 'space-evenly']).default('flex-start'),
+      align: z.enum(['stretch', 'flex-start', 'center', 'flex-end']).default('stretch'),
+      textAlign: z.enum(['left', 'center', 'right']).default('left'),
+      gap: z.string().default('1.5rem')
     }),
     defaultProps: {
       surfaceTone: 'low',
       paddingY: 'lg',
-      maxWidth: 'xl'
+      maxWidth: 'xl',
+      direction: 'column',
+      justify: 'flex-start',
+      align: 'stretch',
+      textAlign: 'left',
+      gap: '1.5rem'
     },
     slots: [{ name: 'children', displayName: 'Section Content' }]
   },
@@ -377,12 +397,16 @@ export const COMPONENT_REGISTRY: Record<string, ComponentManifest<any>> = {
     propsSchema: z.object({
       columns: z.number().min(1).max(4).default(2),
       gap: z.string().default('1.5rem'),
-      alignItems: z.enum(['stretch', 'start', 'center', 'end']).default('stretch')
+      alignItems: z.enum(['stretch', 'start', 'center', 'end']).default('stretch'),
+      justifyItems: z.enum(['stretch', 'start', 'center', 'end']).default('stretch'),
+      textAlign: z.enum(['left', 'center', 'right']).default('left')
     }),
     defaultProps: {
       columns: 2,
       gap: '1.5rem',
-      alignItems: 'stretch'
+      alignItems: 'stretch',
+      justifyItems: 'stretch',
+      textAlign: 'left'
     },
     slots: [{ name: 'children', displayName: 'Grid Items' }]
   },

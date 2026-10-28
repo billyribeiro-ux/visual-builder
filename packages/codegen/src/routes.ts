@@ -87,30 +87,50 @@ function renderNodeInner(
     }
 
     case 'structure/container': {
-      const maxWidth = node.props.maxWidth || 'xl';
+      const p = node.props;
+      const maxWidth = p.maxWidth || 'xl';
+      const extraProps = [
+        p.direction ? ` direction="${p.direction}"` : '',
+        p.justify ? ` justify="${p.justify}"` : '',
+        p.align ? ` align="${p.align}"` : '',
+        p.textAlign ? ` textAlign="${p.textAlign}"` : '',
+        p.gap ? ` gap="${p.gap}"` : ''
+      ].join('');
       const inner = (node.children || [])
         .map((c: BlueprintNode) => renderNodeToSvelte(c, indent + '  ', slotNode))
         .filter(Boolean)
         .join('\n');
-      return `${indent}<Container maxWidth="${maxWidth}"${styleAttr}>\n${inner}\n${indent}</Container>`;
+      return `${indent}<Container maxWidth="${maxWidth}"${extraProps}${styleAttr}>\n${inner}\n${indent}</Container>`;
     }
 
     case 'structure/section': {
       const p = node.props;
+      const extraProps = [
+        p.direction ? ` direction="${p.direction}"` : '',
+        p.justify ? ` justify="${p.justify}"` : '',
+        p.align ? ` align="${p.align}"` : '',
+        p.textAlign ? ` textAlign="${p.textAlign}"` : '',
+        p.gap ? ` gap="${p.gap}"` : ''
+      ].join('');
       const inner = (node.children || [])
         .map((c: BlueprintNode) => renderNodeToSvelte(c, indent + '  ', slotNode))
         .filter(Boolean)
         .join('\n');
-      return `${indent}<Section variant="${p.variant || 'surface'}" paddingY="${p.paddingY || 'lg'}" maxWidth="${p.maxWidth || 'xl'}"${styleAttr}>\n${inner}\n${indent}</Section>`;
+      return `${indent}<Section variant="${p.variant || p.surfaceTone || 'surface'}" paddingY="${p.paddingY || 'lg'}" maxWidth="${p.maxWidth || 'xl'}"${extraProps}${styleAttr}>\n${inner}\n${indent}</Section>`;
     }
 
     case 'structure/grid': {
       const p = node.props;
+      const extraProps = [
+        p.alignItems ? ` alignItems="${p.alignItems}"` : '',
+        p.justifyItems ? ` justifyItems="${p.justifyItems}"` : '',
+        p.textAlign ? ` textAlign="${p.textAlign}"` : ''
+      ].join('');
       const inner = (node.children || [])
         .map((c: BlueprintNode) => renderNodeToSvelte(c, indent + '  ', slotNode))
         .filter(Boolean)
         .join('\n');
-      return `${indent}<Grid columns={${p.columns || 3}} gap="${p.gap || 'md'}"${styleAttr}>\n${inner}\n${indent}</Grid>`;
+      return `${indent}<Grid columns={${p.columns || 3}} gap="${p.gap || 'md'}"${extraProps}${styleAttr}>\n${inner}\n${indent}</Grid>`;
     }
 
     case 'structure/divider': {

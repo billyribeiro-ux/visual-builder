@@ -189,6 +189,15 @@
           editor.saveSelectedNodeAsSymbol();
         } else if (action === 'hide') {
           editor.dispatch({ type: 'UPDATE_NODE_META', nodeId, meta: { hidden: true } });
+        } else if (action === 'align-left') {
+          editor.selectNode(nodeId);
+          editor.alignNode(nodeId, 'left');
+        } else if (action === 'align-center') {
+          editor.selectNode(nodeId);
+          editor.alignNode(nodeId, 'center');
+        } else if (action === 'align-right') {
+          editor.selectNode(nodeId);
+          editor.alignNode(nodeId, 'right');
         }
       } else if (data.type === 'INSERT_STRUCTURE') {
         const { structureId, targetNodeId } = data;

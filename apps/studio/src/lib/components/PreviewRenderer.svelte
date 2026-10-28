@@ -42,7 +42,10 @@
     | 'paste-style'
     | 'reset-style'
     | 'save-symbol'
-    | 'hide';
+    | 'hide'
+    | 'align-left'
+    | 'align-center'
+    | 'align-right';
 
   interface Props {
     node: BlueprintNode;
@@ -83,11 +86,39 @@
   const isSelected = $derived(selectedNodeId === node.id);
   const effectiveCss = $derived(resolveEffectiveStyles(node.styles, activeBreakpoint));
   const inlineStyle = $derived(cssPropertiesToString(effectiveCss));
+  const sectionInnerLayoutStyle = $derived(
+    cssPropertiesToString({
+      display: effectiveCss.display,
+      flexDirection: effectiveCss.flexDirection,
+      justifyContent: effectiveCss.justifyContent,
+      alignItems: effectiveCss.alignItems,
+      flexWrap: effectiveCss.flexWrap,
+      gap: effectiveCss.gap,
+      gridTemplateColumns: effectiveCss.gridTemplateColumns,
+      textAlign: effectiveCss.textAlign
+    })
+  );
   const isContainer = $derived(
     node.componentType === 'structure/container' ||
       node.componentType === 'structure/section' ||
       node.componentType === 'structure/grid' ||
       node.componentType === 'app/dashboard-shell'
+  );
+  const outerWrapperStyle = $derived(
+    node.componentType === 'structure/container' ||
+      node.componentType === 'structure/section' ||
+      node.componentType === 'structure/grid'
+      ? cssPropertiesToString({
+          flex: effectiveCss.flex,
+          alignSelf: effectiveCss.alignSelf,
+          width: effectiveCss.width,
+          margin: effectiveCss.margin,
+          marginTop: effectiveCss.marginTop,
+          marginBottom: effectiveCss.marginBottom,
+          marginLeft: effectiveCss.marginLeft,
+          marginRight: effectiveCss.marginRight
+        })
+      : inlineStyle
   );
 
   const editableTextProps = $derived.by<Array<{ key: string; val: string }>>(() => {
@@ -295,7 +326,7 @@
       tabindex="0"
       aria-label={node.name}
       class="preview-node {!isInteractiveMode ? 'preview-node--editable' : ''} {isSelected && !isInteractiveMode ? 'preview-node--selected' : ''} {dropZone ? `preview-node--drop-${dropZone}` : ''} {node.customClasses || ''}"
-      style={inlineStyle}
+      style={outerWrapperStyle}
     >
       {#if dropZone && !isInteractiveMode}
         <div class="drop-indicator drop-indicator--{dropZone}">
@@ -321,6 +352,27 @@
                   }}
                 >✏️</button>
               {/if}
+              <button
+                type="button"
+                class="preview-node__action-btn"
+                title="Align Left"
+                aria-label="Align left"
+                onclick={(e) => triggerAction(e, 'align-left')}
+              >⬅</button>
+              <button
+                type="button"
+                class="preview-node__action-btn"
+                title="Center Content / Element"
+                aria-label="Center content"
+                onclick={(e) => triggerAction(e, 'align-center')}
+              >⬌</button>
+              <button
+                type="button"
+                class="preview-node__action-btn"
+                title="Align Right"
+                aria-label="Align right"
+                onclick={(e) => triggerAction(e, 'align-right')}
+              >➡</button>
               <button
                 type="button"
                 class="preview-node__action-btn"
@@ -414,7 +466,15 @@
       {/if}
 
       {#if node.componentType === 'structure/container'}
-        <Container maxWidth={node.props.maxWidth || 'xl'}>
+        <Container
+          maxWidth={node.props.maxWidth || 'xl'}
+          direction={node.props.direction}
+          justify={node.props.justify}
+          align={node.props.align}
+          textAlign={node.props.textAlign}
+          gap={node.props.gap}
+          style={inlineStyle}
+        >
           {#if (!node.children || node.children.length === 0) && !isInteractiveMode}
             <div class="el-empty-column-slot">
               <span class="el-empty-column-plus">+</span>
@@ -443,8 +503,16 @@
       {:else if node.componentType === 'structure/section'}
         <Section
           variant={node.props.variant}
+          surfaceTone={node.props.surfaceTone}
           paddingY={node.props.paddingY}
           maxWidth={node.props.maxWidth}
+          direction={node.props.direction}
+          justify={node.props.justify}
+          align={node.props.align}
+          textAlign={node.props.textAlign}
+          gap={node.props.gap}
+          style={inlineStyle}
+          contentStyle={sectionInnerLayoutStyle}
         >
           {#if (!node.children || node.children.length === 0) && !isInteractiveMode}
             <div class="el-empty-column-slot">
@@ -472,7 +540,14 @@
           {/if}
         </Section>
       {:else if node.componentType === 'structure/grid'}
-        <Grid columns={node.props.columns} gap={node.props.gap}>
+        <Grid
+          columns={node.props.columns}
+          gap={node.props.gap}
+          alignItems={node.props.alignItems}
+          justifyItems={node.props.justifyItems}
+          textAlign={node.props.textAlign}
+          style={inlineStyle}
+        >
           {#if (!node.children || node.children.length === 0) && !isInteractiveMode}
             <div class="el-empty-column-slot">
               <span class="el-empty-column-plus">+</span>
@@ -510,6 +585,8 @@
           secondaryCtaText={node.props.secondaryCtaText}
           secondaryCtaHref={node.props.secondaryCtaHref}
           badgeText={node.props.badgeText}
+          align={node.props.align}
+          style={inlineStyle}
           {onNavigate}
         />
       {:else if node.componentType === 'marketing/feature-grid'}
@@ -649,6 +726,10 @@
           body={node.props.body}
           actionText={node.props.actionText}
           actionHref={node.props.actionHref}
+          ctaText={node.props.ctaText}
+          ctaHref={node.props.ctaHref}
+          align={node.props.align}
+          style={inlineStyle}
           {onNavigate}
         />
       {:else if node.componentType === 'ui/alert'}
