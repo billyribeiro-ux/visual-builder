@@ -14,17 +14,27 @@
     { key: 'wide', label: 'Wide', icon: '🖵', width: '1440px' }
   ];
 
-  let isExporting = $state(false);
-  let showTemplateModal = $state(false);
-  let showSnapshotsModal = $state(false);
   let showPreflightModal = $state(false);
   let showCodeModal = $state(false);
   let activeCodeTab = $state<'page' | 'css' | 'agents' | 'blueprint'>('page');
   let copySuccess = $state(false);
 
-  let snapshotLabel = $state('');
-  let importJsonText = $state('');
-  let importError = $state('');
+  const saveLabel = $derived.by(() => {
+    switch (editor.saveStatus) {
+      case 'saving':
+        return 'Saving…';
+      case 'dirty':
+        return 'Unsaved changes';
+      case 'error':
+        return 'Not saved — click for details';
+      case 'saved':
+        return editor.lastSavedAt
+          ? `Saved ${new Date(editor.lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+          : 'Saved';
+      default:
+        return editor.ready ? 'All changes saved' : 'Loading…';
+    }
+  });
 
   const liveCodeOutput = $derived.by(() => {
     if (!showCodeModal) return '';
@@ -41,19 +51,8 @@
   });
 
   function closeAllModals() {
-    showTemplateModal = false;
-    showSnapshotsModal = false;
     showPreflightModal = false;
     showCodeModal = false;
-  }
-
-  async function handleExport() {
-    isExporting = true;
-    try {
-      await editor.exportHandoffPackage();
-    } finally {
-      isExporting = false;
-    }
   }
 
   async function handleCopyCode() {
@@ -63,22 +62,6 @@
     setTimeout(() => (copySuccess = false), 2000);
   }
 
-  function handleSaveSnapshot() {
-    editor.createSnapshot(snapshotLabel);
-    snapshotLabel = '';
-  }
-
-  function handleImportJson() {
-    importError = '';
-    if (!importJsonText.trim()) return;
-    const res = editor.importBlueprintJson(importJsonText);
-    if (!res.ok) {
-      importError = res.error || 'Invalid blueprint JSON';
-    } else {
-      importJsonText = '';
-      showTemplateModal = false;
-    }
-  }
 </script>
 
 <header class="studio-topbar">
@@ -98,11 +81,7 @@
         type="text"
         aria-label="Project name"
         value={editor.blueprint.meta.name}
-        onchange={(e) =>
-          editor.dispatch({
-            type: 'UPDATE_PROJECT_META',
-            meta: { name: (e.target as HTMLInputElement).value }
-          })}
+        onchange={(e) => editor.renameProject((e.target as HTMLInputElement).value)}
         class="brand-name-input"
       />
     </div>
@@ -145,31 +124,29 @@
     <button
       type="button"
       onclick={() => {
-        const next = !showTemplateModal;
         closeAllModals();
-        showTemplateModal = next;
+        editor.showProjectLibrary = true;
       }}
       class="studio-btn top-pill-btn"
-      title="Switch starter project or import JSON"
+      title="Open, create, duplicate, import or export projects"
     >
-      Starter ▾
+      🗂 Projects
     </button>
 
     <div class="divider"></div>
 
-    <div class="status-indicator">
-      {#if editor.isSaving}
-        <span class="status status--saving">
-          <span class="status-dot status-dot--pulse"></span>
-          Saving...
-        </span>
-      {:else}
-        <span class="status status--saved">
-          <span class="status-dot"></span>
-          {editor.lastSavedAt}
-        </span>
-      {/if}
-    </div>
+    <button
+      type="button"
+      class="status-indicator status-btn"
+      aria-live="polite"
+      title={editor.saveError ?? 'Autosaved to this browser'}
+      onclick={() => (editor.saveStatus === 'error' ? editor.saveNow() : (editor.showProjectLibrary = true))}
+    >
+      <span class="status {editor.saveStatus === 'error' ? 'status--error' : editor.saveStatus === 'saving' || editor.saveStatus === 'dirty' ? 'status--saving' : 'status--saved'}">
+        <span class="status-dot {editor.saveStatus === 'saving' ? 'status-dot--pulse' : ''}"></span>
+        {saveLabel}
+      </span>
+    </button>
 
     <!-- Undo / Redo + Snapshots -->
     <div class="studio-btn-group">
@@ -194,14 +171,14 @@
       <button
         type="button"
         onclick={() => {
-          const next = !showSnapshotsModal;
           closeAllModals();
-          showSnapshotsModal = next;
+          editor.showProjectLibrary = true;
         }}
-        title="Project Snapshots & Restore"
+        title="Version history"
+        aria-label="Version history ({editor.snapshots.length} saved versions)"
         class="studio-btn"
       >
-        🕒 ({editor.snapshots.length})
+        🕒 {editor.snapshots.length}
       </button>
     </div>
   </div>
@@ -332,131 +309,21 @@
       <span>{editor.isInteractiveMode ? '✏️ Back to Editor' : '👁 Preview'}</span>
     </button>
 
-    <!-- Export for AI Agents ZIP Button -->
+    <!-- Export build spec for Claude Code (any stack) -->
     <button
       type="button"
-      onclick={handleExport}
-      disabled={isExporting}
+      onclick={() => {
+        closeAllModals();
+        editor.showExportDialog = true;
+      }}
       class="studio-btn studio-btn--primary export-btn"
+      title="Export a build spec for Claude Code (⌘E)"
     >
       <span>⚡</span>
-      <span>{isExporting ? 'Generating ZIP...' : 'Export for AI Agents'}</span>
+      <span>Export for Claude Code</span>
     </button>
   </div>
 </header>
-
-{#if showTemplateModal}
-  <div class="topbar-modal" role="dialog" aria-label="Project Templates and Import">
-    <div class="topbar-modal__header">
-      <span class="topbar-modal__title">Project Templates & Blueprint Import</span>
-      <button type="button" class="studio-btn" onclick={() => (showTemplateModal = false)}>✕</button>
-    </div>
-    <div class="topbar-modal__body">
-      <div class="template-grid">
-        <div class="template-card">
-          <div class="template-card__title">Acme Cloud SaaS (5-Route Starter)</div>
-          <p class="template-card__desc">Full Google MD3 SaaS marketing site + interactive analytics dashboard & settings.</p>
-          <button
-            type="button"
-            class="studio-btn studio-btn--primary"
-            onclick={() => {
-              editor.loadStarterTemplate('acme-saas');
-              showTemplateModal = false;
-            }}
-          >
-            Load Acme SaaS Starter
-          </button>
-        </div>
-        <div class="template-card">
-          <div class="template-card__title">Blank MD3 Project</div>
-          <p class="template-card__desc">Clean slate with shared Navbar/Footer layout and Google Material Design 3 tokens.</p>
-          <button
-            type="button"
-            class="studio-btn"
-            style="border: 1px solid var(--md-sys-color-outline-variant);"
-            onclick={() => {
-              editor.loadStarterTemplate('blank');
-              showTemplateModal = false;
-            }}
-          >
-            Start Blank Project
-          </button>
-        </div>
-      </div>
-
-      <div class="import-box">
-        <label for="import-blueprint-json" class="import-label">Or Paste `project.blueprint.json` to Import:</label>
-        <textarea
-          id="import-blueprint-json"
-          rows={3}
-          bind:value={importJsonText}
-          placeholder="Paste serialized blueprint JSON here..."
-          class="studio-textarea"
-        ></textarea>
-        {#if importError}
-          <div class="import-error">{importError}</div>
-        {/if}
-        <div style="display: flex; justify-content: space-between; margin-top: 0.5rem;">
-          <button type="button" class="studio-btn" onclick={() => editor.downloadBlueprintJson()}>
-            ⬇ Download Current JSON
-          </button>
-          <button type="button" class="studio-btn studio-btn--primary" onclick={handleImportJson}>
-            Import JSON Blueprint
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-{/if}
-
-{#if showSnapshotsModal}
-  <div class="topbar-modal" role="dialog" aria-label="Version Snapshots">
-    <div class="topbar-modal__header">
-      <span class="topbar-modal__title">Version Snapshots ({editor.snapshots.length})</span>
-      <button type="button" class="studio-btn" onclick={() => (showSnapshotsModal = false)}>✕</button>
-    </div>
-    <div class="topbar-modal__body">
-      <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
-        <input
-          type="text"
-          bind:value={snapshotLabel}
-          placeholder="Snapshot label (e.g. Before Pricing Redesign)"
-          aria-label="Snapshot label"
-          class="studio-input"
-        />
-        <button type="button" class="studio-btn studio-btn--primary" onclick={handleSaveSnapshot}>
-          + Save Snapshot
-        </button>
-      </div>
-      {#if editor.snapshots.length === 0}
-        <p style="font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); margin: 0;">
-          No named snapshots saved yet. Create a checkpoint anytime to restore with one click.
-        </p>
-      {:else}
-        <div class="snapshot-list">
-          {#each editor.snapshots as snap (snap.id)}
-            <div class="snapshot-row">
-              <div>
-                <div style="font-size: 0.75rem; font-weight: 600;">{snap.label}</div>
-                <div style="font-size: 0.6875rem; color: var(--md-sys-color-on-surface-variant);">{snap.createdAt}</div>
-              </div>
-              <button
-                type="button"
-                class="studio-btn studio-btn--primary"
-                onclick={() => {
-                  editor.restoreSnapshot(snap.id);
-                  showSnapshotsModal = false;
-                }}
-              >
-                Restore
-              </button>
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </div>
-  </div>
-{/if}
 
 {#if showPreflightModal}
   <div class="topbar-modal" role="dialog" aria-label="Preflight Audit Report">
@@ -602,6 +469,19 @@
     display: flex;
     align-items: center;
     gap: 0.375rem;
+  }
+  .status-btn {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+  }
+  .status--error {
+    color: var(--md-sys-color-error);
+    font-weight: 700;
+  }
+  .status--error .status-dot {
+    background-color: var(--md-sys-color-error);
   }
   .status--saved {
     color: var(--md-sys-color-success);

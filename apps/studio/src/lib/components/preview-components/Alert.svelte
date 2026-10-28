@@ -11,7 +11,7 @@
     tone = 'info',
     title = 'System Notice',
     message = '',
-    dismissible = true,
+    dismissible = false,
     style = ''
   }: Props = $props();
 
@@ -19,7 +19,7 @@
 
   const toneStyles: Record<string, string> = {
     info: 'background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container);',
-    success: 'background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container);',
+    success: 'background-color: var(--md-sys-color-success-container, #C4EED0); color: var(--md-sys-color-on-success-container, #072711);',
     warning: 'background-color: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container);',
     error: 'background-color: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container);'
   };

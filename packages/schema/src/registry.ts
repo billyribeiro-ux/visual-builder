@@ -29,4 +29,13 @@ export interface ComponentManifest<TProps = Record<string, any>> {
   slots: ComponentSlot[];
   allowedParents?: string[];
   isSection?: boolean;
+  /** Optional inspector overrides (labels, control types, enum options) per prop. */
+  propControls?: Record<string, PropControl>;
+}
+
+export interface PropControl {
+  label?: string;
+  type?: 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'color' | 'url';
+  options?: Array<{ value: string; label: string }>;
+  help?: string;
 }

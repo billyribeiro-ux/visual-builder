@@ -30,8 +30,103 @@ export interface GeneratedProject {
   files: Record<string, string>;
 }
 
+/* ==========================================================================
+   Path safety: page paths and asset localPaths become ZIP entry paths, so
+   they must never contain `..`, absolute prefixes, or unexpected characters.
+   ========================================================================== */
+
+/** SvelteKit param segment: [id], [[optional]], [...rest] (identifier chars only). */
+const DYNAMIC_SEGMENT_RE = /^(\[\[[a-z_][a-z0-9_]*\]\]|\[(\.\.\.)?[a-z_][a-z0-9_]*\])$/;
+
+function normalizeRouteSegment(raw: string): string {
+  const seg = raw.trim().toLowerCase();
+  if (!seg || seg === '.' || seg === '..') return '';
+  if (DYNAMIC_SEGMENT_RE.test(seg)) return seg;
+  const hasBrackets = /[[\]]/.test(seg);
+  let cleaned = seg.replace(/[^a-z0-9\-_[\]]+/g, '-');
+  if (hasBrackets) {
+    // Keep a single well-formed [param] if present, otherwise strip brackets entirely.
+    const inner = /^\[+([a-z_][a-z0-9_]*)\]+$/.exec(cleaned.replace(/-/g, '_'));
+    cleaned = inner ? `[${inner[1]}]` : cleaned.replace(/[[\]]/g, '');
+  }
+  cleaned = cleaned.replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '');
+  return cleaned;
+}
+
+/**
+ * Normalizes a page path into a safe SvelteKit route directory (no leading or
+ * trailing slash; '' means the root route). Lowercases segments, collapses
+ * `//`, drops `.` / `..` segments, and restricts each segment to
+ * `[a-z0-9-_[\]]` (well-formed SvelteKit dynamic segments are preserved).
+ */
+export function normalizeRoutePath(path: string): string {
+  return String(path ?? '')
+    .replace(/\\/g, '/')
+    .split(/[?#]/)[0]
+    .split('/')
+    .map(normalizeRouteSegment)
+    .filter(Boolean)
+    .join('/');
+}
+
+function normalizeAssetSegment(raw: string): string {
+  const seg = raw.trim();
+  if (!seg || seg === '.' || seg === '..') return '';
+  return seg
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^[.-]+/, '') // no hidden files / leading dashes
+    .replace(/[.-]+$/, '');
+}
+
+/**
+ * Normalizes a static asset path (relative to `static/`). Same rules as routes,
+ * except case and `.` inside file names are preserved (e.g. `assets/Logo.svg`).
+ */
+export function normalizeAssetPath(path: string): string {
+  return String(path ?? '')
+    .replace(/\\/g, '/')
+    .split(/[?#]/)[0]
+    .split('/')
+    .map(normalizeAssetSegment)
+    .filter(Boolean)
+    .join('/');
+}
+
+/**
+ * Deterministically de-duplicates normalized paths: the first occurrence keeps
+ * its path, later collisions get `-2`, `-3`, ... appended to the last segment
+ * (before the file extension when `keepExtension` is set).
+ */
+export function dedupePaths(paths: string[], keepExtension = false): string[] {
+  const used = new Set<string>();
+  return paths.map((path) => {
+    const key = path.toLowerCase();
+    if (!used.has(key)) {
+      used.add(key);
+      return path;
+    }
+    const base = path || 'index';
+    const slash = base.lastIndexOf('/');
+    const dir = slash === -1 ? '' : base.slice(0, slash + 1);
+    const last = base.slice(slash + 1);
+    const dot = keepExtension ? last.lastIndexOf('.') : -1;
+    const stem = dot > 0 ? last.slice(0, dot) : last;
+    const ext = dot > 0 ? last.slice(dot) : '';
+    for (let n = 2; ; n++) {
+      const candidate = `${dir}${stem}-${n}${ext}`;
+      if (!used.has(candidate.toLowerCase())) {
+        used.add(candidate.toLowerCase());
+        return candidate;
+      }
+    }
+  });
+}
+
 export function generateFullExport(blueprint: ProjectBlueprint): GeneratedProject {
   const files: Record<string, string> = {};
+  const routeDirs = dedupePaths(blueprint.pages.map((p) => normalizeRoutePath(p.path)));
+  const routeUrl = (idx: number) => `/${routeDirs[idx]}`;
 
   // 1. Root Agent & Human Documentation
   files['AGENTS.md'] = generateAgentsMarkdown(blueprint);
@@ -48,8 +143,8 @@ export function generateFullExport(blueprint: ProjectBlueprint): GeneratedProjec
   // 2. Machine-Readable Blueprint Files
   files['blueprint/project.blueprint.json'] = JSON.stringify(blueprint, null, 2);
   files['blueprint/routes.json'] = JSON.stringify(
-    blueprint.pages.map((p) => ({
-      path: p.path,
+    blueprint.pages.map((p, idx) => ({
+      path: routeUrl(idx),
       slug: p.slug,
       title: p.title,
       layoutId: p.layoutId || null
@@ -86,9 +181,9 @@ export function generateFullExport(blueprint: ProjectBlueprint): GeneratedProjec
   files['acceptance/acceptance-criteria.md'] = generateAcceptanceCriteria(blueprint);
   files['acceptance/scenarios.json'] = JSON.stringify(
     {
-      scenarios: blueprint.pages.map((p) => ({
+      scenarios: blueprint.pages.map((p, idx) => ({
         id: `route-${p.slug}`,
-        path: p.path,
+        path: routeUrl(idx),
         expectedTitle: p.title,
         expectedStatus: 200
       }))
@@ -108,18 +203,12 @@ export function generateFullExport(blueprint: ProjectBlueprint): GeneratedProjec
   files[`${appPrefix}src/routes/+layout.svelte`] = generateRootLayout(blueprint);
   files[`${appPrefix}src/routes/+error.svelte`] = generateErrorRoute();
 
-  // Add individual page routes
-  for (const page of blueprint.pages) {
-    const routePath = page.path.replace(/^\//, '');
-    if (!routePath) {
-      files[`${appPrefix}src/routes/+page.svelte`] = generatePageRoute(page, blueprint);
-    } else {
-      files[`${appPrefix}src/routes/${routePath}/+page.svelte`] = generatePageRoute(
-        page,
-        blueprint
-      );
-    }
-  }
+  // Add individual page routes (normalized + de-duplicated; never overwrite)
+  blueprint.pages.forEach((page, idx) => {
+    const routeDir = routeDirs[idx];
+    const routeFile = routeDir ? `src/routes/${routeDir}/+page.svelte` : 'src/routes/+page.svelte';
+    files[`${appPrefix}${routeFile}`] = generatePageRoute(page, blueprint);
+  });
 
   // Add library components
   const components = getComponentSources();
@@ -128,12 +217,17 @@ export function generateFullExport(blueprint: ProjectBlueprint): GeneratedProjec
   }
 
   // Add bundled project SVG / media assets into generated-app/static/
-  for (const asset of blueprint.assets || []) {
-    if (asset.svgContent && asset.localPath) {
-      const cleanRel = asset.localPath.replace(/^\//, '');
-      files[`${appPrefix}static/${cleanRel}`] = asset.svgContent;
-    }
-  }
+  const svgAssets = (blueprint.assets || [])
+    .filter((a) => a.svgContent && a.localPath)
+    .map((a) => ({ content: a.svgContent as string, rel: normalizeAssetPath(a.localPath) }))
+    .filter((a) => a.rel);
+  const assetPaths = dedupePaths(
+    svgAssets.map((a) => a.rel),
+    true
+  );
+  svgAssets.forEach((asset, idx) => {
+    files[`${appPrefix}static/${assetPaths[idx]}`] = asset.content;
+  });
 
   // 5. Parity and Audit Report
   files['reference/preview-parity-report.json'] = JSON.stringify(
@@ -142,7 +236,7 @@ export function generateFullExport(blueprint: ProjectBlueprint): GeneratedProjec
       pageCount: blueprint.pages.length,
       componentCount: Object.keys(components).length,
       parityStatus: 'VERIFIED',
-      generatedAt: '2026-10-25T12:00:00.000Z'
+      generatedAt: '2026-10-28T12:00:00.000Z'
     },
     null,
     2

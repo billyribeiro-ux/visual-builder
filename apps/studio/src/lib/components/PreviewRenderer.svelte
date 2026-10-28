@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { onDestroy, untrack } from 'svelte';
   import type { BlueprintNode, InteractionRule } from '@app-viz/schema';
   import { cssPropertiesToString, resolveEffectiveStyles } from '@app-viz/engine';
+  import type { DropPosition, NodeQuickAction as QuickAction } from '../canvas/messages.js';
   import Container from './preview-components/Container.svelte';
   import Section from './preview-components/Section.svelte';
   import Grid from './preview-components/Grid.svelte';
@@ -28,24 +30,8 @@
   import AuthCard from './preview-components/AuthCard.svelte';
   import PreviewRenderer from './PreviewRenderer.svelte';
 
-  export type NodeQuickAction =
-    | 'up'
-    | 'down'
-    | 'duplicate'
-    | 'delete'
-    | 'wrap-section'
-    | 'wrap-container'
-    | 'unwrap'
-    | 'copy'
-    | 'paste'
-    | 'copy-style'
-    | 'paste-style'
-    | 'reset-style'
-    | 'save-symbol'
-    | 'hide'
-    | 'align-left'
-    | 'align-center'
-    | 'align-right';
+  /** Re-exported for backwards compatibility; the canonical list lives in `canvas/messages.ts`. */
+  export type NodeQuickAction = QuickAction;
 
   interface Props {
     node: BlueprintNode;
@@ -59,10 +45,11 @@
     onDropItem?: (
       payload: { componentType?: string; nodeId?: string },
       targetNodeId: string,
-      position: 'before' | 'inside' | 'after'
+      position: DropPosition
     ) => void;
     onContextMenuNode?: (node: BlueprintNode, x: number, y: number) => void;
-    onInlinePropEdit?: (nodeId: string, propKey: string, value: string) => void;
+    /** `final` is true for the committed value sent when the input loses focus. */
+    onInlinePropEdit?: (nodeId: string, propKey: string, value: string, final?: boolean) => void;
     onResizeNodeStyle?: (nodeId: string, styles: Record<string, string>) => void;
     onTriggerInteraction?: (rule: InteractionRule, sourceNode: BlueprintNode) => void;
   }
@@ -84,6 +71,9 @@
   }: Props = $props();
 
   const isSelected = $derived(selectedNodeId === node.id);
+  const isLocked = $derived(node.locked === true);
+  /** Components only navigate in interactive mode; in design mode a click just selects. */
+  const componentNavigate = $derived(isInteractiveMode ? onNavigate : undefined);
   const effectiveCss = $derived(resolveEffectiveStyles(node.styles, activeBreakpoint));
   const inlineStyle = $derived(cssPropertiesToString(effectiveCss));
   const sectionInnerLayoutStyle = $derived(
@@ -121,6 +111,23 @@
       : inlineStyle
   );
 
+  /**
+   * Canvas wrapper semantics. INTERACTIVE mode: a plain element (the real app controls are the
+   * tab stops). DESIGN mode: one focusable `group` per node (never role=button, because nodes
+   * contain real buttons/links).
+   */
+  const wrapperA11yAttrs = $derived<Record<string, string | number | undefined>>(
+    isInteractiveMode
+      ? {}
+      : {
+          role: 'group',
+          tabindex: 0,
+          'aria-label': `${node.name}${isLocked ? ' (locked)' : ''}`,
+          'aria-roledescription': 'canvas element',
+          'aria-current': isSelected ? 'true' : undefined
+        }
+  );
+
   const editableTextProps = $derived.by<Array<{ key: string; val: string }>>(() => {
     const entries: Array<{ key: string; val: string }> = [];
     const skipKeys = new Set([
@@ -139,7 +146,14 @@
       'actionHref',
       'redirectHref',
       'href',
-      'logoUrl'
+      'logoUrl',
+      'align',
+      'textAlign',
+      'direction',
+      'justify',
+      'alignItems',
+      'justifyItems',
+      'surfaceTone'
     ]);
     for (const [k, v] of Object.entries(node.props || {})) {
       if (typeof v === 'string' && !skipKeys.has(k)) {
@@ -149,10 +163,185 @@
     return entries;
   });
 
-  let dropZone = $state<'before' | 'inside' | 'after' | null>(null);
+  let dropZone = $state<DropPosition | null>(null);
   let showInlineEditor = $state(false);
   let isResizingPadding = $state(false);
   let livePaddingPx = $state<number | null>(null);
+
+  const inlineEditorOpen = $derived(
+    showInlineEditor && isSelected && !isInteractiveMode && !isLocked && editableTextProps.length > 0
+  );
+
+  /* ---------------------------------------------------------------------------------------- */
+  /* Inline text editor: while an input is focused we keep a local draft and never rebind its */
+  /* value from props (late SYNC_STATE echoes would otherwise reset the caret mid-typing).    */
+  /* ---------------------------------------------------------------------------------------- */
+
+  let focusedPropKey = $state<string | null>(null);
+  let draftValue = $state('');
+
+  function inlineInputValue(key: string, propValue: string): string {
+    return focusedPropKey === key ? draftValue : propValue;
+  }
+
+  function handleInlineFocus(key: string, e: FocusEvent) {
+    draftValue = (e.currentTarget as HTMLInputElement).value;
+    focusedPropKey = key;
+  }
+
+  function handleInlineInput(key: string, e: Event) {
+    if (isLocked) return;
+    const value = (e.currentTarget as HTMLInputElement).value;
+    draftValue = value;
+    onInlinePropEdit?.(node.id, key, value, false);
+  }
+
+  function handleInlineBlur(key: string, propValue: string, e: FocusEvent) {
+    const value = (e.currentTarget as HTMLInputElement).value;
+    if (focusedPropKey === key) focusedPropKey = null;
+    if (!isLocked && value !== propValue) {
+      onInlinePropEdit?.(node.id, key, value, true);
+    }
+  }
+
+  function handleInlineKeyDown(e: KeyboardEvent) {
+    e.stopPropagation();
+    const input = e.currentTarget as HTMLInputElement;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      input.blur();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      input.blur();
+      showInlineEditor = false;
+    }
+  }
+
+  // Close the inline editor whenever it can no longer be used (deselected, locked, interactive).
+  $effect(() => {
+    if (!isSelected || isLocked || isInteractiveMode) {
+      untrack(() => {
+        showInlineEditor = false;
+        focusedPropKey = null;
+      });
+    }
+  });
+
+  /* ---------------------------------------------------------------------------------------- */
+  /* Padding drag handle (pointer events + pointer capture, always cleaned up)                */
+  /* ---------------------------------------------------------------------------------------- */
+
+  let stopPaddingResize: (() => void) | null = null;
+
+  function readStartPadding(): number {
+    const currentRaw = String(effectiveCss.paddingBottom || effectiveCss.paddingTop || '24px');
+    const parsedStart = parseInt(currentRaw, 10);
+    return Number.isFinite(parsedStart) ? parsedStart : 24;
+  }
+
+  function emitPadding(nodeId: string, px: number) {
+    onResizeNodeStyle?.(nodeId, { paddingTop: `${px}px`, paddingBottom: `${px}px` });
+  }
+
+  function startPaddingResize(e: PointerEvent) {
+    if (isInteractiveMode || isLocked || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    stopPaddingResize?.();
+
+    const handle = e.currentTarget as HTMLElement;
+    const pointerId = e.pointerId;
+    const nodeId = node.id;
+    const startY = e.clientY;
+    const startPx = readStartPadding();
+    let pendingPx: number | null = null;
+    let frame = 0;
+
+    isResizingPadding = true;
+    livePaddingPx = startPx;
+
+    try {
+      handle.setPointerCapture(pointerId);
+    } catch {
+      // Pointer may already be released (e.g. synthetic events); listeners still clean up.
+    }
+
+    function flush() {
+      frame = 0;
+      if (pendingPx === null) return;
+      const px = pendingPx;
+      pendingPx = null;
+      emitPadding(nodeId, px);
+    }
+
+    function onMove(ev: PointerEvent) {
+      if (ev.pointerId !== pointerId) return;
+      const delta = Math.round((ev.clientY - startY) / 2);
+      const nextPx = Math.max(0, Math.min(200, startPx + delta));
+      if (nextPx === livePaddingPx) return;
+      livePaddingPx = nextPx;
+      pendingPx = nextPx;
+      if (!frame) frame = requestAnimationFrame(flush);
+    }
+
+    function onEnd(ev: PointerEvent) {
+      if (ev.pointerId !== pointerId) return;
+      cleanup(true);
+    }
+
+    function cleanup(commitPending: boolean) {
+      handle.removeEventListener('pointermove', onMove);
+      handle.removeEventListener('pointerup', onEnd);
+      handle.removeEventListener('pointercancel', onEnd);
+      handle.removeEventListener('lostpointercapture', onEnd);
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+      if (commitPending) flush();
+      pendingPx = null;
+      try {
+        if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
+      } catch {
+        // Element may be detached already.
+      }
+      isResizingPadding = false;
+      if (stopPaddingResize === cancel) stopPaddingResize = null;
+    }
+
+    function cancel() {
+      cleanup(false);
+    }
+
+    handle.addEventListener('pointermove', onMove);
+    handle.addEventListener('pointerup', onEnd);
+    handle.addEventListener('pointercancel', onEnd);
+    handle.addEventListener('lostpointercapture', onEnd);
+    stopPaddingResize = cancel;
+  }
+
+  function handlePaddingKeyDown(e: KeyboardEvent) {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (isInteractiveMode || isLocked) return;
+    const step = e.shiftKey ? 16 : 4;
+    const base = livePaddingPx ?? readStartPadding();
+    const nextPx = Math.max(0, Math.min(200, base + (e.key === 'ArrowDown' ? step : -step)));
+    livePaddingPx = nextPx;
+    emitPadding(node.id, nextPx);
+  }
+
+  // Abort an in-flight drag if the handle disappears (deselect / lock / mode switch)…
+  $effect(() => {
+    if (!isSelected || isLocked || isInteractiveMode) {
+      untrack(() => stopPaddingResize?.());
+    }
+  });
+  // …and always on destroy.
+  onDestroy(() => stopPaddingResize?.());
+
+  /* ---------------------------------------------------------------------------------------- */
+  /* Selection, context menu, drag & drop                                                     */
+  /* ---------------------------------------------------------------------------------------- */
 
   function handleClick(e: MouseEvent) {
     if (!isInteractiveMode) {
@@ -180,45 +369,13 @@
   }
 
   function handleDblClick(e: MouseEvent) {
-    if (isInteractiveMode || node.locked) return;
+    if (isInteractiveMode || isLocked) return;
     e.preventDefault();
     e.stopPropagation();
     onSelectNode?.(node.id);
     if (editableTextProps.length > 0) {
       showInlineEditor = true;
     }
-  }
-
-  function startPaddingResize(e: MouseEvent) {
-    if (isInteractiveMode || node.locked) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const startY = e.clientY;
-    const currentRaw = String(effectiveCss.paddingBottom || effectiveCss.paddingTop || '24px');
-    const parsedStart = parseInt(currentRaw, 10);
-    const startPx = Number.isFinite(parsedStart) ? parsedStart : 24;
-
-    isResizingPadding = true;
-    livePaddingPx = startPx;
-
-    function onMove(moveEvent: MouseEvent) {
-      const delta = Math.round((moveEvent.clientY - startY) / 2);
-      const nextPx = Math.max(0, Math.min(200, startPx + delta));
-      livePaddingPx = nextPx;
-      onResizeNodeStyle?.(node.id, {
-        paddingTop: `${nextPx}px`,
-        paddingBottom: `${nextPx}px`
-      });
-    }
-
-    function onUp() {
-      isResizingPadding = false;
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    }
-
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
   }
 
   function handleContextMenu(e: MouseEvent) {
@@ -230,7 +387,10 @@
   }
 
   function handleKeyDown(e: KeyboardEvent) {
-    if (!isInteractiveMode && (e.key === 'Enter' || e.key === ' ')) {
+    if (isInteractiveMode) return;
+    // Only react when the wrapper itself is focused, never for keys typed in nested controls.
+    if (e.target !== e.currentTarget) return;
+    if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       e.stopPropagation();
       onSelectNode?.(node.id);
@@ -238,14 +398,15 @@
   }
 
   function handleDragStart(e: DragEvent) {
-    if (isInteractiveMode || node.locked) return;
+    if (isInteractiveMode || isLocked) return;
     e.stopPropagation();
     e.dataTransfer?.setData('application/x-app-viz-node-id', node.id);
     if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
   }
 
   function handleDragOver(e: DragEvent) {
-    if (isInteractiveMode) return;
+    // Locked nodes are not drop targets: let the event bubble to the nearest unlocked ancestor.
+    if (isInteractiveMode || isLocked) return;
     e.preventDefault();
     e.stopPropagation();
     const el = e.currentTarget as HTMLElement;
@@ -263,12 +424,13 @@
   }
 
   function handleDragLeave(e: DragEvent) {
+    if (isLocked) return;
     e.stopPropagation();
     dropZone = null;
   }
 
   function handleDrop(e: DragEvent) {
-    if (isInteractiveMode) return;
+    if (isInteractiveMode || isLocked) return;
     e.preventDefault();
     e.stopPropagation();
     const targetZone = dropZone || (isContainer ? 'inside' : 'after');
@@ -313,7 +475,9 @@
     <div
       data-node-id={node.id}
       data-node-type={node.componentType}
-      draggable={!isInteractiveMode && !node.locked && !showInlineEditor}
+      data-locked={isLocked ? 'true' : undefined}
+      {...wrapperA11yAttrs}
+      draggable={!isInteractiveMode && !isLocked && !inlineEditorOpen}
       ondragstart={handleDragStart}
       ondragover={handleDragOver}
       ondragleave={handleDragLeave}
@@ -322,10 +486,7 @@
       ondblclick={handleDblClick}
       oncontextmenu={handleContextMenu}
       onkeydown={handleKeyDown}
-      role="button"
-      tabindex="0"
-      aria-label={node.name}
-      class="preview-node {!isInteractiveMode ? 'preview-node--editable' : ''} {isSelected && !isInteractiveMode ? 'preview-node--selected' : ''} {dropZone ? `preview-node--drop-${dropZone}` : ''} {node.customClasses || ''}"
+      class="preview-node {!isInteractiveMode ? 'preview-node--editable' : ''} {isSelected && !isInteractiveMode ? 'preview-node--selected' : ''} {isLocked && !isInteractiveMode ? 'preview-node--locked' : ''} {dropZone ? `preview-node--drop-${dropZone}` : ''} {node.customClasses || ''}"
       style={outerWrapperStyle}
     >
       {#if dropZone && !isInteractiveMode}
@@ -335,65 +496,71 @@
       {/if}
 
       {#if isSelected && !isInteractiveMode}
-        <div class="preview-node__toolbar">
+        <div class="preview-node__toolbar {isLocked ? 'preview-node__toolbar--locked' : ''}">
+          {#if isLocked}
+            <span class="preview-node__lock" title="Locked — editing is disabled" aria-label="Locked">🔒</span>
+          {/if}
           <span class="preview-node__badge-text">{node.name}</span>
-          {#if onNodeAction && !node.locked}
+          {#if onNodeAction}
             <div class="preview-node__actions">
-              {#if editableTextProps.length > 0}
+              {#if !isLocked}
+                {#if editableTextProps.length > 0}
+                  <button
+                    type="button"
+                    class="preview-node__action-btn"
+                    title="Inline Text Edit (Double-Click)"
+                    aria-label="Inline edit text"
+                    aria-pressed={inlineEditorOpen}
+                    onclick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      showInlineEditor = !showInlineEditor;
+                    }}
+                  >✏️</button>
+                {/if}
                 <button
                   type="button"
                   class="preview-node__action-btn"
-                  title="Inline Text Edit (Double-Click)"
-                  aria-label="Inline edit text"
-                  onclick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    showInlineEditor = !showInlineEditor;
-                  }}
-                >✏️</button>
+                  title="Align Left"
+                  aria-label="Align left"
+                  onclick={(e) => triggerAction(e, 'align-left')}
+                >⬅</button>
+                <button
+                  type="button"
+                  class="preview-node__action-btn"
+                  title="Center Content / Element"
+                  aria-label="Center content"
+                  onclick={(e) => triggerAction(e, 'align-center')}
+                >⬌</button>
+                <button
+                  type="button"
+                  class="preview-node__action-btn"
+                  title="Align Right"
+                  aria-label="Align right"
+                  onclick={(e) => triggerAction(e, 'align-right')}
+                >➡</button>
+                <button
+                  type="button"
+                  class="preview-node__action-btn"
+                  title="Move Up (Alt+↑)"
+                  aria-label="Move node up"
+                  onclick={(e) => triggerAction(e, 'up')}
+                >↑</button>
+                <button
+                  type="button"
+                  class="preview-node__action-btn"
+                  title="Move Down (Alt+↓)"
+                  aria-label="Move node down"
+                  onclick={(e) => triggerAction(e, 'down')}
+                >↓</button>
+                <button
+                  type="button"
+                  class="preview-node__action-btn"
+                  title="Wrap in Section"
+                  aria-label="Wrap node in section"
+                  onclick={(e) => triggerAction(e, 'wrap-section')}
+                >📦</button>
               {/if}
-              <button
-                type="button"
-                class="preview-node__action-btn"
-                title="Align Left"
-                aria-label="Align left"
-                onclick={(e) => triggerAction(e, 'align-left')}
-              >⬅</button>
-              <button
-                type="button"
-                class="preview-node__action-btn"
-                title="Center Content / Element"
-                aria-label="Center content"
-                onclick={(e) => triggerAction(e, 'align-center')}
-              >⬌</button>
-              <button
-                type="button"
-                class="preview-node__action-btn"
-                title="Align Right"
-                aria-label="Align right"
-                onclick={(e) => triggerAction(e, 'align-right')}
-              >➡</button>
-              <button
-                type="button"
-                class="preview-node__action-btn"
-                title="Move Up (Alt+↑)"
-                aria-label="Move node up"
-                onclick={(e) => triggerAction(e, 'up')}
-              >↑</button>
-              <button
-                type="button"
-                class="preview-node__action-btn"
-                title="Move Down (Alt+↓)"
-                aria-label="Move node down"
-                onclick={(e) => triggerAction(e, 'down')}
-              >↓</button>
-              <button
-                type="button"
-                class="preview-node__action-btn"
-                title="Wrap in Section"
-                aria-label="Wrap node in section"
-                onclick={(e) => triggerAction(e, 'wrap-section')}
-              >📦</button>
               <button
                 type="button"
                 class="preview-node__action-btn"
@@ -401,18 +568,20 @@
                 aria-label="Duplicate node"
                 onclick={(e) => triggerAction(e, 'duplicate')}
               >⧉</button>
-              <button
-                type="button"
-                class="preview-node__action-btn preview-node__action-btn--danger"
-                title="Delete (Backspace)"
-                aria-label="Delete node"
-                onclick={(e) => triggerAction(e, 'delete')}
-              >✕</button>
+              {#if !isLocked}
+                <button
+                  type="button"
+                  class="preview-node__action-btn preview-node__action-btn--danger"
+                  title="Delete (Backspace)"
+                  aria-label="Delete node"
+                  onclick={(e) => triggerAction(e, 'delete')}
+                >✕</button>
+              {/if}
             </div>
           {/if}
         </div>
 
-        {#if showInlineEditor && editableTextProps.length > 0}
+        {#if inlineEditorOpen}
           <!-- On-Canvas Inline Quick Text Editor Popover -->
           <div
             class="inline-editor-popover"
@@ -436,11 +605,13 @@
                   <span class="inline-editor-label">{item.key}</span>
                   <input
                     type="text"
-                    value={item.val}
+                    value={inlineInputValue(item.key, item.val)}
                     onclick={(e) => e.stopPropagation()}
-                    onkeydown={(e) => e.stopPropagation()}
-                    oninput={(e) =>
-                      onInlinePropEdit?.(node.id, item.key, (e.target as HTMLInputElement).value)}
+                    ondblclick={(e) => e.stopPropagation()}
+                    onkeydown={handleInlineKeyDown}
+                    onfocus={(e) => handleInlineFocus(item.key, e)}
+                    oninput={(e) => handleInlineInput(item.key, e)}
+                    onblur={(e) => handleInlineBlur(item.key, item.val, e)}
                     class="inline-editor-input"
                   />
                 </label>
@@ -449,13 +620,15 @@
           </div>
         {/if}
 
-        {#if !node.locked}
-          <!-- Interactive On-Canvas Vertical Spacing Drag Handle -->
+        {#if !isLocked}
+          <!-- Interactive On-Canvas Vertical Spacing Drag Handle (drag or ↑/↓ keys) -->
           <button
             type="button"
-            class="resize-padding-handle"
-            title="Drag vertically to resize top & bottom padding"
-            onmousedown={startPaddingResize}
+            class="resize-padding-handle {isResizingPadding ? 'resize-padding-handle--active' : ''}"
+            title="Drag vertically (or use ↑/↓) to resize top & bottom padding"
+            aria-label="Resize vertical padding"
+            onpointerdown={startPaddingResize}
+            onkeydown={handlePaddingKeyDown}
             onclick={(e) => e.stopPropagation()}
           >
             ↕ {isResizingPadding && livePaddingPx !== null
@@ -587,7 +760,7 @@
           badgeText={node.props.badgeText}
           align={node.props.align}
           style={inlineStyle}
-          {onNavigate}
+          onNavigate={componentNavigate}
         />
       {:else if node.componentType === 'marketing/feature-grid'}
         <FeatureGrid
@@ -603,7 +776,7 @@
           sectionTitle={node.props.sectionTitle}
           sectionDescription={node.props.sectionDescription}
           plans={node.props.plans}
-          {onNavigate}
+          onNavigate={componentNavigate}
         />
       {:else if node.componentType === 'marketing/faq-accordion'}
         <FaqAccordion
@@ -625,7 +798,7 @@
           primaryCtaHref={node.props.primaryCtaHref}
           secondaryCtaText={node.props.secondaryCtaText}
           secondaryCtaHref={node.props.secondaryCtaHref}
-          {onNavigate}
+          onNavigate={componentNavigate}
         />
       {:else if node.componentType === 'marketing/stats-bar'}
         <StatsBar stats={node.props.stats} />
@@ -649,7 +822,7 @@
           tagline={node.props.tagline}
           copyright={node.props.copyright}
           columns={node.props.columns}
-          {onNavigate}
+          onNavigate={componentNavigate}
         />
       {:else if node.componentType === 'navigation/navbar'}
         <Navbar
@@ -658,13 +831,13 @@
           links={node.props.links}
           ctaText={node.props.ctaText}
           ctaHref={node.props.ctaHref}
-          {onNavigate}
+          onNavigate={componentNavigate}
         />
       {:else if node.componentType === 'app/dashboard-shell'}
         <DashboardShell
           title={node.props.title}
           activeNav={node.props.activeNav}
-          {onNavigate}
+          onNavigate={componentNavigate}
         >
           {#each node.children || [] as child (child.id)}
             <PreviewRenderer
@@ -705,14 +878,14 @@
           title={node.props.title}
           subtitle={node.props.subtitle}
           redirectHref={node.props.redirectHref}
-          {onNavigate}
+          onNavigate={componentNavigate}
         />
       {:else if node.componentType === 'ui/button'}
         <Button
           variant={node.props.variant}
           size={node.props.size}
           href={node.props.href}
-          {onNavigate}
+          onNavigate={componentNavigate}
         >
           {node.props.text || 'Button'}
         </Button>
@@ -730,7 +903,7 @@
           ctaHref={node.props.ctaHref}
           align={node.props.align}
           style={inlineStyle}
-          {onNavigate}
+          onNavigate={componentNavigate}
         />
       {:else if node.componentType === 'ui/alert'}
         <Alert
@@ -842,6 +1015,15 @@
     font-weight: 600;
     cursor: ns-resize;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    touch-action: none;
+    user-select: none;
+  }
+  .resize-padding-handle--active {
+    background: #146C2E;
+  }
+  .resize-padding-handle:focus-visible {
+    outline: 2px solid #FFFFFF;
+    outline-offset: 2px;
   }
   .preview-node {
     position: relative;
@@ -849,6 +1031,13 @@
   }
   .preview-node--editable:hover {
     outline: 1px dashed var(--md-sys-color-primary, #0B57D0);
+  }
+  .preview-node--editable:focus-visible {
+    outline: 2px dashed var(--md-sys-color-primary, #0B57D0);
+    outline-offset: 2px;
+  }
+  .preview-node--locked {
+    cursor: not-allowed;
   }
   .preview-node--selected {
     outline: 2px solid var(--md-sys-color-primary, #0B57D0) !important;
@@ -906,6 +1095,14 @@
     z-index: 30;
     white-space: nowrap;
     box-shadow: 0 -2px 10px rgba(11, 87, 208, 0.28);
+  }
+  .preview-node__toolbar--locked {
+    background-color: #5E5E62;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
+  }
+  .preview-node__lock {
+    font-size: 0.6875rem;
+    line-height: 1;
   }
   .preview-node__badge-text {
     padding-right: 4px;

@@ -1,5 +1,6 @@
 <script lang="ts">
   import Container from './Container.svelte';
+  import { sanitizeHref } from '../../canvas/messages.js';
 
   interface FooterColumn {
     title: string;
@@ -25,7 +26,7 @@
   }: Props = $props();
 
   function handleLink(e: MouseEvent, href: string) {
-    if (onNavigate && href.startsWith('/')) {
+    if (onNavigate && href.startsWith('/') && !href.startsWith('//')) {
       e.preventDefault();
       onNavigate(href);
     }
@@ -45,10 +46,11 @@
           <div style="font-weight: 700; font-size: 0.875rem; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em;">{col.title}</div>
           <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.625rem; font-size: 0.875rem;">
             {#each col.links as link, lIdx (lIdx)}
+              {@const safeHref = sanitizeHref(link.href)}
               <li>
                 <a
-                  href={link.href}
-                  onclick={(e) => handleLink(e, link.href)}
+                  href={safeHref}
+                  onclick={(e) => handleLink(e, safeHref)}
                   style="color: var(--md-sys-color-on-surface-variant); text-decoration: none;"
                 >
                   {link.label}

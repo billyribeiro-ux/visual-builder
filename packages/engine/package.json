@@ -20,7 +20,10 @@
     "@app-viz/schema": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.8.0",
-    "vitest": "^3.0.4"
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=26.13.0"
   }
 }

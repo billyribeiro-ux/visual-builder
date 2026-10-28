@@ -127,4 +127,10 @@ export type EditorCommand =
   | {
       type: 'LOAD_BLUEPRINT';
       blueprint: ProjectBlueprint;
+    }
+  | {
+      /** Applies several commands atomically as a single undo step. */
+      type: 'BATCH';
+      label?: string;
+      commands: EditorCommand[];
     };

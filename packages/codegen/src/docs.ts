@@ -7,10 +7,10 @@ export function generateAgentsMarkdown(blueprint: ProjectBlueprint): string {
 
   return `# AGENTS.md — Canonical AI Coding Agent Instructions
 
-> **Project Target**: Svelte 5.57.2 + SvelteKit 3.1.0 + Vite 8.0.12 + Google Material Design 3 (MD3)  
+> **Project Target**: Svelte 5.57.3 + SvelteKit 3.1.0 + Vite 8.3.5 + Google Material Design 3 (MD3)  
 > **Schema Version**: ${blueprint.schemaVersion}  
 > **Project Name**: ${blueprint.meta.name}  
-> **Generation Date**: 2026-10-25T12:00:00Z  
+> **Generation Date**: 2026-10-28T12:00:00Z  
 
 ## 1. Operating Instructions for Coding Agents
 You are an autonomous AI coding agent tasked with implementing, verifying, or extending this application.
@@ -60,7 +60,7 @@ exported-project/
 ├── acceptance/
 │   ├── acceptance-criteria.md         # Route-by-route acceptance criteria
 │   ├── scenarios.json                 # Machine-readable test scenarios
-│   └── dependency-compatibility.md    # Date-locked (2026-10-25) version matrix
+│   └── dependency-compatibility.md    # Date-locked (2026-10-28) version matrix
 └── generated-app/                     # Fully compilable SvelteKit 3 application
     ├── package.json
     ├── vite.config.ts
@@ -92,7 +92,7 @@ Any change you implement must:
 export function generateReadme(blueprint: ProjectBlueprint): string {
   return `# ${blueprint.meta.name}
 
-> Exported from Svelte Visual App Builder on 2026-10-25.
+> Exported from Svelte Visual App Builder on 2026-10-28.
 
 This is a self-contained, production-ready Svelte 5 and SvelteKit 3 application with an AI Agent handoff package.
 
@@ -132,7 +132,7 @@ export function generateImplementationSpec(blueprint: ProjectBlueprint): string 
 
 ## 1. Specification Overview
 - **Project Name**: ${blueprint.meta.name}
-- **Target Platform**: Svelte 5.57.2, SvelteKit 3.1.0, Vite 8.0.12, Node >=22.17.0
+- **Target Platform**: Svelte 5.57.3, SvelteKit 3.1.0, Vite 8.3.5, Node >=26.13.0
 - **Styling**: Google Material Design 3 (MD3) pure Vanilla CSS with CSS Custom Properties
 
 ## 2. State & Reactivity Architecture
@@ -251,15 +251,16 @@ ${sections}
 }
 
 export function generateDependencyCompatibility(): string {
-  return `# Dependency Compatibility Matrix (Cutoff: 2026-10-25)
+  return `# Dependency Compatibility Matrix (Cutoff: 2026-10-28)
 
 | Package | Version | Status | Notes |
 |---|---|---|---|
-| \`svelte\` | \`5.57.2\` | Locked Stable | Svelte 5 runes runtime |
+| \`svelte\` | \`5.57.3\` | Locked Stable | Svelte 5 runes runtime |
 | \`@sveltejs/kit\` | \`3.1.0\` | Locked Stable | Configured via \`vite.config.ts\`, \`#lib\` alias |
-| \`vite\` | \`8.0.12\` | Locked Stable | Required minimum for SvelteKit 3 |
-| \`@sveltejs/vite-plugin-svelte\` | \`7.0.0\` | Locked Stable | Vite 8 peer compatible |
-| \`typescript\` | \`6.0.2\` | Locked Stable | Required minimum for SvelteKit 3 |
+| \`vite\` | \`8.3.5\` | Locked Stable | Required minimum for SvelteKit 3 |
+| \`@sveltejs/vite-plugin-svelte\` | \`7.3.1\` | Locked Stable | Vite 8 peer compatible |
+| \`typescript\` | \`6.0.3\` | Locked Stable | Required minimum for SvelteKit 3 |
+| \`node\` | \`26.13.0\` | Active LTS | Node 26 LTS runtime |
 `;
 }
 
@@ -326,7 +327,7 @@ export function generateManifest(blueprint: ProjectBlueprint, fileCount: number)
       schemaVersion: blueprint.schemaVersion,
       projectId: blueprint.meta.id,
       projectName: blueprint.meta.name,
-      generatedAt: '2026-10-25T12:00:00.000Z',
+      generatedAt: '2026-10-28T12:00:00.000Z',
       framework: 'sveltekit-3',
       designSystem: 'google-md3-vanilla-css',
       fileCount,

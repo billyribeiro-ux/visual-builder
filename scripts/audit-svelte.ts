@@ -7,7 +7,7 @@ import { createDefaultAcmeSaaSProject } from '../packages/schema/src/index.js';
 import { generateFullExport } from '../packages/codegen/src/index.js';
 
 const ROOT_DIR = process.cwd();
-const SVELTE_VERSION = '5.57.2';
+const SVELTE_VERSION = '5.57.3';
 
 function findSvelteFiles(dir: string, fileList: string[] = []): string[] {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -56,7 +56,7 @@ function parseMcpOutput(output: string): { issues: string[]; suggestions: string
 
 async function auditRepository() {
   console.log('=================================================================');
-  console.log('🔍 SVELTE AI-TOOL (@sveltejs/mcp) AUDIT — Svelte 5.57.2');
+  console.log('🔍 SVELTE AI-TOOL (@sveltejs/mcp) AUDIT — Svelte 5.57.3');
   console.log('=================================================================');
 
   // 1. Audit all repository .svelte files

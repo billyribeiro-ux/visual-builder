@@ -64,7 +64,16 @@ describe('Editor Engine & Reducer', () => {
     expect(heroNode?.props.title).toBe('Updated Hero Title via Studio');
     expect(heroNode?.name).toBe('Custom Hero Name');
     expect(heroNode?.locked).toBe(true);
-    expect(homePage!.rootNode.children[1].id).toBe(heroNodeId);
+    // Locked nodes are read-only: the REORDER above must have been ignored.
+    expect(homePage!.rootNode.children[0].id).toBe(heroNodeId);
+
+    const unlocked = executeCommand(updated, {
+      type: 'UPDATE_NODE_META',
+      nodeId: heroNodeId,
+      meta: { locked: false }
+    });
+    const reordered = executeCommand(unlocked, { type: 'REORDER_NODE', nodeId: heroNodeId, direction: 'down' });
+    expect(reordered.pages.find((p) => p.path === '/')!.rootNode.children[1].id).toBe(heroNodeId);
   });
 
   it('cascades responsive styles properly', () => {
@@ -75,9 +84,13 @@ describe('Editor Engine & Reducer', () => {
       hover: { color: '#FF0000' }
     };
 
+    // Elementor-style contract: tablet overrides inherit down to mobile; desktop never leaks down.
     const mobileEffective = resolveEffectiveStyles(style, 'mobile');
-    expect(mobileEffective.fontSize).toBe('16px');
+    expect(mobileEffective.fontSize).toBe('20px');
     expect(mobileEffective.color).toBe('#000000');
+    expect(resolveEffectiveStyles({ ...style, mobile: { fontSize: '14px' } }, 'mobile').fontSize).toBe('14px');
+    expect(resolveEffectiveStyles({ ...style, mobile: { fontSize: '14px' } }, 'desktop').fontSize).toBe('24px');
+    expect(resolveEffectiveStyles({ base: {}, desktop: { gap: '2rem' }, wide: { gap: '3rem' } }, 'wide').gap).toBe('3rem');
 
     const tabletEffective = resolveEffectiveStyles(style, 'tablet');
     expect(tabletEffective.fontSize).toBe('20px');

@@ -1,7 +1,14 @@
 import {
   ProjectBlueprintSchema,
+  BlueprintNodeSchema,
+  CURRENT_SCHEMA_VERSION,
+  createNode,
+  createId,
+  reassignNodeIds,
   type ProjectBlueprint,
+  type ProjectBlueprintInput,
   type BlueprintNode,
+  type BlueprintNodeInput,
   type PageRoute,
   type BlueprintAsset
 } from './blueprint.js';
@@ -15,14 +22,14 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
   const dashboardPageId = '10000000-0000-0000-0000-000000000004';
   const settingsPageId = '10000000-0000-0000-0000-000000000005';
 
-  return {
-    schemaVersion: '1.0.0',
+  const raw: ProjectBlueprintInput = {
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     target: {
       framework: 'sveltekit',
-      svelteVersion: '5.57.2',
+      svelteVersion: '5.57.3',
       sveltekitVersion: '3.1.0',
-      viteVersion: '8.0.12',
-      nodeVersion: '24.22.0',
+      viteVersion: '8.3.5',
+      nodeVersion: '26.13.0',
       styling: 'vanilla-md3'
     },
     meta: {
@@ -503,6 +510,7 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
       implementation: 'Preloaded production reference project implementing the complete 11-step user journey.'
     }
   };
+  return ProjectBlueprintSchema.parse(raw);
 }
 
 export const CURATED_PROJECT_ASSETS: BlueprintAsset[] = [
@@ -562,35 +570,42 @@ export const CURATED_PROJECT_ASSETS: BlueprintAsset[] = [
 
 export function createBlankProject(name = 'Untitled App'): ProjectBlueprint {
   const base = createDefaultAcmeSaaSProject();
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'untitled-app';
-  return {
+  const slug = toSlug(name) || 'untitled-app';
+  const now = new Date().toISOString();
+  // Fresh layout IDs so a blank project never shares node IDs with the reference project.
+  const layouts = base.layouts.map((l) => ({ ...l, id: createId(), rootNode: reassignNodeIds(l.rootNode) }));
+  const defaultLayoutId = layouts.find((l) => l.isDefault)?.id ?? layouts[0]?.id;
+
+  return ProjectBlueprintSchema.parse({
     ...base,
     meta: {
       ...base.meta,
-      id: '00000000-0000-0000-0000-000000000002',
+      id: createId(),
       name,
       slug,
-      description: `${name} — Built with Svelte Visual Studio & Google MD3`
+      description: `${name} — built with the Visual Builder`,
+      createdAt: now,
+      updatedAt: now
     },
+    layouts,
     pages: [
       {
-        id: '10000000-0000-0000-0000-000000000010',
+        id: createId(),
         path: '/',
         slug: 'home',
         title: `${name} — Home`,
         description: `Welcome to ${name}`,
-        layoutId: '20000000-0000-0000-0000-000000000001',
+        layoutId: defaultLayoutId,
         isDynamic: false,
         seo: { title: `${name} — Home` },
-        rootNode: {
-          id: '30000000-0000-0000-0000-000000000010',
+        rootNode: createNode({
           componentType: 'structure/container',
           name: 'Home Root Container',
           props: { maxWidth: 'xl' },
           styles: { base: { minHeight: '60vh', paddingTop: '3rem', paddingBottom: '3rem' } },
           children: [
             {
-              id: '30000000-0000-0000-0000-000000000011',
+              id: createId(),
               componentType: 'hero/split-hero',
               name: 'Welcome Hero',
               props: {
@@ -601,17 +616,19 @@ export function createBlankProject(name = 'Untitled App'): ProjectBlueprint {
                 primaryCtaHref: '/',
                 secondaryCtaText: 'Learn More',
                 secondaryCtaHref: '#features',
-                badgeText: 'Svelte 5 + Google MD3'
-              },
-              styles: { base: {} },
-              children: []
+                badgeText: 'New project'
+              }
             }
           ]
-        }
+        })
       }
     ],
     interactions: []
-  };
+  } satisfies ProjectBlueprintInput);
+}
+
+export function toSlug(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
 export interface PreflightCheckItem {
@@ -647,7 +664,7 @@ export function validateBlueprintPreflight(blueprint: ProjectBlueprint): Preflig
     status: parsed.success ? 'pass' : 'fail',
     detail: parsed.success
       ? `Valid v${blueprint.schemaVersion} Blueprint (${blueprint.pages.length} routes)`
-      : parsed.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join('; ')
+      : parsed.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join('; ')
   });
 
   // 2. Target & Styling Policy Check
@@ -795,8 +812,25 @@ export const PAGE_TEMPLATE_CATALOG: Array<{
   }
 ];
 
-function nextUuid(): string {
-  return '70000000-0000-4000-8000-' + Math.random().toString(16).slice(2, 14).padEnd(12, '0');
+function pageFromNode(
+  rootNode: BlueprintNodeInput,
+  path: string,
+  slug: string,
+  title: string,
+  description: string,
+  layoutId: string | undefined
+): PageRoute {
+  return {
+    id: createId(),
+    path,
+    slug,
+    title,
+    description,
+    layoutId,
+    isDynamic: false,
+    seo: { title },
+    rootNode: BlueprintNodeSchema.parse(reassignNodeIds(rootNode))
+  };
 }
 
 export function createPageFromTemplate(
@@ -809,157 +843,73 @@ export function createPageFromTemplate(
   const slug = normalizedPath.replace(/^\//, '').replace(/\//g, '-') || 'page';
   const acme = createDefaultAcmeSaaSProject();
 
-  if (templateKey === 'saas-landing') {
-    const src = JSON.parse(JSON.stringify(acme.pages[0].rootNode));
-    src.id = nextUuid();
-    for (const c of src.children) c.id = nextUuid();
-    return {
-      id: nextUuid(),
-      path: normalizedPath,
-      slug,
-      title,
-      description: `${title} — SaaS Landing Page`,
-      layoutId,
-      isDynamic: false,
-      seo: { title },
-      rootNode: src
-    };
-  }
-
-  if (templateKey === 'features') {
-    const src = JSON.parse(JSON.stringify(acme.pages[1].rootNode));
-    src.id = nextUuid();
-    for (const c of src.children) c.id = nextUuid();
-    return {
-      id: nextUuid(),
-      path: normalizedPath,
-      slug,
-      title,
-      description: `${title} — Product Features`,
-      layoutId,
-      isDynamic: false,
-      seo: { title },
-      rootNode: src
-    };
-  }
-
-  if (templateKey === 'pricing') {
-    const src = JSON.parse(JSON.stringify(acme.pages[2].rootNode));
-    src.id = nextUuid();
-    for (const c of src.children) c.id = nextUuid();
-    return {
-      id: nextUuid(),
-      path: normalizedPath,
-      slug,
-      title,
-      description: `${title} — Pricing Plans`,
-      layoutId,
-      isDynamic: false,
-      seo: { title },
-      rootNode: src
-    };
-  }
-
-  if (templateKey === 'dashboard') {
-    const src = JSON.parse(JSON.stringify(acme.pages[3].rootNode));
-    src.id = nextUuid();
-    for (const c of src.children) c.id = nextUuid();
-    return {
-      id: nextUuid(),
-      path: normalizedPath,
-      slug,
-      title,
-      description: `${title} — Analytics Dashboard`,
-      layoutId: undefined,
-      isDynamic: false,
-      seo: { title },
-      rootNode: src
-    };
-  }
-
-  if (templateKey === 'auth-contact') {
-    return {
-      id: nextUuid(),
-      path: normalizedPath,
-      slug,
-      title,
-      description: `${title} — Portal`,
-      layoutId,
-      isDynamic: false,
-      seo: { title },
-      rootNode: {
-        id: nextUuid(),
-        componentType: 'structure/container',
-        name: `${title} Root Container`,
-        props: { maxWidth: 'xl' },
-        styles: { base: { paddingTop: '2rem', paddingBottom: '4rem' } },
-        interactions: [],
-        locked: false,
-        hidden: false,
-        customClasses: '',
-        children: [
-          {
-            id: nextUuid(),
-            componentType: 'app/auth-card',
-            name: 'Workspace Sign-In Card',
-            props: {
-              mode: 'signin',
-              brandName: 'Acme Cloud',
-              title: 'Sign in to your account',
-              subtitle: 'Enter your work credentials to access the console.',
-              redirectHref: '/dashboard'
+  switch (templateKey) {
+    case 'saas-landing':
+      return pageFromNode(acme.pages[0].rootNode, normalizedPath, slug, title, `${title} — SaaS Landing Page`, layoutId);
+    case 'features':
+      return pageFromNode(acme.pages[1].rootNode, normalizedPath, slug, title, `${title} — Product Features`, layoutId);
+    case 'pricing':
+      return pageFromNode(acme.pages[2].rootNode, normalizedPath, slug, title, `${title} — Pricing Plans`, layoutId);
+    case 'dashboard':
+      // Dashboard pages render their own application shell, so they never use the public layout.
+      return pageFromNode(acme.pages[3].rootNode, normalizedPath, slug, title, `${title} — Analytics Dashboard`, undefined);
+    case 'auth-contact':
+      return pageFromNode(
+        {
+          id: createId(),
+          componentType: 'structure/container',
+          name: `${title} Root Container`,
+          props: { maxWidth: 'xl' },
+          styles: { base: { paddingTop: '2rem', paddingBottom: '4rem' } },
+          children: [
+            {
+              id: createId(),
+              componentType: 'app/auth-card',
+              name: 'Workspace Sign-In Card',
+              props: {
+                mode: 'signin',
+                brandName: 'Acme Cloud',
+                title: 'Sign in to your account',
+                subtitle: 'Enter your work credentials to access the console.',
+                redirectHref: '/dashboard'
+              }
             },
-            styles: { base: {} },
-            interactions: [],
-            locked: false,
-            hidden: false,
-            customClasses: '',
-            children: []
-          },
-          {
-            id: nextUuid(),
-            componentType: 'marketing/contact-form',
-            name: 'Enterprise Contact Form',
-            props: {
-              sectionEyebrow: 'ENTERPRISE SUPPORT',
-              sectionTitle: 'Need a custom deployment?',
-              sectionSubtitle: 'Reach out to our solutions engineering team.',
-              submitText: 'Send Request'
-            },
-            styles: { base: {} },
-            interactions: [],
-            locked: false,
-            hidden: false,
-            customClasses: '',
-            children: []
-          }
-        ]
-      }
-    };
+            {
+              id: createId(),
+              componentType: 'marketing/contact-form',
+              name: 'Enterprise Contact Form',
+              props: {
+                sectionEyebrow: 'ENTERPRISE SUPPORT',
+                sectionTitle: 'Need a custom deployment?',
+                sectionSubtitle: 'Reach out to our solutions engineering team.',
+                submitText: 'Send Request'
+              }
+            }
+          ]
+        },
+        normalizedPath,
+        slug,
+        title,
+        `${title} — Portal`,
+        layoutId
+      );
+    case 'blank':
+    default:
+      return pageFromNode(
+        {
+          id: createId(),
+          componentType: 'structure/container',
+          name: `${title} Root Container`,
+          props: { maxWidth: 'xl' },
+          styles: { base: { minHeight: '60vh', paddingTop: '3rem', paddingBottom: '3rem' } }
+        },
+        normalizedPath,
+        slug,
+        title,
+        `${title} page`,
+        layoutId
+      );
   }
-
-  return {
-    id: nextUuid(),
-    path: normalizedPath,
-    slug,
-    title,
-    description: `${title} page`,
-    layoutId,
-    isDynamic: false,
-    seo: { title },
-    rootNode: {
-      id: nextUuid(),
-      componentType: 'structure/container',
-      name: `${title} Root Container`,
-      props: { maxWidth: 'xl' },
-      styles: { base: { minHeight: '60vh', paddingTop: '3rem', paddingBottom: '3rem' } },
-      interactions: [],
-      locked: false,
-      hidden: false,
-      customClasses: '',
-      children: []
-    }
-  };
 }
 
 export interface PromptCompositionResult {
@@ -969,14 +919,18 @@ export interface PromptCompositionResult {
 }
 
 /**
- * Deterministic Natural-Language Prompt-to-Blueprint Composer.
- * Translates natural language specifications (e.g. "Add an AI hero, stats bar, and 3-tier pricing")
- * into customized, ready-to-render BlueprintNode subtrees.
+ * Deterministic natural-language prompt-to-blueprint composer.
+ * Translates specifications such as "Add an AI hero, stats bar, and 3-tier pricing" into
+ * validated BlueprintNode subtrees. Every prop name matches the component registry contract.
  */
 export function composeNodesFromPrompt(prompt: string): PromptCompositionResult {
   const q = prompt.trim().toLowerCase();
   const nodes: BlueprintNode[] = [];
   const addedLabels: string[] = [];
+  const add = (label: string, input: Omit<BlueprintNodeInput, 'id'>) => {
+    nodes.push(createNode(input));
+    addedLabels.push(label);
+  };
 
   const isAi = /\b(ai|agent|llm|model|copilot|neural|automation)\b/.test(q);
   const isFintech = /\b(fintech|bank|payment|revenue|finance|crypto|billing|treasury)\b/.test(q);
@@ -990,166 +944,112 @@ export function composeNodesFromPrompt(prompt: string): PromptCompositionResult 
         ? 'google-blue-dark'
         : undefined;
 
-  const domainBrand = isFintech
-    ? 'FinPulse Treasury'
-    : isAi
-      ? 'Nexus AI Agents'
-      : 'Acme Cloud';
+  const domainBrand = isFintech ? 'FinPulse Treasury' : isAi ? 'Nexus AI Agents' : 'Acme Cloud';
 
-  // 1. Hero detection
+  const heroProps = (title: string, subtitle: string, badgeText: string) => ({
+    eyebrow: domainBrand,
+    badgeText,
+    title,
+    subtitle,
+    primaryCtaText: isFintech ? 'Open Treasury Account' : 'Start Free Trial',
+    primaryCtaHref: '/dashboard',
+    secondaryCtaText: 'View Pricing',
+    secondaryCtaHref: '/pricing'
+  });
+
   if (/\b(hero|banner|header|landing|intro)\b/.test(q)) {
-    nodes.push({
-      id: nextUuid(),
+    add('Split Hero', {
       componentType: 'hero/split-hero',
       name: `${domainBrand} Hero`,
-      props: {
-        badgeText: isFintech
-          ? 'INSTANT GLOBAL SETTLEMENT'
-          : isAi
-            ? 'AUTONOMOUS SVELTE 5 AGENTS'
-            : 'GOOGLE MD3 DESIGN SYSTEM',
-        title: isFintech
+      props: heroProps(
+        isFintech
           ? 'Programmable treasury and real-time liquidity at scale.'
           : isAi
             ? 'Deploy autonomous AI workflows in minutes, not quarters.'
-            : 'Ship production SvelteKit 3 web apps with visual precision.',
-        subtitle: isFintech
+            : 'Ship production web apps with visual precision.',
+        isFintech
           ? 'Automate multi-currency reconciliation, yield optimization, and enterprise spend controls from one unified ledger.'
-          : 'Combine visual Google Material Design 3 components with deterministic AI agent handoff.',
-        primaryCtaText: isFintech ? 'Open Treasury Account' : 'Start Free Trial',
-        primaryCtaHref: '/dashboard',
-        secondaryCtaText: 'View Pricing',
-        secondaryCtaHref: '/pricing',
-        previewMetricLabel: isFintech ? '24h Settlement Volume' : 'Deployment Velocity',
-        previewMetricValue: isFintech ? '$48.2M (+34.8%)' : '14.2x Faster'
-      },
-      styles: { base: {} },
-      interactions: [],
-      locked: false,
-      hidden: false,
-      customClasses: '',
-      children: []
+          : 'Compose responsive sections visually and hand a precise build spec to your coding agent.',
+        isFintech ? 'Instant global settlement' : isAi ? 'Autonomous agents' : 'Material Design 3'
+      )
     });
-    addedLabels.push('Split Hero');
   }
 
-  // 2. Stats / Metrics bar detection
   if (/\b(stat|stats|metric|numbers|counter|proof)\b/.test(q)) {
-    nodes.push({
-      id: nextUuid(),
+    add('Stats Bar', {
       componentType: 'marketing/stats-bar',
       name: `${domainBrand} Stats Bar`,
       props: {
         stats: [
-          { value: '99.99%', label: 'SLA Uptime Guarantee', change: '+0.04% YoY' },
-          { value: '18ms', label: 'Global Edge Latency', change: '-42% P99' },
-          { value: '42,000+', label: 'Active Engineering Teams', change: '+128% Growth' },
-          { value: 'SOC2 II', label: 'Zero-Trust Compliance', change: 'Verified' }
+          { value: '99.99%', label: 'SLA Uptime Guarantee', detail: '+0.04% YoY' },
+          { value: '18ms', label: 'Global Edge Latency', detail: '-42% P99' },
+          { value: '42,000+', label: 'Active Engineering Teams', detail: '+128% growth' },
+          { value: 'SOC 2 II', label: 'Zero-Trust Compliance', detail: 'Verified' }
         ]
-      },
-      styles: { base: {} },
-      interactions: [],
-      locked: false,
-      hidden: false,
-      customClasses: '',
-      children: []
+      }
     });
-    addedLabels.push('Stats Bar');
   }
 
-  // 3. KPI Grid detection
   if (/\b(kpi|dashboard|analytics|overview)\b/.test(q)) {
-    nodes.push({
-      id: nextUuid(),
+    add('KPI Grid', {
       componentType: 'app/kpi-grid',
       name: `${domainBrand} KPI Cards`,
       props: {
         cards: [
-          { label: 'Net Revenue Retention', value: '138.4%', delta: '+12.1%', trend: 'up' },
-          { label: 'Active Workspaces', value: '8,940', delta: '+19.4%', trend: 'up' },
-          { label: 'Avg Resolution Time', value: '1.4m', delta: '-38.0%', trend: 'up' }
+          { title: 'Net Revenue Retention', value: '138.4%', change: '+12.1%', trend: 'up' },
+          { title: 'Active Workspaces', value: '8,940', change: '+19.4%', trend: 'up' },
+          { title: 'Avg Resolution Time', value: '1.4m', change: '-38.0%', trend: 'up' }
         ]
-      },
-      styles: { base: {} },
-      interactions: [],
-      locked: false,
-      hidden: false,
-      customClasses: '',
-      children: []
+      }
     });
-    addedLabels.push('KPI Grid');
   }
 
-  // 4. Feature Grid detection
   if (/\b(feature|features|bento|capabilities|grid|benefits)\b/.test(q)) {
-    nodes.push({
-      id: nextUuid(),
+    add('Feature Grid', {
       componentType: 'marketing/feature-grid',
       name: `${domainBrand} Feature Grid`,
       props: {
+        sectionEyebrow: 'Capabilities',
         sectionTitle: `Why leading teams run on ${domainBrand}`,
-        sectionSubtitle: 'Architected for speed, observability, and deterministic handoff.',
+        sectionDescription: 'Architected for speed, observability, and deterministic handoff.',
         columns: 3,
         features: [
-          {
-            icon: '⚡',
-            title: 'Real-Time Streaming Engine',
-            description: 'Sub-20ms state synchronization powered by Svelte 5 runes.'
-          },
-          {
-            icon: '🛡️',
-            title: 'Enterprise Role Controls',
-            description: 'Granular RBAC permissions, audit logs, and hardware key enforcement.'
-          },
-          {
-            icon: '🤖',
-            title: 'Deterministic AI Handoff',
-            description: 'Export self-contained SvelteKit 3 source and machine-verified specs.'
-          }
+          { icon: '⚡', title: 'Real-Time Streaming Engine', description: 'Sub-20ms state synchronization across every client.' },
+          { icon: '🛡️', title: 'Enterprise Role Controls', description: 'Granular RBAC permissions, audit logs, and hardware key enforcement.' },
+          { icon: '🤖', title: 'Deterministic AI Handoff', description: 'Export a precise, stack-agnostic build spec for coding agents.' }
         ]
-      },
-      styles: { base: {} },
-      interactions: [],
-      locked: false,
-      hidden: false,
-      customClasses: '',
-      children: []
+      }
     });
-    addedLabels.push('Feature Grid');
   }
 
-  // 5. Pricing Table detection
   if (/\b(price|pricing|plan|plans|tier|tiers|billing|subscription)\b/.test(q)) {
-    nodes.push({
-      id: nextUuid(),
+    add('Pricing Table', {
       componentType: 'marketing/pricing-table',
       name: `${domainBrand} Pricing Plans`,
       props: {
-        headline: 'Transparent, predictable pricing for every stage',
-        subheadline: 'Start free in development. Upgrade when you scale to production.',
+        sectionEyebrow: 'Pricing',
+        sectionTitle: 'Transparent, predictable pricing for every stage',
+        sectionDescription: 'Start free in development. Upgrade when you scale to production.',
         plans: [
           {
             name: 'Starter',
             price: '$0',
-            period: '/month',
+            period: 'per month',
             description: 'For solo founders and rapid prototyping.',
-            features: ['Up to 3 active projects', 'SvelteKit 3 source export', 'Community support'],
+            features: ['Up to 3 active projects', 'Build spec export', 'Community support'],
             ctaText: 'Start Free',
-            highlighted: false
+            ctaHref: '/dashboard',
+            isPopular: false
           },
           {
             name: 'Growth Pro',
             price: '$79',
-            period: '/month',
+            period: 'per month',
             description: 'For product teams shipping weekly.',
-            features: [
-              'Unlimited routes & symbols',
-              'Full AI Agent handoff ZIP',
-              'Custom MD3 design tokens',
-              'Priority Slack support'
-            ],
+            features: ['Unlimited routes & symbols', 'Full AI agent handoff', 'Custom design tokens', 'Priority support'],
             ctaText: 'Start 14-Day Trial',
-            highlighted: true
+            ctaHref: '/dashboard',
+            isPopular: true
           },
           {
             name: 'Enterprise',
@@ -1158,135 +1058,91 @@ export function composeNodesFromPrompt(prompt: string): PromptCompositionResult 
             description: 'Dedicated infrastructure and custom SLAs.',
             features: ['SSO / SAML 2.0', 'Dedicated solutions engineer', '99.99% uptime SLA'],
             ctaText: 'Contact Sales',
-            highlighted: false
+            ctaHref: '/contact',
+            isPopular: false
           }
         ]
-      },
-      styles: { base: {} },
-      interactions: [],
-      locked: false,
-      hidden: false,
-      customClasses: '',
-      children: []
+      }
     });
-    addedLabels.push('Pricing Table');
   }
 
-  // 6. Data Table detection (avoid matching "pricing table")
   if (
     /\b(datatable|data table|rows|logs|transactions|records)\b/.test(q) ||
     (/\btable\b/.test(q) && !/\bpricing\s+table\b/.test(q))
   ) {
-    nodes.push({
-      id: nextUuid(),
+    add('Data Table', {
       componentType: 'app/data-table',
       name: `${domainBrand} Activity Table`,
       props: {
         title: 'Live Production Deployments & Events',
-        searchable: true,
         columns: ['Deployment ID', 'Service', 'Status', 'Latency'],
         rows: [
           ['dep-9482a', 'auth-edge-gateway', 'Healthy', '12ms'],
           ['dep-9481f', 'ai-inference-worker', 'Healthy', '44ms'],
           ['dep-9479c', 'billing-webhook-sync', 'Warning', '168ms']
         ]
-      },
-      styles: { base: {} },
-      interactions: [],
-      locked: false,
-      hidden: false,
-      customClasses: '',
-      children: []
+      }
     });
-    addedLabels.push('Data Table');
   }
 
-  // 7. Testimonials detection
   if (/\b(testimonial|testimonials|review|reviews|quote|quotes|customer|social proof)\b/.test(q)) {
-    nodes.push({
-      id: nextUuid(),
+    add('Testimonials', {
       componentType: 'marketing/testimonials',
       name: 'Customer Testimonials',
       props: {
-        headline: 'Trusted by staff engineers and design leaders',
-        items: [
+        sectionEyebrow: 'Social Proof',
+        sectionTitle: 'Trusted by staff engineers and design leaders',
+        testimonials: [
           {
-            quote: 'We cut our design-to-SvelteKit implementation cycle from 3 weeks to 20 minutes.',
+            quote: 'We cut our design-to-production implementation cycle from 3 weeks to 20 minutes.',
             author: 'Elena Rostova',
             role: 'VP Engineering, LinearFlow'
           },
           {
-            quote: 'The exported AGENTS.md and blueprint JSON let our coding agents implement features with zero guesswork.',
+            quote: 'The exported build spec let our coding agents implement features with zero guesswork.',
             author: 'Marcus Vance',
             role: 'Principal Architect, RaycastCloud'
           }
         ]
-      },
-      styles: { base: {} },
-      interactions: [],
-      locked: false,
-      hidden: false,
-      customClasses: '',
-      children: []
+      }
     });
-    addedLabels.push('Testimonials');
   }
 
-  // 8. FAQ Accordion detection
   if (/\b(faq|faqs|question|questions|accordion|help)\b/.test(q)) {
-    nodes.push({
-      id: nextUuid(),
+    add('FAQ Accordion', {
       componentType: 'marketing/faq-accordion',
       name: 'FAQ Accordion',
       props: {
-        headline: 'Frequently Asked Questions',
+        sectionTitle: 'Frequently Asked Questions',
         items: [
           {
-            question: 'Does the exported app use genuine Svelte 5 runes and SvelteKit 3?',
-            answer: 'Yes. Every component uses $props(), $state(), and $derived() with zero legacy syntax.'
+            question: 'Can I build the exported layout in any framework?',
+            answer: 'Yes. The build spec is stack-agnostic: pick Next.js, SvelteKit, Nuxt, Astro, or plain HTML.'
           },
           {
-            question: 'Is Tailwind CSS required?',
-            answer: 'No. All styling uses pure Vanilla CSS with Google Material Design 3 system variables.'
+            question: 'Is a CSS framework required?',
+            answer: 'No. Design tokens are exported as CSS variables and W3C design-token JSON.'
           }
         ]
-      },
-      styles: { base: {} },
-      interactions: [],
-      locked: false,
-      hidden: false,
-      customClasses: '',
-      children: []
+      }
     });
-    addedLabels.push('FAQ Accordion');
   }
 
-  // 9. Contact / Lead Form detection
   if (/\b(contact|form|lead|inquire|support|sales)\b/.test(q)) {
-    nodes.push({
-      id: nextUuid(),
+    add('Contact Form', {
       componentType: 'marketing/contact-form',
       name: 'Contact & Inquiry Form',
       props: {
-        sectionEyebrow: 'GET IN TOUCH',
+        sectionEyebrow: 'Get in touch',
         sectionTitle: 'Talk to our engineering team',
         sectionSubtitle: 'Tell us about your architecture and timeline.',
         submitText: 'Send Message'
-      },
-      styles: { base: {} },
-      interactions: [],
-      locked: false,
-      hidden: false,
-      customClasses: '',
-      children: []
+      }
     });
-    addedLabels.push('Contact Form');
   }
 
-  // 10. Auth / Login detection
   if (/\b(auth|login|signin|sign-in|signup|register)\b/.test(q)) {
-    nodes.push({
-      id: nextUuid(),
+    add('Auth Card', {
       componentType: 'app/auth-card',
       name: 'Authentication Card',
       props: {
@@ -1295,109 +1151,58 @@ export function composeNodesFromPrompt(prompt: string): PromptCompositionResult 
         title: `Sign in to ${domainBrand}`,
         subtitle: 'Use your workspace SSO or email credentials.',
         redirectHref: '/dashboard'
-      },
-      styles: { base: {} },
-      interactions: [],
-      locked: false,
-      hidden: false,
-      customClasses: '',
-      children: []
-    });
-    addedLabels.push('Auth Card');
-  }
-
-  // 11. CTA Banner or Newsletter detection
-  if (/\b(cta|call to action|newsletter|subscribe)\b/.test(q)) {
-    if (/\b(newsletter|subscribe)\b/.test(q)) {
-      nodes.push({
-        id: nextUuid(),
-        componentType: 'marketing/newsletter',
-        name: 'Newsletter Signup',
-        props: {
-          title: 'Get monthly architecture deep-dives',
-          subtitle: 'Zero spam. Unsubscribe in one click.',
-          placeholder: 'you@company.com',
-          buttonText: 'Subscribe'
-        },
-        styles: { base: {} },
-        interactions: [],
-        locked: false,
-        hidden: false,
-        customClasses: '',
-        children: []
-      });
-      addedLabels.push('Newsletter');
-    } else {
-      nodes.push({
-        id: nextUuid(),
-        componentType: 'marketing/cta-banner',
-        name: 'Conversion CTA Banner',
-        props: {
-          title: `Ready to build with ${domainBrand}?`,
-          subtitle: 'Export a self-contained SvelteKit 3 repository and AI handoff package today.',
-          primaryCtaText: 'Launch Studio',
-          primaryCtaHref: '/dashboard',
-          secondaryCtaText: 'Compare Plans',
-          secondaryCtaHref: '/pricing'
-        },
-        styles: { base: {} },
-        interactions: [],
-        locked: false,
-        hidden: false,
-        customClasses: '',
-        children: []
-      });
-      addedLabels.push('CTA Banner');
-    }
-  }
-
-  // Fallback if prompt was generic: compose a complete Hero + Feature Grid section
-  if (nodes.length === 0) {
-    nodes.push(
-      {
-        id: nextUuid(),
-        componentType: 'hero/split-hero',
-        name: `${prompt.slice(0, 28) || 'Custom'} Hero`,
-        props: {
-          badgeText: 'AI COMPOSER GENERATED',
-          title: prompt.length > 8 ? prompt : 'Build modern responsive web apps at 10x speed.',
-          subtitle:
-            'Crafted with Google Material Design 3 tokens and live Svelte 5 runes.',
-          primaryCtaText: 'Get Started',
-          primaryCtaHref: '/dashboard',
-          secondaryCtaText: 'Learn More',
-          secondaryCtaHref: '/features',
-          previewMetricLabel: 'System Status',
-          previewMetricValue: '99.99% Online'
-        },
-        styles: { base: {} },
-        interactions: [],
-        locked: false,
-        hidden: false,
-        customClasses: '',
-        children: []
-      },
-      {
-        id: nextUuid(),
-        componentType: 'marketing/cta-banner',
-        name: 'Follow-up CTA Banner',
-        props: {
-          title: 'Take your project to production',
-          subtitle: 'Click Export for AI Agents to download the full SvelteKit 3 package.',
-          primaryCtaText: 'Open Dashboard',
-          primaryCtaHref: '/dashboard',
-          secondaryCtaText: 'Pricing',
-          secondaryCtaHref: '/pricing'
-        },
-        styles: { base: {} },
-        interactions: [],
-        locked: false,
-        hidden: false,
-        customClasses: '',
-        children: []
       }
-    );
-    addedLabels.push('Split Hero', 'CTA Banner');
+    });
+  }
+
+  if (/\b(newsletter|subscribe)\b/.test(q)) {
+    add('Newsletter', {
+      componentType: 'marketing/newsletter',
+      name: 'Newsletter Signup',
+      props: {
+        title: 'Get monthly architecture deep-dives',
+        subtitle: 'Zero spam. Unsubscribe in one click.',
+        placeholder: 'you@company.com',
+        buttonText: 'Subscribe'
+      }
+    });
+  } else if (/\b(cta|call to action)\b/.test(q)) {
+    add('CTA Banner', {
+      componentType: 'marketing/cta-banner',
+      name: 'Conversion CTA Banner',
+      props: {
+        title: `Ready to build with ${domainBrand}?`,
+        subtitle: 'Export a precise build spec and ship it in the stack of your choice.',
+        primaryCtaText: 'Launch Studio',
+        primaryCtaHref: '/dashboard',
+        secondaryCtaText: 'Compare Plans',
+        secondaryCtaHref: '/pricing'
+      }
+    });
+  }
+
+  if (nodes.length === 0) {
+    add('Split Hero', {
+      componentType: 'hero/split-hero',
+      name: `${prompt.slice(0, 28) || 'Custom'} Hero`,
+      props: heroProps(
+        prompt.length > 8 ? prompt : 'Build modern responsive web apps at 10x speed.',
+        'Crafted with Material Design 3 tokens.',
+        'AI composer'
+      )
+    });
+    add('CTA Banner', {
+      componentType: 'marketing/cta-banner',
+      name: 'Follow-up CTA Banner',
+      props: {
+        title: 'Take your project to production',
+        subtitle: 'Export the build spec and hand it to your coding agent.',
+        primaryCtaText: 'Open Dashboard',
+        primaryCtaHref: '/dashboard',
+        secondaryCtaText: 'Pricing',
+        secondaryCtaHref: '/pricing'
+      }
+    });
   }
 
   return {
@@ -1406,5 +1211,3 @@ export function composeNodesFromPrompt(prompt: string): PromptCompositionResult 
     suggestedThemeId
   };
 }
-
-

@@ -1,10 +1,19 @@
 <script lang="ts">
   import { editor } from '../state/editor.svelte.js';
   import type { BlueprintNode, PageRoute } from '@app-viz/schema';
-  import { onMount } from 'svelte';
+  import { findNodeInBlueprint } from '@app-viz/engine';
+  import { onMount, untrack } from 'svelte';
+  import {
+    NON_MUTATING_NODE_ACTIONS,
+    parsePreviewMessage,
+    sanitizeResizeStyles,
+    type KeyShortcut,
+    type NodeQuickAction,
+    type ParentToPreviewMessage,
+    type PreviewToParentMessage
+  } from '../canvas/messages.js';
 
-  let iframeElement: HTMLIFrameElement | null = $state(null);
-  let isIframeLoaded = $state(false);
+  let iframeElement: HTMLIFrameElement | null = null;
 
   const breakpointWidths = {
     mobile: '375px',
@@ -104,135 +113,301 @@
     });
   });
 
-  // Synchronize blueprint state with iframe via postMessage
-  $effect(() => {
-    if (iframeElement && iframeElement.contentWindow && isIframeLoaded && editor.canvasViewMode === 'canvas') {
-      iframeElement.contentWindow.postMessage(
-        {
-          type: 'SYNC_STATE',
-          blueprint: $state.snapshot(editor.blueprint),
-          activePageId: editor.activePageId,
-          selectedNodeId: editor.selectedNodeId,
-          isInteractiveMode: editor.isInteractiveMode,
-          activeBreakpoint: editor.activeBreakpoint
-        },
-        window.location.origin
-      );
+  /* ---------------------------------------------------------------------------------------- */
+  /* Iframe handshake                                                                         */
+  /*                                                                                          */
+  /* PREVIEW_READY may fire before our listener exists, and the iframe remounts whenever we   */
+  /* switch flow → canvas. So readiness is owned by the parent: it is reset whenever the      */
+  /* iframe element mounts/unmounts or fires `load`, and we PING until the preview answers.   */
+  /* ---------------------------------------------------------------------------------------- */
+
+  const PING_INTERVAL_MS = 250;
+  const MAX_PING_ATTEMPTS = 40;
+
+  let isPreviewReady = $state(false);
+  let handshakeFailed = $state(false);
+  let pingTimer: ReturnType<typeof setInterval> | null = null;
+  let pingAttempts = 0;
+
+  function postToPreview(message: ParentToPreviewMessage) {
+    const target = iframeElement?.contentWindow;
+    if (!target) return;
+    target.postMessage(message, window.location.origin);
+  }
+
+  function stopPinging() {
+    if (pingTimer !== null) {
+      clearInterval(pingTimer);
+      pingTimer = null;
     }
+  }
+
+  function sendPing() {
+    pingAttempts += 1;
+    postToPreview({ type: 'PING', attempt: pingAttempts });
+  }
+
+  function startHandshake() {
+    stopPinging();
+    isPreviewReady = false;
+    handshakeFailed = false;
+    pingAttempts = 0;
+    sendPing();
+    pingTimer = setInterval(() => {
+      if (isPreviewReady) {
+        stopPinging();
+      } else if (pingAttempts >= MAX_PING_ATTEMPTS) {
+        stopPinging();
+        handshakeFailed = true;
+      } else {
+        sendPing();
+      }
+    }, PING_INTERVAL_MS);
+  }
+
+  function retryHandshake() {
+    if (!iframeElement) return;
+    // Reloading fires `load`, which restarts the handshake.
+    isPreviewReady = false;
+    handshakeFailed = false;
+    iframeElement.src = '/preview';
+  }
+
+  /** Attachment: runs on every iframe mount, cleans up on unmount. */
+  function previewFrame(el: HTMLIFrameElement) {
+    return untrack(() => {
+      iframeElement = el;
+      isPreviewReady = false;
+      const onLoad = () => startHandshake();
+      el.addEventListener('load', onLoad);
+      // The iframe may already be (partially) loaded; start pinging right away. The `load`
+      // event restarts the handshake against the final document.
+      startHandshake();
+
+      return () => {
+        el.removeEventListener('load', onLoad);
+        stopPinging();
+        isPreviewReady = false;
+        handshakeFailed = false;
+        if (iframeElement === el) iframeElement = null;
+      };
+    });
+  }
+
+  function buildSyncMessage(): ParentToPreviewMessage {
+    return {
+      type: 'SYNC_STATE',
+      blueprint: $state.snapshot(editor.blueprint),
+      activePageId: editor.activePageId,
+      selectedNodeId: editor.selectedNodeId,
+      isInteractiveMode: editor.isInteractiveMode,
+      activeBreakpoint: editor.activeBreakpoint
+    };
+  }
+
+  // Synchronize blueprint state with the iframe once (and whenever) the handshake completes.
+  $effect(() => {
+    if (!isPreviewReady || editor.canvasViewMode !== 'canvas') return;
+    postToPreview(buildSyncMessage());
   });
+
+  function isLockedNode(nodeId: string): boolean {
+    return findNodeInBlueprint(editor.blueprint, nodeId)?.node.locked === true;
+  }
+
+  function handlePreviewMessage(message: PreviewToParentMessage) {
+    switch (message.type) {
+      case 'PREVIEW_READY': {
+        stopPinging();
+        handshakeFailed = false;
+        if (!isPreviewReady) {
+          // Flipping readiness triggers the sync effect, which sends a full SYNC_STATE.
+          isPreviewReady = true;
+        } else {
+          // Already ready (e.g. a late answer to an earlier PING): resend full state anyway.
+          postToPreview(buildSyncMessage());
+        }
+        break;
+      }
+      case 'SELECT_NODE':
+        editor.selectNode(message.nodeId);
+        break;
+      case 'NAVIGATE_PAGE': {
+        const targetPage = editor.blueprint.pages.find((p) => p.path === message.path);
+        if (targetPage) editor.setActivePage(targetPage.id);
+        break;
+      }
+      case 'INLINE_PROP_EDIT': {
+        if (isLockedNode(message.nodeId)) break;
+        editor.dispatch({
+          type: 'UPDATE_PROPS',
+          nodeId: message.nodeId,
+          props: { [message.propKey]: message.value }
+        });
+        break;
+      }
+      case 'RESIZE_NODE_STYLE': {
+        if (isLockedNode(message.nodeId)) break;
+        const styles = sanitizeResizeStyles(message.styles);
+        if (!styles) break;
+        editor.dispatch({
+          type: 'UPDATE_STYLES',
+          nodeId: message.nodeId,
+          breakpoint: 'base',
+          styles
+        });
+        break;
+      }
+      case 'NODE_ACTION':
+        handleNodeAction(message.nodeId, message.action);
+        break;
+      case 'INSERT_STRUCTURE':
+        editor.insertContainerStructure(message.structureId, message.targetNodeId);
+        break;
+      case 'DROP_ITEM': {
+        const { componentType, draggedNodeId, targetNodeId, position } = message;
+        if (componentType) {
+          editor.dropComponentOnTarget(componentType, targetNodeId, position);
+        } else if (draggedNodeId && draggedNodeId !== targetNodeId) {
+          editor.dropNodeOnTarget(draggedNodeId, targetNodeId, position);
+        }
+        break;
+      }
+      case 'KEY_SHORTCUT':
+        handleShortcut(message.shortcut);
+        break;
+      case 'OPEN_BLOCK_LIBRARY':
+        editor.showBlockLibraryModal = true;
+        break;
+    }
+  }
+
+  function handleNodeAction(nodeId: string, action: NodeQuickAction) {
+    if (!NON_MUTATING_NODE_ACTIONS.has(action) && isLockedNode(nodeId)) return;
+    switch (action) {
+      case 'up':
+      case 'down':
+        editor.dispatch({ type: 'REORDER_NODE', nodeId, direction: action });
+        break;
+      case 'duplicate':
+        editor.dispatch({ type: 'DUPLICATE_NODE', nodeId });
+        break;
+      case 'delete':
+        editor.dispatch({ type: 'DELETE_NODE', nodeId });
+        if (editor.selectedNodeId === nodeId) editor.selectNode(null);
+        break;
+      case 'wrap-section':
+        editor.wrapNode(nodeId, 'structure/section');
+        break;
+      case 'wrap-container':
+        editor.wrapNode(nodeId, 'structure/container');
+        break;
+      case 'unwrap':
+        editor.unwrapNode(nodeId);
+        break;
+      case 'copy':
+        editor.selectNode(nodeId);
+        editor.copySelectedNode();
+        break;
+      case 'paste':
+        editor.pasteNode(nodeId);
+        break;
+      case 'copy-style':
+        editor.selectNode(nodeId);
+        editor.copyNodeStyle(nodeId);
+        break;
+      case 'paste-style':
+        editor.selectNode(nodeId);
+        editor.pasteNodeStyle(nodeId);
+        break;
+      case 'reset-style':
+        editor.selectNode(nodeId);
+        editor.resetNodeStyle(nodeId);
+        break;
+      case 'save-symbol':
+        editor.selectNode(nodeId);
+        editor.saveSelectedNodeAsSymbol();
+        break;
+      case 'hide':
+        editor.dispatch({ type: 'UPDATE_NODE_META', nodeId, meta: { hidden: true } });
+        break;
+      case 'align-left':
+        editor.selectNode(nodeId);
+        editor.alignNode(nodeId, 'left');
+        break;
+      case 'align-center':
+        editor.selectNode(nodeId);
+        editor.alignNode(nodeId, 'center');
+        break;
+      case 'align-right':
+        editor.selectNode(nodeId);
+        editor.alignNode(nodeId, 'right');
+        break;
+    }
+  }
+
+  function handleShortcut(shortcut: KeyShortcut) {
+    const selectedId = editor.selectedNodeId;
+    const selectedLocked = selectedId ? isLockedNode(selectedId) : false;
+    switch (shortcut) {
+      case 'undo':
+        editor.undo();
+        break;
+      case 'redo':
+        editor.redo();
+        break;
+      case 'duplicate':
+        editor.duplicateSelectedNode();
+        break;
+      case 'copy':
+        editor.copySelectedNode();
+        break;
+      case 'paste':
+        editor.pasteNode();
+        break;
+      case 'copy-style':
+        editor.copyNodeStyle();
+        break;
+      case 'paste-style':
+        if (!selectedLocked) editor.pasteNodeStyle();
+        break;
+      case 'navigator':
+        editor.showNavigator = !editor.showNavigator;
+        break;
+      case 'delete':
+        if (!selectedLocked) editor.deleteSelectedNode();
+        break;
+      case 'escape':
+        editor.selectNode(null);
+        break;
+      case 'command-palette':
+        editor.showCommandPalette = !editor.showCommandPalette;
+        break;
+      case 'move-up':
+        if (!selectedLocked) editor.reorderSelectedNode('up');
+        break;
+      case 'move-down':
+        if (!selectedLocked) editor.reorderSelectedNode('down');
+        break;
+    }
+  }
 
   onMount(() => {
     function handleMessage(event: MessageEvent) {
       if (event.origin !== window.location.origin) return;
-      const data = event.data;
-      if (!data || !data.type) return;
-
-      if (data.type === 'PREVIEW_READY') {
-        isIframeLoaded = true;
-      } else if (data.type === 'SELECT_NODE') {
-        editor.selectNode(data.nodeId);
-      } else if (data.type === 'NAVIGATE_PAGE') {
-        const targetPage = editor.blueprint.pages.find((p) => p.path === data.path);
-        if (targetPage) {
-          editor.setActivePage(targetPage.id);
-        }
-      } else if (data.type === 'INLINE_PROP_EDIT') {
-        const { nodeId, propKey, value } = data;
-        if (nodeId && propKey && typeof value === 'string') {
-          editor.dispatch({
-            type: 'UPDATE_PROPS',
-            nodeId,
-            props: { [propKey]: value }
-          });
-        }
-      } else if (data.type === 'RESIZE_NODE_STYLE') {
-        const { nodeId, styles } = data;
-        if (nodeId && styles && typeof styles === 'object') {
-          editor.dispatch({
-            type: 'UPDATE_STYLES',
-            nodeId,
-            breakpoint: 'base',
-            styles
-          });
-        }
-      } else if (data.type === 'NODE_ACTION') {
-        const { nodeId, action } = data;
-        if (action === 'up' || action === 'down') {
-          editor.dispatch({ type: 'REORDER_NODE', nodeId, direction: action });
-        } else if (action === 'duplicate') {
-          editor.dispatch({ type: 'DUPLICATE_NODE', nodeId });
-        } else if (action === 'delete') {
-          editor.dispatch({ type: 'DELETE_NODE', nodeId });
-          if (editor.selectedNodeId === nodeId) editor.selectNode(null);
-        } else if (action === 'wrap-section') {
-          editor.wrapNode(nodeId, 'structure/section');
-        } else if (action === 'wrap-container') {
-          editor.wrapNode(nodeId, 'structure/container');
-        } else if (action === 'unwrap') {
-          editor.unwrapNode(nodeId);
-        } else if (action === 'copy') {
-          editor.selectNode(nodeId);
-          editor.copySelectedNode();
-        } else if (action === 'paste') {
-          editor.pasteNode(nodeId);
-        } else if (action === 'copy-style') {
-          editor.selectNode(nodeId);
-          editor.copyNodeStyle(nodeId);
-        } else if (action === 'paste-style') {
-          editor.selectNode(nodeId);
-          editor.pasteNodeStyle(nodeId);
-        } else if (action === 'reset-style') {
-          editor.selectNode(nodeId);
-          editor.resetNodeStyle(nodeId);
-        } else if (action === 'save-symbol') {
-          editor.selectNode(nodeId);
-          editor.saveSelectedNodeAsSymbol();
-        } else if (action === 'hide') {
-          editor.dispatch({ type: 'UPDATE_NODE_META', nodeId, meta: { hidden: true } });
-        } else if (action === 'align-left') {
-          editor.selectNode(nodeId);
-          editor.alignNode(nodeId, 'left');
-        } else if (action === 'align-center') {
-          editor.selectNode(nodeId);
-          editor.alignNode(nodeId, 'center');
-        } else if (action === 'align-right') {
-          editor.selectNode(nodeId);
-          editor.alignNode(nodeId, 'right');
-        }
-      } else if (data.type === 'INSERT_STRUCTURE') {
-        const { structureId, targetNodeId } = data;
-        if (structureId) {
-          editor.insertContainerStructure(structureId, targetNodeId);
-        }
-      } else if (data.type === 'DROP_ITEM') {
-        const { componentType, draggedNodeId, targetNodeId, position } = data;
-        if (componentType) {
-          editor.dropComponentOnTarget(componentType, targetNodeId, position);
-        } else if (draggedNodeId) {
-          editor.dropNodeOnTarget(draggedNodeId, targetNodeId, position);
-        }
-      } else if (data.type === 'KEY_SHORTCUT') {
-        const { shortcut } = data;
-        if (shortcut === 'undo') editor.undo();
-        else if (shortcut === 'redo') editor.redo();
-        else if (shortcut === 'duplicate') editor.duplicateSelectedNode();
-        else if (shortcut === 'copy') editor.copySelectedNode();
-        else if (shortcut === 'paste') editor.pasteNode();
-        else if (shortcut === 'copy-style') editor.copyNodeStyle();
-        else if (shortcut === 'paste-style') editor.pasteNodeStyle();
-        else if (shortcut === 'navigator') editor.showNavigator = !editor.showNavigator;
-        else if (shortcut === 'delete') editor.deleteSelectedNode();
-        else if (shortcut === 'escape') editor.selectNode(null);
-        else if (shortcut === 'command-palette') {
-          editor.showCommandPalette = !editor.showCommandPalette;
-        }
-      } else if (data.type === 'OPEN_BLOCK_LIBRARY') {
-        editor.showBlockLibraryModal = true;
-      }
+      // Only accept messages from OUR preview iframe (not other frames / windows / extensions).
+      const frameWindow = iframeElement?.contentWindow;
+      if (!frameWindow || event.source !== frameWindow) return;
+      const message = parsePreviewMessage(event.data);
+      if (!message) return;
+      handlePreviewMessage(message);
     }
 
     window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      stopPinging();
+    };
   });
 </script>
 
@@ -397,11 +572,23 @@
       style="width: {canvasWidth}; min-height: 85vh; transform: scale({editor.zoom / 100}); transform-origin: top center;"
     >
       <iframe
-        bind:this={iframeElement}
+        {@attach previewFrame}
         src="/preview"
         title="Live Svelte 5 Preview Canvas"
         class="canvas-iframe"
       ></iframe>
+      {#if !isPreviewReady}
+        <div class="canvas-connecting" role="status" aria-live="polite">
+          {#if handshakeFailed}
+            <span>Preview canvas did not respond.</span>
+            <button type="button" class="studio-btn studio-btn--primary" onclick={retryHandshake}>
+              Reload preview
+            </button>
+          {:else}
+            <span>Connecting to preview canvas…</span>
+          {/if}
+        </div>
+      {/if}
     </div>
   {/if}
 </main>
@@ -461,6 +648,19 @@
     color: var(--md-sys-color-on-primary-container);
     background-color: var(--md-sys-color-primary-container);
     font-weight: 600;
+  }
+  .canvas-connecting {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    font-size: 0.8125rem;
+    color: var(--md-sys-color-on-surface-variant);
+    background-color: color-mix(in srgb, var(--md-sys-color-surface) 85%, transparent);
+    pointer-events: auto;
   }
   .canvas-iframe {
     width: 100%;

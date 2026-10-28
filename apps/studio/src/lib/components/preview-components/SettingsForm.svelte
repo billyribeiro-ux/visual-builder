@@ -14,6 +14,8 @@
     notificationsEnabled = true,
     style = ''
   }: Props = $props();
+  /** Unique per instance so several forms on one canvas keep valid label/input pairs. */
+  const uid = $props.id();
 
   let name = $state('');
   let email = $state('');
@@ -46,23 +48,23 @@
 
   <form onsubmit={handleSubmit}>
     <div class="md-form-group">
-      <label for="pref-name" class="md-label">User Display Name</label>
-      <input id="pref-name" type="text" bind:value={name} class="md-input" />
+      <label for="{uid}-pref-name" class="md-label">User Display Name</label>
+      <input id="{uid}-pref-name" type="text" bind:value={name} class="md-input" />
     </div>
 
     <div class="md-form-group">
-      <label for="pref-email" class="md-label">Notification Email Address</label>
-      <input id="pref-email" type="email" bind:value={email} class="md-input" />
+      <label for="{uid}-pref-email" class="md-label">Notification Email Address</label>
+      <input id="{uid}-pref-email" type="email" bind:value={email} class="md-input" />
     </div>
 
     <div class="md-form-group" style="display: flex; align-items: center; gap: 0.75rem; margin-top: 1.5rem;">
       <input
-        id="pref-notif"
+        id="{uid}-pref-notif"
         type="checkbox"
         bind:checked={notifications}
         style="width: 18px; height: 18px; accent-color: var(--md-sys-color-primary);"
       />
-      <label for="pref-notif" style="font-size: 0.875rem; font-weight: 500; cursor: pointer;">
+      <label for="{uid}-pref-notif" style="font-size: 0.875rem; font-weight: 500; cursor: pointer;">
         Enable email digest and alert notifications
       </label>
     </div>

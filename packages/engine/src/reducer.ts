@@ -1,18 +1,92 @@
 import type { ProjectBlueprint, BlueprintNode } from '@app-viz/schema';
 import type { EditorCommand } from './commands.js';
+import { createId } from '@app-viz/schema';
 import {
   findNodeById,
   findNodeParent,
+  findNodeInBlueprint,
   cloneSubtreeWithNewIds
 } from './selector.js';
+
+/**
+ * Normalizes a user-supplied route path into a canonical, filesystem-safe URL path.
+ * "Pricing Page/" -> "/pricing-page", "../x" -> "/x", "" -> "/". Dynamic segments like
+ * "[slug]" are preserved.
+ */
+export function normalizePagePath(raw: string): string {
+  const segments = (raw || '/')
+    .split('/')
+    .map((seg) => seg.trim())
+    .filter((seg) => seg && seg !== '.' && seg !== '..')
+    .map((seg) =>
+      /^\[\.{0,3}[a-zA-Z_][a-zA-Z0-9_]*\]$/.test(seg)
+        ? seg
+        : seg
+            .toLowerCase()
+            .replace(/[^a-z0-9_-]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+    )
+    .filter(Boolean);
+  return '/' + segments.join('/');
+}
+
+/** Returns `path` or the first `path-N` not used by another page. */
+export function uniquePagePath(blueprint: ProjectBlueprint, path: string, ignorePageId?: string): string {
+  const taken = new Set(blueprint.pages.filter((p) => p.id !== ignorePageId).map((p) => p.path));
+  if (!taken.has(path)) return path;
+  const base = path === '/' ? '/home' : path;
+  for (let n = 2; ; n++) {
+    const candidate = `${base}-${n}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}
+
+function slugFromPath(path: string): string {
+  return path.replace(/^\//, '').replace(/\//g, '-').replace(/[[\]]/g, '') || 'home';
+}
+
+/** IDs of the node(s) a command mutates. Used for lock enforcement. */
+function commandTargetNodeIds(command: EditorCommand): string[] {
+  switch (command.type) {
+    case 'MOVE_NODE':
+    case 'REORDER_NODE':
+    case 'WRAP_NODE':
+    case 'UNWRAP_NODE':
+    case 'UPDATE_PROPS':
+    case 'UPDATE_STYLES':
+    case 'DELETE_NODE':
+    case 'PASTE_NODE_STYLE':
+    case 'RESET_NODE_STYLE':
+    case 'UPDATE_INTERACTIONS':
+      return [command.nodeId];
+    case 'UPDATE_NODE_META': {
+      // Toggling the lock itself (and renaming / hiding in the navigator) must stay possible.
+      const keys = Object.keys(command.meta);
+      const metaOnly = keys.every((k) => k === 'locked' || k === 'name' || k === 'hidden');
+      return metaOnly ? [] : [command.nodeId];
+    }
+    default:
+      return [];
+  }
+}
+
+/** True when the command would mutate a locked node. Locked nodes are read-only. */
+export function isBlockedByLock(blueprint: ProjectBlueprint, command: EditorCommand): boolean {
+  if (command.type === 'BATCH') return command.commands.some((c) => isBlockedByLock(blueprint, c));
+  return commandTargetNodeIds(command).some((id) => findNodeInBlueprint(blueprint, id)?.node.locked === true);
+}
 
 export function executeCommand(
   prev: ProjectBlueprint,
   command: EditorCommand
 ): ProjectBlueprint {
+  if (command.type === 'BATCH') {
+    return command.commands.reduce((state, c) => executeCommand(state, c), prev);
+  }
+  if (isBlockedByLock(prev, command)) return prev;
+
   // Deep clone to ensure immutability
   const next: ProjectBlueprint = JSON.parse(JSON.stringify(prev));
-  next.meta.updatedAt = new Date().toISOString();
 
   switch (command.type) {
     case 'INSERT_NODE': {
@@ -197,7 +271,8 @@ export function executeCommand(
     }
 
     case 'ADD_PAGE': {
-      next.pages.push(command.page);
+      const path = uniquePagePath(next, normalizePagePath(command.page.path));
+      next.pages.push({ ...command.page, path, slug: command.page.slug || slugFromPath(path) });
       return next;
     }
 
@@ -213,7 +288,12 @@ export function executeCommand(
     case 'UPDATE_PAGE_META': {
       const page = next.pages.find((p) => p.id === command.pageId);
       if (page) {
-        Object.assign(page, command.meta);
+        const meta = { ...command.meta };
+        if (meta.path !== undefined) {
+          meta.path = uniquePagePath(next, normalizePagePath(meta.path), page.id);
+          meta.slug ??= slugFromPath(meta.path);
+        }
+        Object.assign(page, meta);
       }
       return next;
     }
@@ -278,7 +358,7 @@ export function executeCommand(
     case 'WRAP_NODE': {
       const defaultPropsByWrapper: Record<string, Record<string, any>> = {
         'structure/container': { maxWidth: 'xl' },
-        'structure/section': { variant: 'surface-low', paddingY: 'md', maxWidth: 'xl' },
+        'structure/section': { surfaceTone: 'low', paddingY: 'md', maxWidth: 'xl' },
         'structure/grid': { columns: 2, gap: 'md' }
       };
       const defaultNameByWrapper: Record<string, string> = {
@@ -293,7 +373,7 @@ export function executeCommand(
         const { parent, index } = parentInfo;
         const targetNode = parent.children[index];
         const wrapperNode: BlueprintNode = {
-          id: command.wrapperId || '40000000-0000-4000-8000-' + Math.random().toString(16).slice(2, 14).padEnd(12, '0'),
+          id: command.wrapperId || createId(),
           componentType: command.wrapperType,
           name: command.wrapperName || defaultNameByWrapper[command.wrapperType] || 'Wrapper',
           props: command.wrapperProps || defaultPropsByWrapper[command.wrapperType] || {},
@@ -302,7 +382,8 @@ export function executeCommand(
           children: [targetNode],
           locked: false,
           hidden: false,
-          customClasses: ''
+          customClasses: '',
+          customCss: ''
         };
         parent.children.splice(index, 1, wrapperNode);
         return true;
@@ -426,17 +507,43 @@ export function executeCommand(
   }
 }
 
+export interface ExecuteOptions {
+  /**
+   * Consecutive commands sharing a coalesce key within `coalesceWindowMs` collapse into a
+   * single undo step (typing in a field, dragging a padding handle, scrubbing a slider).
+   */
+  coalesceKey?: string;
+  coalesceWindowMs?: number;
+  /** Injectable clock for deterministic tests. */
+  now?: number;
+}
+
 /**
- * Robust history manager for undo/redo with configurable stack depth.
+ * Undo/redo history with transactions, coalescing and no-op detection.
+ *
+ * Invariants:
+ *  - A command that does not change the document never creates an undo step and never
+ *    clears the redo stack.
+ *  - Everything executed inside begin()/commit() is a single undo step.
+ *  - `meta.updatedAt` is stamped only when the document actually changes.
  */
 export class HistoryManager {
   private past: ProjectBlueprint[] = [];
   private present: ProjectBlueprint;
+  private presentJson: string;
   private future: ProjectBlueprint[] = [];
-  private maxHistory: number;
+  private readonly maxHistory: number;
 
-  constructor(initial: ProjectBlueprint, maxHistory: number = 50) {
-    this.present = JSON.parse(JSON.stringify(initial));
+  private lastCoalesceKey: string | null = null;
+  private lastCoalesceAt = 0;
+
+  private txDepth = 0;
+  private txBase: ProjectBlueprint | null = null;
+  private txBaseJson = '';
+
+  constructor(initial: ProjectBlueprint, maxHistory: number = 100) {
+    this.present = structuredClone(initial);
+    this.presentJson = JSON.stringify(this.present);
     this.maxHistory = maxHistory;
   }
 
@@ -460,37 +567,107 @@ export class HistoryManager {
     return this.future.length;
   }
 
+  public get inTransaction(): boolean {
+    return this.txDepth > 0;
+  }
+
   public reset(initial: ProjectBlueprint): ProjectBlueprint {
     this.past = [];
     this.future = [];
-    this.present = JSON.parse(JSON.stringify(initial));
+    this.present = structuredClone(initial);
+    this.presentJson = JSON.stringify(this.present);
+    this.breakCoalescing();
+    this.txDepth = 0;
+    this.txBase = null;
     return this.present;
   }
 
-  public execute(command: EditorCommand): ProjectBlueprint {
-    const nextState = executeCommand(this.present, command);
-    this.past.push(this.present);
-    if (this.past.length > this.maxHistory) {
-      this.past.shift();
+  /** Ends any in-progress coalescing run (call on blur / pointerup). */
+  public breakCoalescing(): void {
+    this.lastCoalesceKey = null;
+  }
+
+  public begin(): void {
+    if (this.txDepth++ === 0) {
+      this.txBase = this.present;
+      this.txBaseJson = this.presentJson;
+      this.breakCoalescing();
     }
-    this.present = nextState;
-    this.future = []; // Clear redo stack on new action
+  }
+
+  public commit(): void {
+    if (this.txDepth === 0) return;
+    if (--this.txDepth > 0) return;
+    const base = this.txBase!;
+    this.txBase = null;
+    if (this.presentJson !== this.txBaseJson) {
+      this.pushPast(base);
+      this.future = [];
+    }
+  }
+
+  public rollback(): ProjectBlueprint {
+    if (this.txDepth === 0) return this.present;
+    this.txDepth = 0;
+    this.present = this.txBase!;
+    this.presentJson = this.txBaseJson;
+    this.txBase = null;
+    return this.present;
+  }
+
+  /** Executes a command. Returns the (possibly unchanged) current document. */
+  public execute(command: EditorCommand, options: ExecuteOptions = {}): ProjectBlueprint {
+    const candidate = executeCommand(this.present, command);
+    if (candidate === this.present) return this.present;
+    const candidateJson = JSON.stringify(candidate);
+    if (candidateJson === this.presentJson) return this.present;
+
+    candidate.meta = { ...candidate.meta, updatedAt: new Date(options.now ?? Date.now()).toISOString() };
+    const previous = this.present;
+    this.present = candidate;
+    this.presentJson = JSON.stringify(candidate);
+
+    if (this.txDepth > 0) return this.present;
+
+    const now = options.now ?? Date.now();
+    const windowMs = options.coalesceWindowMs ?? 800;
+    const coalesce =
+      options.coalesceKey !== undefined &&
+      options.coalesceKey === this.lastCoalesceKey &&
+      now - this.lastCoalesceAt <= windowMs &&
+      this.past.length > 0;
+
+    if (!coalesce) this.pushPast(previous);
+    this.future = [];
+    this.lastCoalesceKey = options.coalesceKey ?? null;
+    this.lastCoalesceAt = now;
     return this.present;
   }
 
   public undo(): ProjectBlueprint | null {
-    if (!this.canUndo) return null;
+    if (this.txDepth > 0 || !this.canUndo) return null;
     const previous = this.past.pop()!;
     this.future.unshift(this.present);
-    this.present = previous;
+    this.setPresent(previous);
     return this.present;
   }
 
   public redo(): ProjectBlueprint | null {
-    if (!this.canRedo) return null;
+    if (this.txDepth > 0 || !this.canRedo) return null;
     const next = this.future.shift()!;
     this.past.push(this.present);
-    this.present = next;
+    this.setPresent(next);
     return this.present;
+  }
+
+  private setPresent(doc: ProjectBlueprint): void {
+    this.present = doc;
+    this.presentJson = JSON.stringify(doc);
+    this.breakCoalescing();
+  }
+
+  private pushPast(doc: ProjectBlueprint): void {
+    this.past.push(doc);
+    if (this.past.length > this.maxHistory) this.past.shift();
   }
 }

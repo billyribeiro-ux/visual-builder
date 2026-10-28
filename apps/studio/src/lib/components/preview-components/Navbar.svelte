@@ -1,5 +1,6 @@
 <script lang="ts">
   import Button from './Button.svelte';
+  import { sanitizeHref } from '../../canvas/messages.js';
 
   interface NavLink {
     label: string;
@@ -27,7 +28,7 @@
   }: Props = $props();
 
   function handleLink(e: MouseEvent, href: string) {
-    if (onNavigate && href.startsWith('/')) {
+    if (onNavigate && href.startsWith('/') && !href.startsWith('//')) {
       e.preventDefault();
       onNavigate(href);
     }
@@ -54,9 +55,10 @@
     <!-- Desktop Navigation Links -->
     <nav class="md-navbar__nav">
       {#each links as link, idx (idx)}
+        {@const safeHref = sanitizeHref(link.href)}
         <a
-          href={link.href}
-          onclick={(e) => handleLink(e, link.href)}
+          href={safeHref}
+          onclick={(e) => handleLink(e, safeHref)}
           class="md-navbar__link"
         >
           {link.label}

@@ -11,7 +11,7 @@
     sectionEyebrow?: string;
     sectionTitle?: string;
     sectionDescription?: string;
-    columns?: 2 | 3 | 4;
+    columns?: number;
     features?: FeatureItem[];
     style?: string;
   }
@@ -24,6 +24,18 @@
     features = [],
     style = ''
   }: Props = $props();
+
+  const safeColumns = $derived(Math.min(4, Math.max(1, Math.round(Number(columns) || 3))));
+
+  /**
+   * Registry icons are icon-library names (e.g. "Layers"); the generated app renders a ⚡
+   * glyph for those, so mirror that. Emoji / short glyph icons are rendered as-is.
+   */
+  function iconGlyph(icon: string | undefined): string {
+    const v = (icon ?? '').trim();
+    if (!v || /^[A-Za-z][A-Za-z0-9-]*$/.test(v)) return '⚡';
+    return v;
+  }
 </script>
 
 <section class="md-feature-grid" {style}>
@@ -40,11 +52,11 @@
       {/if}
     </div>
 
-    <div class="md-feature-grid__cols md-feature-grid__cols--{columns}">
+    <div class="md-feature-grid__cols md-feature-grid__cols--{safeColumns}">
       {#each features as item, idx (idx)}
         <div class="md-card md-card--outlined">
           <div style="font-size: 1.5rem; margin-bottom: 1rem; width: 44px; height: 44px; border-radius: var(--md-sys-shape-corner-small, 8px); background-color: var(--md-sys-color-secondary-container); display: flex; align-items: center; justify-content: center;">
-            {item.icon || '⚡'}
+            {iconGlyph(item.icon)}
           </div>
           <h3 style="font-size: 1.125rem; font-weight: 700; margin-bottom: 0.5rem;">{item.title}</h3>
           <p style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant); line-height: 1.5;">{item.description}</p>
@@ -53,3 +65,16 @@
     </div>
   </Container>
 </section>
+
+<style>
+  @media (min-width: 768px) {
+    .md-feature-grid__cols--4 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (min-width: 1024px) {
+    .md-feature-grid__cols--4 {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+</style>

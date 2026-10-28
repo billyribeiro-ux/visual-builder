@@ -18,6 +18,8 @@
     style = '',
     onNavigate
   }: Props = $props();
+  /** Unique per instance so several forms on one canvas keep valid label/input pairs. */
+  const uid = $props.id();
 
   let email = $state('');
   let password = $state('');
@@ -43,12 +45,12 @@
     </div>
     <form onsubmit={handleSubmit} style="display: flex; flex-direction: column; gap: 1rem;">
       <div>
-        <label for="auth-email" class="md-label-large" style="display: block; margin-bottom: 0.375rem;">Email</label>
-        <input id="auth-email" type="email" required bind:value={email} placeholder="you@company.com" class="md-input" />
+        <label for="{uid}-auth-email" class="md-label-large" style="display: block; margin-bottom: 0.375rem;">Email</label>
+        <input id="{uid}-auth-email" type="email" required bind:value={email} placeholder="you@company.com" class="md-input" />
       </div>
       <div>
-        <label for="auth-password" class="md-label-large" style="display: block; margin-bottom: 0.375rem;">Password</label>
-        <input id="auth-password" type="password" required bind:value={password} placeholder="••••••••" class="md-input" />
+        <label for="{uid}-auth-password" class="md-label-large" style="display: block; margin-bottom: 0.375rem;">Password</label>
+        <input id="{uid}-auth-password" type="password" required bind:value={password} placeholder="••••••••" class="md-input" />
       </div>
       <button type="submit" class="md-btn md-btn-filled" style="width: 100%; margin-top: 0.5rem;">
         {mode === 'signup' ? 'Create Account' : 'Sign In'}

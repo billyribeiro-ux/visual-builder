@@ -3,9 +3,10 @@ import {
   type BreakpointKey,
   type BlueprintNode,
   type BlueprintAsset,
-  ProjectBlueprintSchema,
   createDefaultAcmeSaaSProject,
   createBlankProject,
+  createNode,
+  createId,
   validateBlueprintPreflight,
   composeNodesFromPrompt,
   MD3_THEME_PRESETS
@@ -15,30 +16,64 @@ import {
   type EditorCommand,
   findNodeById,
   findNodeParent,
-  cloneSubtreeWithNewIds
+  cloneSubtreeWithNewIds,
+  isBlockedByLock
 } from '@app-viz/engine';
+import { z } from 'zod';
 import { getAllManifests } from '@app-viz/components';
 import { generateFullExport, createDeterministicZip } from '@app-viz/codegen';
+import {
+  ProjectStore,
+  parseProjectFile,
+  serializeProjectFile,
+  summarize,
+  type ProjectSummary,
+  type SnapshotRecord,
+  type SavedSymbol
+} from '../persistence/project-store.js';
 
-export interface ProjectSnapshot {
-  id: string;
-  label: string;
-  createdAt: string;
-  blueprint: ProjectBlueprint;
+export type { SavedSymbol } from '../persistence/project-store.js';
+export type ProjectSnapshot = SnapshotRecord;
+
+export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
+
+export interface StudioNotice {
+  id: number;
+  kind: 'info' | 'success' | 'warning' | 'error';
+  message: string;
 }
 
-export interface SavedSymbol {
-  id: string;
-  name: string;
-  componentType: string;
-  createdAt: string;
-  node: BlueprintNode;
+const AUTOSAVE_DEBOUNCE_MS = 400;
+const ACTIVE_PROJECT_KEY = 'activeProjectId';
+
+/** Stable coalescing key so continuous edits of the same field collapse into one undo step. */
+function coalesceKeyFor(command: EditorCommand): string | undefined {
+  if (command.type === 'UPDATE_PROPS') {
+    return `props:${command.nodeId}:${Object.keys(command.props).sort().join(',')}`;
+  }
+  if (command.type === 'UPDATE_STYLES') {
+    return `styles:${command.nodeId}:${command.breakpoint}:${Object.keys(command.styles).sort().join(',')}`;
+  }
+  if (command.type === 'UPDATE_PAGE_META') {
+    return `page:${command.pageId}:${Object.keys(command.meta).sort().join(',')}`;
+  }
+  if (command.type === 'UPDATE_PROJECT_META') {
+    return `project:${Object.keys(command.meta).sort().join(',')}`;
+  }
+  return undefined;
 }
 
-const STORAGE_KEY_BLUEPRINT = 'app-viz-studio-blueprint-v1';
-const STORAGE_KEY_SNAPSHOTS = 'app-viz-studio-snapshots-v1';
-const STORAGE_KEY_FAVORITES = 'app-viz-studio-favorites-v1';
-const STORAGE_KEY_SYMBOLS = 'app-viz-studio-symbols-v1';
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Revoking synchronously can cancel the download in Safari/Firefox.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
 
 function findNodePath(root: BlueprintNode, targetId: string): BlueprintNode[] | null {
   if (root.id === targetId) return [root];
@@ -62,6 +97,12 @@ class EditorState {
   // Svelte 5 Runes for fine-grained reactive studio state
   private historyManager = new HistoryManager(createDefaultAcmeSaaSProject());
   private revision = $state<number>(0);
+  private store: ProjectStore | null = null;
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  private saveChain: Promise<void> = Promise.resolve();
+  private noticeSeq = 0;
+  private channel: BroadcastChannel | null = null;
+  private readonly tabId = createId();
 
   blueprint = $state<ProjectBlueprint>(this.historyManager.current);
   selectedNodeId = $state<string | null>('30000000-0000-0000-0000-000000000002');
@@ -74,11 +115,23 @@ class EditorState {
   showCommandPalette = $state<boolean>(false);
   showBlockLibraryModal = $state<boolean>(false);
   showNavigator = $state<boolean>(false);
+  showExportDialog = $state<boolean>(false);
+  showProjectLibrary = $state<boolean>(false);
   studioTheme = $state<'light' | 'dark'>('light');
   activeLeftTab = $state<'pages' | 'layers' | 'library' | 'assets' | 'tokens'>('library');
-  isSaving = $state<boolean>(false);
-  lastSavedAt = $state<string>('Saved locally');
+  /** True once persisted state has been loaded; the UI renders a skeleton until then. */
+  ready = $state<boolean>(false);
+  saveStatus = $state<SaveStatus>('idle');
+  saveError = $state<string | null>(null);
+  /** ISO timestamp of the last successful durable write. */
+  lastSavedAt = $state<string | null>(null);
+  storageDurable = $state<boolean>(true);
+  projects = $state<ProjectSummary[]>([]);
   snapshots = $state<ProjectSnapshot[]>([]);
+  notices = $state<StudioNotice[]>([]);
+  /** Set when another tab saved a newer version of the open project. */
+  externalChange = $state<boolean>(false);
+  isSaving = $derived(this.saveStatus === 'saving');
   clipboardNode = $state<BlueprintNode | null>(null);
   clipboardStyles = $state<{
     styles: BlueprintNode['styles'];
@@ -154,45 +207,107 @@ class EditorState {
 
   preflightReport = $derived.by(() => validateBlueprintPreflight(this.blueprint));
 
-  constructor() {
-    if (typeof window !== 'undefined') {
-      this.hydrateFromStorage();
-    }
-  }
+  /**
+   * Loads persisted projects. Must be called once from the client (the Studio route is
+   * client-only, so this never races SSR hydration).
+   */
+  async init(): Promise<void> {
+    if (this.store || typeof window === 'undefined') return;
+    const store = new ProjectStore();
+    this.store = store;
+    this.storageDurable = store.durable;
 
-  private hydrateFromStorage() {
     try {
-      const rawBp = window.localStorage.getItem(STORAGE_KEY_BLUEPRINT);
-      if (rawBp) {
-        const parsed = ProjectBlueprintSchema.safeParse(JSON.parse(rawBp));
-        if (parsed.success) {
-          this.historyManager.reset(parsed.data);
-          this.blueprint = parsed.data;
-          this.activePageId = parsed.data.pages[0]?.id || this.activePageId;
-          this.revision += 1;
-        }
+      const legacy = await store.importLegacyLocalStorage();
+      if (legacy.error) {
+        this.notify('warning', `A previously saved project could not be read and was preserved for recovery (${legacy.error}).`);
       }
-      const rawSnaps = window.localStorage.getItem(STORAGE_KEY_SNAPSHOTS);
-      if (rawSnaps) {
-        this.snapshots = JSON.parse(rawSnaps);
+
+      this.projects = await store.listProjects();
+      const preferredId =
+        (await store.getSetting(ACTIVE_PROJECT_KEY, z.string())) ??
+        legacy.importedProjectId ??
+        this.projects[0]?.id;
+
+      let opened = false;
+      if (preferredId) opened = await this.openProject(preferredId, { silent: true });
+      if (!opened) {
+        await this.adoptBlueprint(createDefaultAcmeSaaSProject(), { persist: true });
       }
-      const rawFavs = window.localStorage.getItem(STORAGE_KEY_FAVORITES);
-      if (rawFavs) {
-        this.favoriteComponents = JSON.parse(rawFavs);
+
+      const favs = await store.getFavorites();
+      if (favs) this.favoriteComponents = favs;
+      this.customSymbols = await store.getSymbols();
+    } catch (e) {
+      this.storageDurable = false;
+      this.notify('error', `Local storage is unavailable; changes will not persist (${(e as Error).message}).`);
+    }
+
+    this.setupCrossTabSync();
+    window.addEventListener('pagehide', () => void this.flushSave());
+    window.addEventListener('beforeunload', (event) => {
+      if (this.saveStatus === 'dirty' || this.saveStatus === 'saving' || this.saveStatus === 'error') {
+        event.preventDefault();
       }
-      const rawSyms = window.localStorage.getItem(STORAGE_KEY_SYMBOLS);
-      if (rawSyms) {
-        this.customSymbols = JSON.parse(rawSyms);
-      }
-    } catch {
-      // Ignore corrupt storage
+    });
+    this.ready = true;
+  }
+
+  private setupCrossTabSync(): void {
+    if (typeof BroadcastChannel === 'undefined') return;
+    this.channel = new BroadcastChannel('app-viz-studio');
+    this.channel.onmessage = (event: MessageEvent<{ type: string; projectId: string; tabId: string }>) => {
+      const msg = event.data;
+      if (!msg || msg.tabId === this.tabId) return;
+      if (msg.type === 'saved' && msg.projectId === this.blueprint.meta.id) this.externalChange = true;
+      if (msg.type === 'saved' || msg.type === 'deleted') void this.refreshProjects();
+    };
+  }
+
+  notify(kind: StudioNotice['kind'], message: string, timeoutMs = kind === 'error' ? 9000 : 4000): void {
+    const id = ++this.noticeSeq;
+    this.notices = [...this.notices, { id, kind, message }].slice(-4);
+    if (timeoutMs > 0) setTimeout(() => this.dismissNotice(id), timeoutMs);
+  }
+
+  dismissNotice(id: number): void {
+    this.notices = this.notices.filter((n) => n.id !== id);
+  }
+
+  /**
+   * Applies a command as an undoable step. Rapid edits to the same field (typing, dragging)
+   * are coalesced into one undo step automatically. Mutations of locked nodes are refused.
+   */
+  dispatch(command: EditorCommand, options: { coalesce?: boolean } = {}): boolean {
+    if (isBlockedByLock(this.historyManager.current, command)) {
+      this.notify('warning', 'This element is locked. Unlock it in the Navigator or Advanced tab to edit it.');
+      return false;
+    }
+    const before = this.historyManager.current;
+    const coalesceKey = options.coalesce === false ? undefined : coalesceKeyFor(command);
+    const after = this.historyManager.execute(command, { coalesceKey });
+    if (after === before) return false;
+    this.blueprint = after;
+    this.revision += 1;
+    this.reconcileSelection();
+    this.scheduleSave();
+    return true;
+  }
+
+  /** Runs several dispatches as one atomic undo step. */
+  transact<T>(fn: () => T): T {
+    this.historyManager.begin();
+    try {
+      return fn();
+    } finally {
+      this.historyManager.commit();
+      this.revision += 1;
     }
   }
 
-  dispatch(command: EditorCommand) {
-    this.blueprint = this.historyManager.execute(command);
-    this.revision += 1;
-    this.triggerAutosave();
+  /** Call when a continuous edit ends (blur, pointerup) so the next edit starts a new undo step. */
+  endContinuousEdit(): void {
+    this.historyManager.breakCoalescing();
   }
 
   undo() {
@@ -200,7 +315,8 @@ class EditorState {
     if (prev) {
       this.blueprint = prev;
       this.revision += 1;
-      this.triggerAutosave();
+      this.reconcileSelection();
+      this.scheduleSave();
     }
   }
 
@@ -209,7 +325,18 @@ class EditorState {
     if (next) {
       this.blueprint = next;
       this.revision += 1;
-      this.triggerAutosave();
+      this.reconcileSelection();
+      this.scheduleSave();
+    }
+  }
+
+  /** Keeps active page / selection pointing at things that still exist after any change. */
+  private reconcileSelection(): void {
+    if (!this.blueprint.pages.some((p) => p.id === this.activePageId)) {
+      this.activePageId = this.blueprint.pages[0]?.id ?? '';
+    }
+    if (this.selectedNodeId && !this.findNodeAnywhere(this.selectedNodeId)) {
+      this.selectedNodeId = null;
     }
   }
 
@@ -287,6 +414,13 @@ class EditorState {
   }
 
   alignNode(
+    targetNodeId: string | undefined,
+    alignment: 'left' | 'center' | 'right' | 'stretch'
+  ) {
+    this.transact(() => this.applyAlignment(targetNodeId, alignment));
+  }
+
+  private applyAlignment(
     targetNodeId: string | undefined,
     alignment: 'left' | 'center' | 'right' | 'stretch'
   ) {
@@ -433,7 +567,7 @@ class EditorState {
         id: crypto.randomUUID(),
         componentType: 'structure/section',
         name: '1-Column Flexbox Section',
-        props: { variant: 'surface', paddingY: 'lg', maxWidth: 'xl' },
+        props: { surfaceTone: 'surface', paddingY: 'lg', maxWidth: 'xl' },
         styles: {
           base: {
             display: 'flex',
@@ -453,7 +587,7 @@ class EditorState {
         id: crypto.randomUUID(),
         componentType: 'structure/section',
         name: '2-Column Flexbox (50% / 50%)',
-        props: { variant: 'surface', paddingY: 'lg', maxWidth: 'xl' },
+        props: { surfaceTone: 'surface', paddingY: 'lg', maxWidth: 'xl' },
         styles: { base: {} },
         interactions: [],
         children: [
@@ -481,7 +615,7 @@ class EditorState {
         id: crypto.randomUUID(),
         componentType: 'structure/section',
         name: '2-Column Flexbox (33% / 67%)',
-        props: { variant: 'surface', paddingY: 'lg', maxWidth: 'xl' },
+        props: { surfaceTone: 'surface', paddingY: 'lg', maxWidth: 'xl' },
         styles: { base: {} },
         interactions: [],
         children: [
@@ -516,7 +650,7 @@ class EditorState {
         id: crypto.randomUUID(),
         componentType: 'structure/section',
         name: '2-Column Flexbox (67% / 33%)',
-        props: { variant: 'surface', paddingY: 'lg', maxWidth: 'xl' },
+        props: { surfaceTone: 'surface', paddingY: 'lg', maxWidth: 'xl' },
         styles: { base: {} },
         interactions: [],
         children: [
@@ -551,7 +685,7 @@ class EditorState {
         id: crypto.randomUUID(),
         componentType: 'structure/section',
         name: '3-Column Container (33% / 33% / 33%)',
-        props: { variant: 'surface', paddingY: 'lg', maxWidth: 'xl' },
+        props: { surfaceTone: 'surface', paddingY: 'lg', maxWidth: 'xl' },
         styles: { base: {} },
         interactions: [],
         children: [
@@ -579,7 +713,7 @@ class EditorState {
         id: crypto.randomUUID(),
         componentType: 'structure/section',
         name: '4-Column Container (25% × 4)',
-        props: { variant: 'surface', paddingY: 'lg', maxWidth: 'xl' },
+        props: { surfaceTone: 'surface', paddingY: 'lg', maxWidth: 'xl' },
         styles: { base: {} },
         interactions: [],
         children: [
@@ -659,9 +793,7 @@ class EditorState {
 
   deleteSelectedNode() {
     if (!this.selectedNodeId) return;
-    const id = this.selectedNodeId;
-    this.dispatch({ type: 'DELETE_NODE', nodeId: id });
-    this.selectNode(null);
+    if (this.dispatch({ type: 'DELETE_NODE', nodeId: this.selectedNodeId })) this.selectNode(null);
   }
 
   reorderSelectedNode(direction: 'up' | 'down') {
@@ -735,6 +867,36 @@ class EditorState {
     return this.activePage ? { targetParentId: this.activePage.rootNode.id } : null;
   }
 
+  /**
+   * Inserts a fresh instance of a registry component into the selected container (or after
+   * the selected element, or at the end of the page). Returns the new node id.
+   */
+  insertComponent(componentType: string): string | null {
+    const page = this.activePage;
+    const manifest = getAllManifests().find((m) => m.type === componentType);
+    if (!page || !manifest) return null;
+    const node = createNode({
+      componentType: manifest.type,
+      name: manifest.displayName,
+      props: structuredClone(manifest.defaultProps)
+    });
+    const selected = this.selectedNode;
+    let targetParentId = page.rootNode.id;
+    let index: number | undefined;
+    if (selected && isContainerComponent(selected.componentType) && !selected.locked) {
+      targetParentId = selected.id;
+    } else if (selected) {
+      const parentInfo = this.findParentAnywhere(selected.id);
+      if (parentInfo) {
+        targetParentId = parentInfo.parent.id;
+        index = parentInfo.index + 1;
+      }
+    }
+    if (!this.dispatch({ type: 'INSERT_NODE', targetParentId, index, node }, { coalesce: false })) return null;
+    this.selectNode(node.id);
+    return node.id;
+  }
+
   dropComponentOnTarget(
     componentType: string,
     targetNodeId: string,
@@ -746,18 +908,11 @@ class EditorState {
     const resolved = this.resolveDropTarget(targetNodeId, position);
     if (!resolved) return;
 
-    const newNode: BlueprintNode = {
-      id: crypto.randomUUID(),
+    const newNode = createNode({
       componentType: manifest.type,
       name: manifest.displayName,
-      props: JSON.parse(JSON.stringify(manifest.defaultProps)),
-      styles: { base: {} },
-      interactions: [],
-      children: [],
-      locked: false,
-      hidden: false,
-      customClasses: ''
-    };
+      props: structuredClone(manifest.defaultProps)
+    });
 
     this.dispatch({
       type: 'INSERT_NODE',
@@ -793,13 +948,7 @@ class EditorState {
     } else {
       this.favoriteComponents = [...this.favoriteComponents, componentType];
     }
-    if (typeof window !== 'undefined') {
-      try {
-        window.localStorage.setItem(STORAGE_KEY_FAVORITES, JSON.stringify(this.favoriteComponents));
-      } catch {
-        // Ignore quota error
-      }
-    }
+    void this.store?.setSetting('favorites', $state.snapshot(this.favoriteComponents)).catch(() => {});
   }
 
   saveSelectedNodeAsSymbol(customName?: string) {
@@ -811,17 +960,18 @@ class EditorState {
       id: crypto.randomUUID(),
       name: customName?.trim() || `${this.selectedNode.name} Symbol`,
       componentType: this.selectedNode.componentType,
-      createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      createdAt: new Date().toISOString(),
       node: cloned
     };
     this.customSymbols = [sym, ...this.customSymbols];
-    if (typeof window !== 'undefined') {
-      try {
-        window.localStorage.setItem(STORAGE_KEY_SYMBOLS, JSON.stringify(this.customSymbols));
-      } catch {
-        // Ignore quota error
-      }
-    }
+    this.persistSymbols();
+    this.notify('success', `Saved "${sym.name}" to your template library.`);
+  }
+
+  private persistSymbols(): void {
+    void this.store
+      ?.setSetting('symbols', $state.snapshot(this.customSymbols))
+      .catch((e: Error) => this.notify('error', `Could not save template library: ${e.message}`));
   }
 
   insertSymbol(symbolId: string) {
@@ -845,13 +995,7 @@ class EditorState {
 
   deleteSymbol(symbolId: string) {
     this.customSymbols = this.customSymbols.filter((s) => s.id !== symbolId);
-    if (typeof window !== 'undefined') {
-      try {
-        window.localStorage.setItem(STORAGE_KEY_SYMBOLS, JSON.stringify(this.customSymbols));
-      } catch {
-        // Ignore quota error
-      }
-    }
+    this.persistSymbols();
   }
 
   // Prompt-to-Blueprint AI Section Composer
@@ -866,23 +1010,16 @@ class EditorState {
         ? selected.id
         : this.activePage.rootNode.id;
 
-    for (const node of result.nodes) {
-      this.dispatch({
-        type: 'INSERT_NODE',
-        targetParentId,
-        node
-      });
-    }
-
-    if (applySuggestedTheme && result.suggestedThemeId) {
-      const preset = MD3_THEME_PRESETS[result.suggestedThemeId];
-      if (preset) {
-        this.dispatch({
-          type: 'UPDATE_TOKENS',
-          tokens: { colors: { ...preset.colors } }
-        });
-      }
-    }
+    const preset =
+      applySuggestedTheme && result.suggestedThemeId ? MD3_THEME_PRESETS[result.suggestedThemeId] : undefined;
+    this.dispatch({
+      type: 'BATCH',
+      label: `AI compose: ${prompt.slice(0, 40)}`,
+      commands: [
+        ...result.nodes.map((node) => ({ type: 'INSERT_NODE' as const, targetParentId, node })),
+        ...(preset ? [{ type: 'UPDATE_TOKENS' as const, tokens: { colors: { ...preset.colors } } }] : [])
+      ]
+    });
 
     if (result.nodes.length > 0) {
       this.selectNode(result.nodes[result.nodes.length - 1].id);
@@ -920,8 +1057,7 @@ class EditorState {
       });
     } else if (this.activePage) {
       // Insert a Card showcasing the asset
-      const cardNode: BlueprintNode = {
-        id: crypto.randomUUID(),
+      const cardNode = createNode({
         componentType: 'ui/card',
         name: `${asset.filename} Card`,
         props: {
@@ -929,16 +1065,10 @@ class EditorState {
           eyebrow: asset.category?.toUpperCase() || 'ASSET',
           title: asset.alt || asset.filename,
           body: `Bundled static path: ${asset.localPath}`,
-          actionText: 'Explore',
-          actionHref: '#'
-        },
-        styles: { base: {} },
-        interactions: [],
-        children: [],
-        locked: false,
-        hidden: false,
-        customClasses: ''
-      };
+          ctaText: 'Explore',
+          ctaHref: '#'
+        }
+      });
       this.dispatch({
         type: 'INSERT_NODE',
         targetParentId: this.activePage.rootNode.id,
@@ -948,116 +1078,221 @@ class EditorState {
     }
   }
 
-  loadStarterTemplate(template: 'acme-saas' | 'blank') {
-    const nextBp =
-      template === 'blank' ? createBlankProject('My New App') : createDefaultAcmeSaaSProject();
-    this.historyManager.reset(nextBp);
-    this.blueprint = nextBp;
-    this.activePageId = nextBp.pages[0]?.id || '';
-    this.selectedNodeId =
-      nextBp.pages[0]?.rootNode.children[0]?.id || nextBp.pages[0]?.rootNode.id || null;
+  // ---------------------------------------------------------------------------
+  // Project library (multiple saved projects, IndexedDB-backed)
+  // ---------------------------------------------------------------------------
+
+  async refreshProjects(): Promise<void> {
+    if (this.store) this.projects = await this.store.listProjects();
+  }
+
+  /** Swaps the open document. Never destroys data: the outgoing project is flushed first. */
+  private async adoptBlueprint(bp: ProjectBlueprint, opts: { persist?: boolean } = {}): Promise<void> {
+    this.historyManager.reset(bp);
+    this.blueprint = this.historyManager.current;
+    this.activePageId = bp.pages[0]?.id ?? '';
+    this.selectedNodeId = null;
+    this.externalChange = false;
     this.revision += 1;
-    this.triggerAutosave();
+    if (this.store) {
+      this.snapshots = await this.store.listSnapshots(bp.meta.id);
+      await this.store.setSetting(ACTIVE_PROJECT_KEY, bp.meta.id).catch(() => {});
+    }
+    if (opts.persist) await this.saveNow();
   }
 
-  importBlueprintJson(jsonString: string): { ok: boolean; error?: string } {
+  async openProject(id: string, opts: { silent?: boolean } = {}): Promise<boolean> {
+    if (!this.store) return false;
+    await this.flushSave();
+    const result = await this.store.loadProject(id);
+    if (!result.ok) {
+      if (!opts.silent) this.notify('error', `Could not open project: ${result.error}`);
+      else this.notify('warning', `Your last project could not be opened and was preserved for recovery (${result.error}).`);
+      return false;
+    }
+    await this.adoptBlueprint(result.blueprint, { persist: Boolean(result.migratedFrom) });
+    if (result.migratedFrom) {
+      this.notify('info', `Upgraded "${result.blueprint.meta.name}" from schema v${result.migratedFrom}.`);
+    } else if (!opts.silent) {
+      this.notify('success', `Opened "${result.blueprint.meta.name}".`);
+    }
+    return true;
+  }
+
+  async newProject(template: 'acme-saas' | 'blank', name?: string): Promise<void> {
+    await this.flushSave();
+    const bp =
+      template === 'blank'
+        ? createBlankProject(name?.trim() || 'Untitled App')
+        : this.withFreshIdentity(createDefaultAcmeSaaSProject(), name?.trim() || 'Acme SaaS');
+    await this.adoptBlueprint(bp, { persist: true });
+    this.notify('success', `Created "${bp.meta.name}". Your previous project is still in the library.`);
+  }
+
+  /** Gives a template a unique project id/name so it never overwrites an existing save. */
+  private withFreshIdentity(bp: ProjectBlueprint, name: string): ProjectBlueprint {
+    const now = new Date().toISOString();
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'project';
+    return { ...bp, meta: { ...bp.meta, id: createId(), name, slug, createdAt: now, updatedAt: now } };
+  }
+
+  async duplicateProject(id?: string): Promise<void> {
+    if (!this.store) return;
+    await this.flushSave();
+    const source = id && id !== this.blueprint.meta.id ? await this.store.loadProject(id) : null;
+    const base = source?.ok ? source.blueprint : ($state.snapshot(this.blueprint) as ProjectBlueprint);
+    const copy = this.withFreshIdentity(structuredClone(base), `${base.meta.name} (Copy)`);
+    await this.adoptBlueprint(copy, { persist: true });
+    this.notify('success', `Duplicated as "${copy.meta.name}".`);
+  }
+
+  renameProject(name: string): void {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === this.blueprint.meta.name) return;
+    const slug = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || this.blueprint.meta.slug;
+    this.dispatch({ type: 'UPDATE_PROJECT_META', meta: { name: trimmed, slug } }, { coalesce: false });
+  }
+
+  async deleteProject(id: string): Promise<void> {
+    if (!this.store) return;
+    const isOpen = id === this.blueprint.meta.id;
+    await this.store.deleteProject(id);
+    this.channel?.postMessage({ type: 'deleted', projectId: id, tabId: this.tabId });
+    await this.refreshProjects();
+    if (isOpen) {
+      const next = this.projects[0];
+      if (!next || !(await this.openProject(next.id, { silent: true }))) {
+        await this.adoptBlueprint(createBlankProject('Untitled App'), { persist: true });
+      }
+    }
+    this.notify('info', 'Project deleted.');
+  }
+
+  /** Imports a `.appviz.json` file or raw blueprint JSON as a NEW library project. */
+  async importProjectFile(text: string): Promise<{ ok: boolean; error?: string }> {
+    const result = parseProjectFile(text);
+    if (!result.ok) return { ok: false, error: result.error };
+    await this.flushSave();
+    let bp = result.blueprint;
+    if (this.projects.some((p) => p.id === bp.meta.id)) {
+      bp = this.withFreshIdentity(bp, `${bp.meta.name} (Imported)`);
+    }
+    await this.adoptBlueprint(bp, { persist: true });
+    this.notify(
+      'success',
+      result.migratedFrom
+        ? `Imported "${bp.meta.name}" (upgraded from schema v${result.migratedFrom}).`
+        : `Imported "${bp.meta.name}".`
+    );
+    return { ok: true };
+  }
+
+  /** Back-compat alias used by older UI. */
+  importBlueprintJson(jsonString: string): Promise<{ ok: boolean; error?: string }> {
+    return this.importProjectFile(jsonString);
+  }
+
+  exportProjectFile(): void {
+    const json = serializeProjectFile($state.snapshot(this.blueprint) as ProjectBlueprint);
+    downloadBlob(new Blob([json], { type: 'application/json' }), `${this.blueprint.meta.slug}.appviz.json`);
+  }
+
+  async reloadFromStorage(): Promise<void> {
+    this.externalChange = false;
+    await this.openProject(this.blueprint.meta.id, { silent: true });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Version history (named snapshots, per project)
+  // ---------------------------------------------------------------------------
+
+  async createSnapshot(label?: string): Promise<void> {
+    if (!this.store) return;
+    const name =
+      label?.trim() ||
+      `Snapshot ${new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`;
     try {
-      const raw = JSON.parse(jsonString);
-      const parsed = ProjectBlueprintSchema.safeParse(raw);
-      if (!parsed.success) {
-        return { ok: false, error: parsed.error.issues[0]?.message || 'Invalid blueprint schema' };
-      }
-      this.historyManager.reset(parsed.data);
-      this.blueprint = parsed.data;
-      this.activePageId = parsed.data.pages[0]?.id || '';
-      this.selectedNodeId = null;
-      this.revision += 1;
-      this.triggerAutosave();
-      return { ok: true };
+      await this.store.addSnapshot($state.snapshot(this.blueprint) as ProjectBlueprint, name);
+      this.snapshots = await this.store.listSnapshots(this.blueprint.meta.id);
+      this.notify('success', `Saved version "${name}".`);
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      this.notify('error', `Could not save version: ${(e as Error).message}`);
     }
   }
 
-  createSnapshot(label?: string) {
-    const snap: ProjectSnapshot = {
-      id: crypto.randomUUID(),
-      label:
-        label?.trim() ||
-        `Snapshot (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
-      createdAt: new Date().toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      }),
-      blueprint: structuredClone($state.snapshot(this.blueprint))
-    };
-    this.snapshots = [snap, ...this.snapshots].slice(0, 15);
-    if (typeof window !== 'undefined') {
-      try {
-        window.localStorage.setItem(STORAGE_KEY_SNAPSHOTS, JSON.stringify(this.snapshots));
-      } catch {
-        // Ignore quota errors
-      }
-    }
-  }
-
-  restoreSnapshot(snapshotId: string) {
+  /** Restores a snapshot as an undoable change (Cmd+Z brings the current state back). */
+  restoreSnapshot(snapshotId: string): void {
     const snap = this.snapshots.find((s) => s.id === snapshotId);
     if (!snap) return;
-    this.dispatch({ type: 'LOAD_BLUEPRINT', blueprint: snap.blueprint });
+    this.dispatch({ type: 'LOAD_BLUEPRINT', blueprint: structuredClone(snap.blueprint) }, { coalesce: false });
     this.activePageId = snap.blueprint.pages[0]?.id || '';
     this.selectedNodeId = null;
+    this.notify('info', `Restored "${snap.label}". Press ⌘Z to undo.`);
   }
 
-  private triggerAutosave() {
-    this.isSaving = true;
-    if (typeof window !== 'undefined') {
-      try {
-        window.localStorage.setItem(
-          STORAGE_KEY_BLUEPRINT,
-          JSON.stringify($state.snapshot(this.blueprint))
-        );
-      } catch {
-        // Ignore quota errors
-      }
-    }
-    setTimeout(() => {
-      this.isSaving = false;
-      this.lastSavedAt = new Date().toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      });
-    }, 250);
+  async deleteSnapshot(snapshotId: string): Promise<void> {
+    if (!this.store) return;
+    await this.store.deleteSnapshot(snapshotId);
+    this.snapshots = this.snapshots.filter((s) => s.id !== snapshotId);
   }
+
+  // ---------------------------------------------------------------------------
+  // Autosave
+  // ---------------------------------------------------------------------------
+
+  private scheduleSave(): void {
+    if (!this.store) return;
+    this.saveStatus = 'dirty';
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => void this.saveNow(), AUTOSAVE_DEBOUNCE_MS);
+  }
+
+  /** Writes immediately if there are pending changes. */
+  async flushSave(): Promise<void> {
+    if (this.saveTimer || this.saveStatus === 'dirty' || this.saveStatus === 'error') await this.saveNow();
+    else await this.saveChain;
+  }
+
+  /** Serialized durable write. `lastSavedAt` only advances when the write really succeeded. */
+  saveNow(): Promise<void> {
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    const store = this.store;
+    if (!store) return Promise.resolve();
+    const doc = $state.snapshot(this.blueprint) as ProjectBlueprint;
+    this.saveChain = this.saveChain.then(async () => {
+      this.saveStatus = 'saving';
+      try {
+        await store.saveProject(doc);
+        this.saveStatus = 'saved';
+        this.saveError = null;
+        this.lastSavedAt = new Date().toISOString();
+        const summary = summarize(doc);
+        this.projects = [summary, ...this.projects.filter((p) => p.id !== summary.id)];
+        this.channel?.postMessage({ type: 'saved', projectId: doc.meta.id, tabId: this.tabId });
+      } catch (e) {
+        this.saveStatus = 'error';
+        this.saveError = (e as Error).message || 'Unknown storage error';
+        this.notify('error', `Changes are NOT saved: ${this.saveError}. Export a project file to be safe.`, 0);
+      }
+    });
+    return this.saveChain;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Export
+  // ---------------------------------------------------------------------------
 
   async exportHandoffPackage(): Promise<void> {
-    const generated = generateFullExport(this.blueprint);
+    const generated = generateFullExport($state.snapshot(this.blueprint) as ProjectBlueprint);
     const zipBytes = await createDeterministicZip(generated);
-
-    const blob = new Blob([zipBytes], { type: 'application/zip' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${this.blueprint.meta.slug}-ai-handoff.zip`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadBlob(new Blob([zipBytes as BlobPart], { type: 'application/zip' }), `${this.blueprint.meta.slug}-sveltekit.zip`);
   }
 
   downloadBlueprintJson(): void {
-    const jsonStr = JSON.stringify(this.blueprint, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${this.blueprint.meta.slug}.blueprint.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    this.exportProjectFile();
   }
 }
 

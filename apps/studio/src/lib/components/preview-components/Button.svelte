@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { sanitizeHref } from '../../canvas/messages.js';
 
   interface Props {
     variant?: 'filled' | 'outlined' | 'text' | 'tonal' | 'elevated' | 'primary' | 'secondary' | 'outline' | 'ghost';
@@ -35,19 +36,21 @@
     return 'md-btn--filled';
   });
 
+  const safeHref = $derived(href ? sanitizeHref(href) : '');
+
   function handleClick(e: MouseEvent) {
-    if (href && onNavigate && href.startsWith('/')) {
+    if (safeHref && onNavigate && safeHref.startsWith('/') && !safeHref.startsWith('//')) {
       e.preventDefault();
-      onNavigate(href);
+      onNavigate(safeHref);
     } else if (onclick) {
       onclick(e);
     }
   }
 </script>
 
-{#if href}
+{#if safeHref}
   <a
-    {href}
+    href={safeHref}
     onclick={handleClick}
     class="md-btn md-btn--{size} {variantClass} {customClass}"
     {style}

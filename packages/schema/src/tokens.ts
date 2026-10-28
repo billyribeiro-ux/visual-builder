@@ -155,11 +155,7 @@ export const DesignTokensSchema = z.object({
     heading: z.string().default('Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'),
     body: z.string().default('Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'),
     mono: z.string().default('"Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace')
-  }).default({
-    heading: 'Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    body: 'Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    mono: '"Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
-  }),
+  }).prefault({}),
 
   // MD3 Shape Corner System
   radii: z.record(z.string(), z.string()).default({
@@ -206,15 +202,7 @@ export const DesignTokensSchema = z.object({
     tablet: z.string().default('840px'),
     desktop: z.string().default('1200px'),
     wide: z.string().default('1440px')
-  }).default({
-    compact: '600px',
-    medium: '840px',
-    expanded: '1200px',
-    mobile: '600px',
-    tablet: '840px',
-    desktop: '1200px',
-    wide: '1440px'
-  })
+  }).prefault({})
 });
 
 export type DesignTokens = z.infer<typeof DesignTokensSchema>;

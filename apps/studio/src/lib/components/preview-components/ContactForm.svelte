@@ -14,6 +14,8 @@
     submitText = 'Send Message',
     style = ''
   }: Props = $props();
+  /** Unique per instance so several forms on one canvas keep valid label/input pairs. */
+  const uid = $props.id();
 
   let fullName = $state('');
   let email = $state('');
@@ -40,16 +42,16 @@
     </div>
     <form onsubmit={handleSubmit} class="md-card md-card-outlined" style="padding: 2rem; display: flex; flex-direction: column; gap: 1.25rem;">
       <div>
-        <label for="contact-name" class="md-label-large" style="display: block; margin-bottom: 0.5rem;">Full Name</label>
-        <input id="contact-name" type="text" required bind:value={fullName} placeholder="Jane Doe" class="md-input" />
+        <label for="{uid}-contact-name" class="md-label-large" style="display: block; margin-bottom: 0.5rem;">Full Name</label>
+        <input id="{uid}-contact-name" type="text" required bind:value={fullName} placeholder="Jane Doe" class="md-input" />
       </div>
       <div>
-        <label for="contact-email" class="md-label-large" style="display: block; margin-bottom: 0.5rem;">Work Email</label>
-        <input id="contact-email" type="email" required bind:value={email} placeholder="jane@company.com" class="md-input" />
+        <label for="{uid}-contact-email" class="md-label-large" style="display: block; margin-bottom: 0.5rem;">Work Email</label>
+        <input id="{uid}-contact-email" type="email" required bind:value={email} placeholder="jane@company.com" class="md-input" />
       </div>
       <div>
-        <label for="contact-message" class="md-label-large" style="display: block; margin-bottom: 0.5rem;">Message</label>
-        <textarea id="contact-message" rows={4} required bind:value={message} placeholder="How can we help?" class="md-input"></textarea>
+        <label for="{uid}-contact-message" class="md-label-large" style="display: block; margin-bottom: 0.5rem;">Message</label>
+        <textarea id="{uid}-contact-message" rows={4} required bind:value={message} placeholder="How can we help?" class="md-input"></textarea>
       </div>
       <div style="display: flex; align-items: center; gap: 1rem;">
         <button type="submit" class="md-btn md-btn-filled">{submitText}</button>

@@ -4,12 +4,19 @@
     type ProjectBlueprint,
     type BlueprintNode,
     type InteractionRule,
+    ProjectBlueprintSchema,
     createDefaultAcmeSaaSProject
   } from '@app-viz/schema';
-  import { compileNodeScopedCss } from '@app-viz/engine';
-  import PreviewRenderer, {
-    type NodeQuickAction
-  } from '#lib/components/PreviewRenderer.svelte';
+  import { compileNodeScopedCss, findNodeInBlueprint } from '@app-viz/engine';
+  import PreviewRenderer from '#lib/components/PreviewRenderer.svelte';
+  import {
+    NON_MUTATING_NODE_ACTIONS,
+    classifyHref,
+    parseParentMessage,
+    type KeyShortcut,
+    type NodeQuickAction,
+    type PreviewToParentMessage
+  } from '#lib/canvas/messages.js';
 
   let blueprint = $state<ProjectBlueprint>(createDefaultAcmeSaaSProject());
   let activePageId = $state<string>('10000000-0000-0000-0000-000000000001');
@@ -28,6 +35,33 @@
   let activeToast = $state<string | null>(null);
   let customAppState = $state<Record<string, string>>({});
   let showStructurePicker = $state(false);
+  let toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Typed, origin-pinned message to the studio. No-op when /preview is opened standalone. */
+  function postToParent(message: PreviewToParentMessage) {
+    if (window.parent === window) return;
+    window.parent.postMessage(message, window.location.origin);
+  }
+
+  function sendShortcut(shortcut: KeyShortcut) {
+    postToParent({ type: 'KEY_SHORTCUT', shortcut });
+  }
+
+  function showToast(message: string, durationMs = 3200) {
+    if (toastTimer !== null) clearTimeout(toastTimer);
+    activeToast = message;
+    toastTimer = setTimeout(() => {
+      activeToast = null;
+      toastTimer = null;
+    }, durationMs);
+  }
+
+  function findNode(nodeId: string | null): BlueprintNode | null {
+    if (!nodeId) return null;
+    return findNodeInBlueprint(blueprint, nodeId)?.node ?? null;
+  }
+
+  const contextNodeLocked = $derived(contextMenu ? findNode(contextMenu.node.id)?.locked === true : false);
 
   const containerStructurePresets = [
     { id: 'flex-1col', label: '1 Col (100%)', cols: ['100%'] },
@@ -54,39 +88,30 @@
   function handleInsertStructure(structureId: string) {
     if (!activePage) return;
     showStructurePicker = false;
-    window.parent.postMessage(
-      {
-        type: 'INSERT_STRUCTURE',
-        structureId,
-        targetNodeId: activePage.rootNode.id
-      },
-      window.location.origin
-    );
+    postToParent({
+      type: 'INSERT_STRUCTURE',
+      structureId,
+      targetNodeId: activePage.rootNode.id
+    });
   }
 
   function handleQuickInsertOnCanvas(componentType: string) {
     if (!activePage) return;
     showStructurePicker = false;
-    window.parent.postMessage(
-      {
-        type: 'DROP_ITEM',
-        componentType,
-        targetNodeId: activePage.rootNode.id,
-        position: 'inside'
-      },
-      window.location.origin
-    );
+    postToParent({
+      type: 'DROP_ITEM',
+      componentType,
+      targetNodeId: activePage.rootNode.id,
+      position: 'inside'
+    });
   }
 
   function handleOpenTemplateModal() {
-    window.parent.postMessage({ type: 'OPEN_BLOCK_LIBRARY' }, window.location.origin);
+    postToParent({ type: 'OPEN_BLOCK_LIBRARY' });
   }
 
   function handleOpenAiComposer() {
-    window.parent.postMessage(
-      { type: 'KEY_SHORTCUT', shortcut: 'command-palette' },
-      window.location.origin
-    );
+    sendShortcut('command-palette');
   }
 
   const activePage = $derived(
@@ -131,84 +156,205 @@
     }
   });
 
-  onMount(() => {
-    window.parent.postMessage({ type: 'PREVIEW_READY' }, window.location.origin);
+  function isEditableTarget(target: EventTarget | null): boolean {
+    const el = target as HTMLElement | null;
+    return Boolean(
+      el &&
+        (el.tagName === 'INPUT' ||
+          el.tagName === 'TEXTAREA' ||
+          el.tagName === 'SELECT' ||
+          el.isContentEditable)
+    );
+  }
 
-    function handleParentMessage(event: MessageEvent) {
-      if (event.origin !== window.location.origin) return;
-      const data = event.data;
-      if (!data || !data.type) return;
+  /** True when the user has a non-empty text selection inside the canvas. */
+  function hasCanvasTextSelection(): boolean {
+    const sel = window.getSelection();
+    return Boolean(sel && !sel.isCollapsed && sel.toString().trim().length > 0);
+  }
 
-      if (data.type === 'SYNC_STATE') {
-        blueprint = data.blueprint;
-        activePageId = data.activePageId;
-        if (data.activeBreakpoint) activeBreakpoint = data.activeBreakpoint;
-        selectedNodeId = data.selectedNodeId;
-        isInteractiveMode = data.isInteractiveMode;
-      }
+  /** Closes the preview's own transient UI (topmost first). Returns true if something closed. */
+  function closeLocalOverlay(): boolean {
+    if (contextMenu) {
+      contextMenu = null;
+      return true;
+    }
+    if (activeModal) {
+      activeModal = null;
+      return true;
+    }
+    if (activeDrawer) {
+      activeDrawer = null;
+      return true;
+    }
+    if (showStructurePicker) {
+      showStructurePicker = false;
+      return true;
+    }
+    return false;
+  }
+
+  function handleKeyDown(e: KeyboardEvent) {
+    const mod = e.metaKey || e.ctrlKey;
+    const key = e.key.toLowerCase();
+
+    if (mod && key === 'k') {
+      e.preventDefault();
+      sendShortcut('command-palette');
+      return;
     }
 
-    function handleKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        window.parent.postMessage(
-          { type: 'KEY_SHORTCUT', shortcut: 'command-palette' },
-          window.location.origin
-        );
-        return;
-      }
+    if (mod && key === 'i') {
+      e.preventDefault();
+      sendShortcut('navigator');
+      return;
+    }
 
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'i') {
+    if (e.key === 'Escape') {
+      // Close preview-local overlays first; only forward when nothing local was open.
+      if (closeLocalOverlay()) {
         e.preventDefault();
-        window.parent.postMessage(
-          { type: 'KEY_SHORTCUT', shortcut: 'navigator' },
-          window.location.origin
-        );
         return;
       }
+      if (isEditableTarget(e.target)) return;
+      sendShortcut('escape');
+      return;
+    }
 
-      const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT' ||
-          target.isContentEditable)
-      ) {
-        return;
+    if (isEditableTarget(e.target)) return;
+
+    if (mod && key === 'z') {
+      e.preventDefault();
+      sendShortcut(e.shiftKey ? 'redo' : 'undo');
+    } else if (mod && key === 'y') {
+      e.preventDefault();
+      sendShortcut('redo');
+    } else if (mod && key === 'd') {
+      e.preventDefault();
+      sendShortcut('duplicate');
+    } else if (mod && key === 'c') {
+      // Let the browser copy real text selections.
+      if (hasCanvasTextSelection()) return;
+      e.preventDefault();
+      sendShortcut(e.shiftKey ? 'copy-style' : 'copy');
+    } else if (mod && key === 'v') {
+      if (hasCanvasTextSelection()) return;
+      e.preventDefault();
+      sendShortcut(e.shiftKey ? 'paste-style' : 'paste');
+    } else if (e.altKey && !mod && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      if (!isInteractiveMode && selectedNodeId && !findNode(selectedNodeId)?.locked) {
+        e.preventDefault();
+        sendShortcut(e.key === 'ArrowUp' ? 'move-up' : 'move-down');
       }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (!isInteractiveMode && selectedNodeId && !findNode(selectedNodeId)?.locked) {
         e.preventDefault();
-        window.parent.postMessage(
-          { type: 'KEY_SHORTCUT', shortcut: e.shiftKey ? 'redo' : 'undo' },
-          window.location.origin
-        );
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
-        e.preventDefault();
-        window.parent.postMessage({ type: 'KEY_SHORTCUT', shortcut: 'duplicate' }, window.location.origin);
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c') {
-        e.preventDefault();
-        window.parent.postMessage(
-          { type: 'KEY_SHORTCUT', shortcut: e.shiftKey ? 'copy-style' : 'copy' },
-          window.location.origin
-        );
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'v') {
-        e.preventDefault();
-        window.parent.postMessage(
-          { type: 'KEY_SHORTCUT', shortcut: e.shiftKey ? 'paste-style' : 'paste' },
-          window.location.origin
-        );
-      } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (!isInteractiveMode && selectedNodeId) {
-          e.preventDefault();
-          window.parent.postMessage({ type: 'KEY_SHORTCUT', shortcut: 'delete' }, window.location.origin);
+        sendShortcut('delete');
+      }
+    }
+  }
+
+  function scrollToFragment(fragment: string) {
+    if (!fragment) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    let id = fragment;
+    try {
+      id = decodeURIComponent(fragment);
+    } catch {
+      // keep raw fragment
+    }
+    const target = document.getElementById(id) ?? document.getElementsByName(id)[0] ?? null;
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /**
+   * Link safety: no <a> inside the canvas may ever navigate the iframe away. Runs in the
+   * capture phase on the preview root, before any component handler.
+   */
+  function handleLinkClickCapture(e: MouseEvent) {
+    const origin = e.target as Element | null;
+    const anchor = origin?.closest?.('a');
+    if (!anchor) return;
+
+    // Never let the browser follow the link (covers modifier-clicks / middle-clicks too).
+    e.preventDefault();
+
+    if (!isInteractiveMode) {
+      // Design mode: the click only selects the node (handled by PreviewRenderer).
+      return;
+    }
+
+    // Interactive mode: we own the navigation, so stop component-level handlers from
+    // double-handling it.
+    e.stopPropagation();
+    contextMenu = null;
+    if (e.type !== 'click') return;
+
+    const link = classifyHref(anchor.getAttribute('href'));
+    switch (link.kind) {
+      case 'internal':
+        if (!handleNavigate(link.path)) {
+          showToast(`No page exists for route "${link.path}"`);
+        } else if (link.fragment) {
+          requestAnimationFrame(() => scrollToFragment(link.fragment));
         }
-      } else if (e.key === 'Escape') {
-        contextMenu = null;
-        window.parent.postMessage({ type: 'KEY_SHORTCUT', shortcut: 'escape' }, window.location.origin);
-      }
+        break;
+      case 'hash':
+        scrollToFragment(link.fragment);
+        break;
+      case 'external':
+        window.open(link.url, '_blank', 'noopener,noreferrer');
+        break;
+      case 'blocked':
+        showToast(`Blocked unsafe link (${link.reason})`);
+        break;
+      case 'empty':
+        break;
+    }
+  }
+
+  /** Attachment: capture-phase link interception on the preview root. */
+  function linkGuard(root: HTMLElement) {
+    root.addEventListener('click', handleLinkClickCapture, { capture: true });
+    root.addEventListener('auxclick', handleLinkClickCapture, { capture: true });
+    return () => {
+      root.removeEventListener('click', handleLinkClickCapture, { capture: true });
+      root.removeEventListener('auxclick', handleLinkClickCapture, { capture: true });
+    };
+  }
+
+  function handleParentMessage(event: MessageEvent) {
+    if (event.origin !== window.location.origin) return;
+    if (window.parent === window || event.source !== window.parent) return;
+    const message = parseParentMessage(event.data);
+    if (!message) return;
+
+    if (message.type === 'PING') {
+      postToParent({ type: 'PREVIEW_READY' });
+      return;
     }
 
+    if (message.type === 'SYNC_STATE') {
+      const parsed = ProjectBlueprintSchema.safeParse(message.blueprint);
+      if (!parsed.success) {
+        console.warn('[preview] Ignoring SYNC_STATE with invalid blueprint', parsed.error.issues);
+        return;
+      }
+      blueprint = parsed.data;
+      activePageId = message.activePageId;
+      activeBreakpoint = message.activeBreakpoint;
+      selectedNodeId = message.selectedNodeId;
+      isInteractiveMode = message.isInteractiveMode;
+      if (isInteractiveMode) {
+        contextMenu = null;
+        showStructurePicker = false;
+      }
+    }
+  }
+
+  onMount(() => {
     function handleGlobalClick() {
       contextMenu = null;
     }
@@ -216,30 +362,36 @@
     window.addEventListener('message', handleParentMessage);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('click', handleGlobalClick);
+    // Announce readiness eagerly; the parent also PINGs until it hears PREVIEW_READY.
+    postToParent({ type: 'PREVIEW_READY' });
     return () => {
       window.removeEventListener('message', handleParentMessage);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('click', handleGlobalClick);
+      if (toastTimer !== null) clearTimeout(toastTimer);
     };
   });
 
   function handleSelectNode(nodeId: string) {
     contextMenu = null;
     selectedNodeId = nodeId;
-    window.parent.postMessage({ type: 'SELECT_NODE', nodeId }, window.location.origin);
+    postToParent({ type: 'SELECT_NODE', nodeId });
   }
 
-  function handleNavigate(path: string) {
+  /** Navigates to an internal page. Returns false when no page matches `path`. */
+  function handleNavigate(path: string): boolean {
     const targetPage = blueprint.pages.find((p) => p.path === path);
-    if (targetPage) {
-      activePageId = targetPage.id;
-      window.parent.postMessage({ type: 'NAVIGATE_PAGE', path }, window.location.origin);
-    }
+    if (!targetPage) return false;
+    activePageId = targetPage.id;
+    window.scrollTo({ top: 0 });
+    postToParent({ type: 'NAVIGATE_PAGE', path });
+    return true;
   }
 
   function handleNodeAction(nodeId: string, action: NodeQuickAction) {
     contextMenu = null;
-    window.parent.postMessage({ type: 'NODE_ACTION', nodeId, action }, window.location.origin);
+    if (!NON_MUTATING_NODE_ACTIONS.has(action) && findNode(nodeId)?.locked) return;
+    postToParent({ type: 'NODE_ACTION', nodeId, action });
   }
 
   function handleDropItem(
@@ -247,16 +399,13 @@
     targetNodeId: string,
     position: 'before' | 'inside' | 'after'
   ) {
-    window.parent.postMessage(
-      {
-        type: 'DROP_ITEM',
-        componentType: payload.componentType,
-        draggedNodeId: payload.nodeId,
-        targetNodeId,
-        position
-      },
-      window.location.origin
-    );
+    postToParent({
+      type: 'DROP_ITEM',
+      componentType: payload.componentType,
+      draggedNodeId: payload.nodeId,
+      targetNodeId,
+      position
+    });
   }
 
   function handleContextMenuNode(node: BlueprintNode, x: number, y: number) {
@@ -265,18 +414,12 @@
     contextMenu = { node, x: safeX, y: safeY };
   }
 
-  function handleInlinePropEdit(nodeId: string, propKey: string, value: string) {
-    window.parent.postMessage(
-      { type: 'INLINE_PROP_EDIT', nodeId, propKey, value },
-      window.location.origin
-    );
+  function handleInlinePropEdit(nodeId: string, propKey: string, value: string, final = false) {
+    postToParent({ type: 'INLINE_PROP_EDIT', nodeId, propKey, value, final });
   }
 
   function handleResizeNodeStyle(nodeId: string, styles: Record<string, string>) {
-    window.parent.postMessage(
-      { type: 'RESIZE_NODE_STYLE', nodeId, styles },
-      window.location.origin
-    );
+    postToParent({ type: 'RESIZE_NODE_STYLE', nodeId, styles });
   }
 
   function handleTriggerInteraction(rule: InteractionRule, sourceNode: BlueprintNode) {
@@ -304,17 +447,14 @@
               'Inspect contextual workspace details and quick actions in this slide-over sheet.'
           };
     } else if (act === 'showToast' || act === 'show_toast') {
-      activeToast = p.toastMessage || `Triggered action from ${sourceNode.name}`;
-      setTimeout(() => (activeToast = null), 3500);
+      showToast(p.toastMessage || `Triggered action from ${sourceNode.name}`, 3500);
     } else if (act === 'setState' || act === 'toggle_state') {
       const k = p.stateKey || 'status';
       const v = p.stateValue || 'active';
       customAppState[k] = v;
-      activeToast = `State "${k}" updated to "${v}"`;
-      setTimeout(() => (activeToast = null), 2800);
+      showToast(`State "${k}" updated to "${v}"`, 2800);
     } else if (act === 'submitForm' || act === 'submit_mock_form') {
-      activeToast = p.toastMessage || 'Form submitted successfully!';
-      setTimeout(() => (activeToast = null), 3200);
+      showToast(p.toastMessage || 'Form submitted successfully!', 3200);
     }
   }
 </script>
@@ -323,7 +463,7 @@
   <title>{activePage?.title || 'Preview'}</title>
 </svelte:head>
 
-<div class="preview-root">
+<div class="preview-root" {@attach linkGuard}>
   {#if activePage}
     {#if activeLayout}
       <PreviewRenderer
@@ -482,68 +622,80 @@
       style="top: {contextMenu.y}px; left: {contextMenu.x}px;"
       role="menu"
     >
-      <div class="ctx-header">{contextMenu.node.name}</div>
-      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 2px 4px 4px 4px;">
-        <button type="button" class="ctx-item" style="justify-content: center; font-weight: 700;" onclick={() => handleNodeAction(contextMenu!.node.id, 'align-left')} title="Align Left">
-          ⬅ Left
-        </button>
-        <button type="button" class="ctx-item" style="justify-content: center; font-weight: 700; background: var(--md-sys-color-primary-container, #D3E3FD); color: var(--md-sys-color-on-primary-container, #041E49);" onclick={() => handleNodeAction(contextMenu!.node.id, 'align-center')} title="Center Content / Element">
-          ⬌ Center
-        </button>
-        <button type="button" class="ctx-item" style="justify-content: center; font-weight: 700;" onclick={() => handleNodeAction(contextMenu!.node.id, 'align-right')} title="Align Right">
-          ➡ Right
-        </button>
+      <div class="ctx-header">
+        {#if contextNodeLocked}<span aria-label="Locked">🔒 </span>{/if}{contextMenu.node.name}
       </div>
-      <div class="ctx-sep"></div>
-      <button type="button" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'up')}>
-        <span>↑ Move Up</span><span class="ctx-kbd">Alt+↑</span>
+      {#if !contextNodeLocked}
+        <div class="ctx-align-row">
+          <button type="button" role="menuitem" class="ctx-item ctx-item--align" onclick={() => handleNodeAction(contextMenu!.node.id, 'align-left')} title="Align Left">
+            ⬅ Left
+          </button>
+          <button type="button" role="menuitem" class="ctx-item ctx-item--align ctx-item--align-center" onclick={() => handleNodeAction(contextMenu!.node.id, 'align-center')} title="Center Content / Element">
+            ⬌ Center
+          </button>
+          <button type="button" role="menuitem" class="ctx-item ctx-item--align" onclick={() => handleNodeAction(contextMenu!.node.id, 'align-right')} title="Align Right">
+            ➡ Right
+          </button>
+        </div>
+        <div class="ctx-sep"></div>
+        <button type="button" role="menuitem" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'up')}>
+          <span>↑ Move Up</span><span class="ctx-kbd">Alt+↑</span>
+        </button>
+        <button type="button" role="menuitem" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'down')}>
+          <span>↓ Move Down</span><span class="ctx-kbd">Alt+↓</span>
+        </button>
+        <div class="ctx-sep"></div>
+        <button type="button" role="menuitem" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'wrap-section')}>
+          <span>📦 Wrap in Section</span>
+        </button>
+        <button type="button" role="menuitem" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'wrap-container')}>
+          <span>📦 Wrap in Container</span>
+        </button>
+        {#if contextMenu.node.children && contextMenu.node.children.length > 0}
+          <button type="button" role="menuitem" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'unwrap')}>
+            <span>📤 Unwrap Children</span>
+          </button>
+        {/if}
+        <div class="ctx-sep"></div>
+      {/if}
+      <button type="button" role="menuitem" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'duplicate')}>
+        <span>⧉ Duplicate</span><span class="ctx-kbd">⌘D</span>
       </button>
-      <button type="button" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'down')}>
-        <span>↓ Move Down</span><span class="ctx-kbd">Alt+↓</span>
+      <button type="button" role="menuitem" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'copy')}>
+        <span>📋 Copy</span><span class="ctx-kbd">⌘C</span>
       </button>
-      <div class="ctx-sep"></div>
-      <button type="button" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'wrap-section')}>
-        <span>📦 Wrap in Section</span>
-      </button>
-      <button type="button" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'wrap-container')}>
-        <span>📦 Wrap in Container</span>
-      </button>
-      {#if contextMenu.node.children && contextMenu.node.children.length > 0}
-        <button type="button" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'unwrap')}>
-          <span>📤 Unwrap Children</span>
+      {#if !contextNodeLocked}
+        <button type="button" role="menuitem" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'paste')}>
+          <span>📌 Paste After</span><span class="ctx-kbd">⌘V</span>
         </button>
       {/if}
       <div class="ctx-sep"></div>
-      <button type="button" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'duplicate')}>
-        <span>⧉ Duplicate</span><span class="ctx-kbd">⌘D</span>
-      </button>
-      <button type="button" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'copy')}>
-        <span>📋 Copy</span><span class="ctx-kbd">⌘C</span>
-      </button>
-      <button type="button" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'paste')}>
-        <span>📌 Paste After</span><span class="ctx-kbd">⌘V</span>
-      </button>
-      <div class="ctx-sep"></div>
-      <button type="button" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'copy-style')}>
+      <button type="button" role="menuitem" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'copy-style')}>
         <span>🎨 Copy Style</span><span class="ctx-kbd">⌘⇧C</span>
       </button>
-      <button type="button" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'paste-style')}>
-        <span>🖌️ Paste Style</span><span class="ctx-kbd">⌘⇧V</span>
-      </button>
-      <button type="button" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'reset-style')}>
-        <span>↺ Reset Style</span>
-      </button>
+      {#if !contextNodeLocked}
+        <button type="button" role="menuitem" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'paste-style')}>
+          <span>🖌️ Paste Style</span><span class="ctx-kbd">⌘⇧V</span>
+        </button>
+        <button type="button" role="menuitem" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'reset-style')}>
+          <span>↺ Reset Style</span>
+        </button>
+      {/if}
       <div class="ctx-sep"></div>
-      <button type="button" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'save-symbol')}>
+      <button type="button" role="menuitem" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'save-symbol')}>
         <span>★ Save as Reusable Symbol</span>
       </button>
-      <div class="ctx-sep"></div>
-      <button type="button" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'hide')}>
-        <span>👁 Hide Element</span>
-      </button>
-      <button type="button" class="ctx-item ctx-item--danger" onclick={() => handleNodeAction(contextMenu!.node.id, 'delete')}>
-        <span>✕ Delete</span><span class="ctx-kbd">⌫</span>
-      </button>
+      {#if !contextNodeLocked}
+        <div class="ctx-sep"></div>
+        <button type="button" role="menuitem" class="ctx-item" onclick={() => handleNodeAction(contextMenu!.node.id, 'hide')}>
+          <span>👁 Hide Element</span>
+        </button>
+        <button type="button" role="menuitem" class="ctx-item ctx-item--danger" onclick={() => handleNodeAction(contextMenu!.node.id, 'delete')}>
+          <span>✕ Delete</span><span class="ctx-kbd">⌫</span>
+        </button>
+      {:else}
+        <div class="ctx-locked-note">Element is locked — unlock it to edit.</div>
+      {/if}
     </div>
   {/if}
 </div>
@@ -603,6 +755,25 @@
   .ctx-item--danger:hover {
     background-color: var(--md-sys-color-error-container, #F9DEDC);
     color: var(--md-sys-color-on-error-container, #410E0B);
+  }
+  .ctx-align-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    padding: 2px 4px 4px 4px;
+  }
+  .ctx-item--align {
+    justify-content: center;
+    font-weight: 700;
+  }
+  .ctx-item--align-center {
+    background: var(--md-sys-color-primary-container, #D3E3FD);
+    color: var(--md-sys-color-on-primary-container, #041E49);
+  }
+  .ctx-locked-note {
+    padding: 6px 10px;
+    font-size: 0.6875rem;
+    color: var(--md-sys-color-on-surface-variant, #444746);
   }
   .ctx-kbd {
     font-family: var(--md-sys-font-mono, monospace);

@@ -86,36 +86,9 @@
   });
 
   function insertComponent(componentType: string) {
-    if (!editor.activePage) return;
-    const manifest = getAllManifests().find((m) => m.type === componentType);
-    if (!manifest) return;
-
-    const newNode: BlueprintNode = {
-      id: crypto.randomUUID(),
-      componentType: manifest.type,
-      name: manifest.displayName,
-      props: JSON.parse(JSON.stringify(manifest.defaultProps)),
-      styles: { base: {} },
-      interactions: [],
-      children: [],
-      locked: false,
-      hidden: false,
-      customClasses: ''
-    };
-
-    const selected = editor.selectedNode;
-    const targetParentId =
-      selected && isContainerComponent(selected.componentType)
-        ? selected.id
-        : editor.activePage.rootNode.id;
-
-    editor.dispatch({
-      type: 'INSERT_NODE',
-      targetParentId,
-      node: newNode
-    });
-    editor.selectNode(newNode.id);
+    editor.insertComponent(componentType);
   }
+
 
   function createNewPage() {
     const defaultLayout =
@@ -152,9 +125,22 @@
     });
   }
 
+  const MAX_ASSET_BYTES = 2 * 1024 * 1024; // 2 MB
+
+  function sanitizeSvgMarkup(raw: string): string {
+    return raw
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+      .replace(/javascript:/gi, '');
+  }
+
   function handleCreateCustomAsset() {
-    const cleanFilename = customAssetName.trim() || 'asset.svg';
-    const svg = customAssetSvg.trim();
+    const cleanFilename = (customAssetName.trim() || 'asset.svg').replace(/[^a-zA-Z0-9._-]/g, '-');
+    const svg = sanitizeSvgMarkup(customAssetSvg.trim());
+    if (!svg.startsWith('<svg')) {
+      editor.notify('error', 'SVG markup must start with an <svg> element');
+      return;
+    }
     const asset: BlueprintAsset = {
       id: crypto.randomUUID(),
       filename: cleanFilename,
@@ -174,22 +160,30 @@
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
+    if (file.size > MAX_ASSET_BYTES) {
+      editor.notify('error', 'Asset exceeds 2 MB limit');
+      input.value = '';
+      return;
+    }
+    const safeFilename = file.name.replace(/[^a-zA-Z0-9._-]/g, '-') || 'asset';
     const reader = new FileReader();
     reader.onload = () => {
-      const content = String(reader.result || '');
-      const isSvg = file.name.endsWith('.svg') || content.trim().startsWith('<svg');
+      const rawContent = String(reader.result || '');
+      const isSvg = safeFilename.endsWith('.svg') || rawContent.trim().startsWith('<svg');
+      const content = isSvg ? sanitizeSvgMarkup(rawContent) : rawContent;
       const asset: BlueprintAsset = {
         id: crypto.randomUUID(),
-        filename: file.name,
+        filename: safeFilename,
         mimeType: file.type || (isSvg ? 'image/svg+xml' : 'image/png'),
         size: file.size,
-        localPath: `/assets/${file.name}`,
-        alt: file.name.replace(/\.[^.]+$/, ''),
+        localPath: `/assets/${safeFilename}`,
+        alt: safeFilename.replace(/\.[^.]+$/, ''),
         category: 'uploaded',
         svgContent: isSvg ? content : undefined,
         dataUrl: isSvg ? `data:image/svg+xml;utf8,${encodeURIComponent(content)}` : content
       };
       editor.addAsset(asset);
+      input.value = '';
     };
     if (file.name.endsWith('.svg')) {
       reader.readAsText(file);

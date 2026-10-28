@@ -1,5 +1,10 @@
 import { createDefaultAcmeSaaSProject, ProjectBlueprintSchema } from '../packages/schema/src/index.js';
-import { generateFullExport, createDeterministicZip } from '../packages/codegen/src/index.js';
+import {
+  generateFullExport,
+  createDeterministicZip,
+  generateBuildSpec,
+  STACK_PRESETS
+} from '../packages/codegen/src/index.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { execSync } from 'node:child_process';
@@ -96,15 +101,24 @@ async function runParityValidation() {
   const agentsMd = fs.readFileSync(path.join(exportDir, 'AGENTS.md'), 'utf-8');
   const blueprintJson = fs.readFileSync(path.join(exportDir, 'blueprint/project.blueprint.json'), 'utf-8');
 
-  if (!agentsMd.includes('Svelte 5.57.2 + SvelteKit 3.1.0')) {
+  if (!agentsMd.includes('Svelte 5.57.3 + SvelteKit 3.1.0')) {
     throw new Error('AGENTS.md missing target framework specs');
   }
-  if (!blueprintJson.includes('"schemaVersion": "1.0.0"')) {
+  if (!blueprintJson.includes('"schemaVersion": "1.1.0"')) {
     throw new Error('Blueprint JSON invalid');
   }
 
   console.log('  ✓ AGENTS.md verified: clear instructions, build commands, and contracts');
-  console.log('  ✓ project.blueprint.json verified: canonical single versioned source of truth');
+  console.log('  ✓ project.blueprint.json verified: canonical single versioned source of truth (v1.1.0)');
+
+  console.log('\n[Step 12] Validating Stack-Agnostic Claude Code Build Specs...');
+  for (const preset of Object.keys(STACK_PRESETS) as Array<keyof typeof STACK_PRESETS>) {
+    const spec = generateBuildSpec(parsed, { stack: preset });
+    if (!spec.files['CLAUDE.md'] || !spec.prompt.includes('CLAUDE.md')) {
+      throw new Error(`Invalid Claude Code Build Spec for stack: ${preset}`);
+    }
+    console.log(`  ✓ Claude Code Build Spec verified for ${STACK_PRESETS[preset].label} (${Object.keys(spec.files).length} files)`);
+  }
 
   console.log('\n===========================================================');
   console.log('🎉 ALL 11 STEPS OF THE USER JOURNEY PASSED 100%!');

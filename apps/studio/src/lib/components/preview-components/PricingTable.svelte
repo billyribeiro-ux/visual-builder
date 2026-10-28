@@ -5,6 +5,7 @@
   interface PricingPlan {
     name: string;
     price: string;
+    period?: string;
     description: string;
     features: string[];
     ctaText?: string;
@@ -29,6 +30,14 @@
     style = '',
     onNavigate
   }: Props = $props();
+
+  /** `per month` / `forever` render as-is; bare units (`mo`, `month`) render as `/ mo`. */
+  function formatPeriod(period: string | undefined): string {
+    const p = (period ?? '').trim();
+    if (!p) return '';
+    if (/^(\/|per\b|forever\b|one[- ]?time\b|once\b|billed\b)/i.test(p)) return p;
+    return `/ ${p}`;
+  }
 </script>
 
 <section class="md-pricing" {style}>
@@ -47,6 +56,7 @@
 
     <div class="md-pricing__grid">
       {#each plans as plan, idx (idx)}
+        {@const period = formatPeriod(plan.period)}
         <div class="md-card md-pricing__card {plan.isPopular ? 'md-pricing__card--popular' : 'md-card--outlined'}">
           <div>
             {#if plan.isPopular}
@@ -55,7 +65,10 @@
             <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem;">{plan.name}</h3>
             <p style="font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant);">{plan.description}</p>
             <div class="md-pricing__price">
-              {plan.price}<span style="font-size: 1rem; font-weight: 400; color: var(--md-sys-color-on-surface-variant);">/mo</span>
+              {plan.price}
+              {#if period}
+                <span style="font-size: 1rem; font-weight: 400; color: var(--md-sys-color-on-surface-variant);">{period}</span>
+              {/if}
             </div>
             <ul style="list-style: none; padding: 0; margin: 1.5rem 0; display: flex; flex-direction: column; gap: 0.75rem; font-size: 0.875rem;">
               {#each plan.features || [] as feat, fIdx (fIdx)}

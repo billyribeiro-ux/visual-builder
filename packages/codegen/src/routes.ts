@@ -1,6 +1,242 @@
 import type { BlueprintNode, PageRoute, ProjectBlueprint, InteractionRule } from '@app-viz/schema';
 import { cssPropertiesToString } from '@app-viz/engine';
 
+/* ==========================================================================
+   Output-safety helpers
+   --------------------------------------------------------------------------
+   Every user-controlled value that ends up in generated Svelte source MUST go
+   through one of these helpers. Svelte evaluates `{...}` inside quoted
+   attributes and text, and `\"` is NOT an escape inside a quoted attribute,
+   so string props are always emitted as `{"<js string literal>"}` expressions.
+   ========================================================================== */
+
+/**
+ * JSON.stringify hardened for embedding in Svelte markup expressions and
+ * `<script>` blocks: `<` is escaped (so `</script>` / `<!--` can never appear)
+ * and U+2028/U+2029 are escaped (legacy JS line terminators).
+ */
+export function safeJson(value: unknown): string {
+  const json = JSON.stringify(value === undefined ? null : value) ?? 'null';
+  return json
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
+/** HTML-escapes text for raw HTML / Svelte text & quoted attribute contexts. */
+export function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Escapes text placed in Svelte template text / quoted attributes: HTML-escape
+ * plus `{` / `}` entities so Svelte never treats user text as an expression.
+ */
+export function escapeSvelteText(value: unknown): string {
+  return escapeHtml(value).replace(/\{/g, '&#123;').replace(/\}/g, '&#125;');
+}
+
+const SAFE_URL_SCHEMES = new Set(['http', 'https', 'mailto', 'tel']);
+
+/**
+ * Allows only relative URLs (`/path`, `#hash`, `?query`, `./x`, `x/y`) and the
+ * http(s):, mailto:, tel: schemes. Anything else (javascript:, data:,
+ * vbscript:, protocol-relative `//host`, ...) becomes `fallback`.
+ */
+export function sanitizeHref(value: unknown, fallback = '#'): string {
+  if (typeof value !== 'string') return fallback;
+  // Browsers ignore ASCII control chars / whitespace when parsing schemes.
+  // eslint-disable-next-line no-control-regex
+  const cleaned = value.replace(/[\u0000-\u001F\u007F]/g, '').trim();
+  if (!cleaned) return '';
+  if (cleaned.startsWith('#') || cleaned.startsWith('?')) return cleaned;
+  if (cleaned.startsWith('/')) {
+    // Reject protocol-relative (`//evil.example`) and `/\` variants.
+    return /^\/[/\\]/.test(cleaned) ? fallback : cleaned;
+  }
+  if (cleaned.startsWith('\\')) return fallback;
+  const schemeMatch = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(cleaned);
+  if (schemeMatch) {
+    return SAFE_URL_SCHEMES.has(schemeMatch[1].toLowerCase()) ? cleaned : fallback;
+  }
+  // No scheme: only accept if there is no ':' before the first / ? # (pure relative path).
+  const firstDelim = cleaned.search(/[/?#]/);
+  const head = firstDelim === -1 ? cleaned : cleaned.slice(0, firstDelim);
+  return head.includes(':') ? fallback : cleaned;
+}
+
+/** Image/media src: same policy as hrefs, but `mailto:`/`tel:` make no sense and invalid → ''. */
+function sanitizeSrc(value: unknown): string {
+  const href = sanitizeHref(value, '');
+  return /^(mailto|tel):/i.test(href) ? '' : href;
+}
+
+/** Recursively sanitizes every `*href` / `*Href` / `src` / `*Url` string inside array/object props. */
+function sanitizeUrlsDeep(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((v) => sanitizeUrlsDeep(v));
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
+      if (typeof v === 'string' && /href$/i.test(key)) out[key] = sanitizeHref(v);
+      else if (typeof v === 'string' && (key === 'src' || /url$/i.test(key))) out[key] = sanitizeSrc(v);
+      else out[key] = sanitizeUrlsDeep(v);
+    }
+    return out;
+  }
+  return value;
+}
+
+function normalizeCssForCheck(value: string): string {
+  return value.toLowerCase().replace(/[\s'"\\]/g, '');
+}
+
+/** Returns true when a CSS value could break out of its context or execute script. */
+function isDangerousCssValue(value: string): boolean {
+  if (/[<{}]/.test(value)) return true;
+  const n = normalizeCssForCheck(value);
+  return (
+    n.includes('url(javascript:') ||
+    n.includes('url(vbscript:') ||
+    n.includes('expression(') ||
+    n.includes('javascript:')
+  );
+}
+
+/** Sanitizes a single free-form CSS value (e.g. a gap length). Dangerous values → ''. */
+export function sanitizeCssValue(value: unknown): string {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value !== 'string') return '';
+  const v = value.trim();
+  if (!v || isDangerousCssValue(v) || v.includes(';')) return '';
+  return v;
+}
+
+/** cssPropertiesToString with unsafe keys/values dropped. */
+export function safeStyleString(css: Record<string, unknown> | undefined | null): string {
+  if (!css) return '';
+  const filtered: Record<string, string | number> = {};
+  for (const [key, raw] of Object.entries(css)) {
+    if (!/^-{0,2}[a-zA-Z][a-zA-Z0-9-]*$/.test(key)) continue;
+    if (typeof raw === 'number') {
+      if (Number.isFinite(raw)) filtered[key] = raw;
+      continue;
+    }
+    if (typeof raw !== 'string') continue;
+    if (!raw.trim() || isDangerousCssValue(raw)) continue;
+    filtered[key] = raw;
+  }
+  return cssPropertiesToString(filtered);
+}
+
+/** Restricts generated class lists to `[A-Za-z0-9_\- ]`. */
+export function sanitizeClassList(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/[^A-Za-z0-9_\- ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function sanitizeNodeId(id: unknown): string {
+  return String(id ?? '').replace(/[^A-Za-z0-9_-]/g, '');
+}
+
+function toText(value: unknown, fallback: string): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return fallback;
+}
+
+/* ---- attribute emitters (all return `name={expr}`) ---- */
+
+/** String prop → `name={"..."}`. Empty strings are respected (not replaced by fallback) only when `keepEmpty`. */
+function strAttr(name: string, value: unknown, fallback = '', keepEmpty = false): string {
+  const text = toText(value, fallback);
+  return `${name}={${safeJson(text === '' && !keepEmpty ? fallback : text)}}`;
+}
+
+function hrefAttr(name: string, value: unknown, fallback = '#'): string {
+  const raw = toText(value, '');
+  const safe = raw === '' ? fallback : sanitizeHref(raw, '#');
+  return `${name}={${safeJson(safe)}}`;
+}
+
+function enumAttr(name: string, value: unknown, allowed: readonly string[], fallback: string): string {
+  const v = typeof value === 'string' && allowed.includes(value) ? value : fallback;
+  return `${name}={${safeJson(v)}}`;
+}
+
+function cssAttr(name: string, value: unknown, fallback = ''): string {
+  return `${name}={${safeJson(sanitizeCssValue(value) || fallback)}}`;
+}
+
+function numAttr(name: string, value: unknown, min: number, max: number, fallback: number): string {
+  const n = Number(value);
+  const v = Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : fallback;
+  return `${name}={${v}}`;
+}
+
+function boolAttr(name: string, value: boolean): string {
+  return `${name}={${value ? 'true' : 'false'}}`;
+}
+
+function jsonAttr(name: string, value: unknown, fallback: unknown = []): string {
+  const v = value === undefined || value === null ? fallback : value;
+  return `${name}={${safeJson(sanitizeUrlsDeep(v))}}`;
+}
+
+function styleAttr(css: string): string {
+  return css ? `style={${safeJson(css)}}` : '';
+}
+
+/** Emits a self-closing (or children-wrapping) component tag with one attribute per line. */
+function tag(name: string, indent: string, attrs: string[], children?: string): string {
+  const list = attrs.filter(Boolean);
+  const open =
+    list.length <= 2
+      ? `${indent}<${name}${list.map((a) => ` ${a}`).join('')}`
+      : `${indent}<${name}\n${list.map((a) => `${indent}  ${a}`).join('\n')}\n${indent}`;
+  if (children === undefined) return `${open}${list.length <= 2 ? ' ' : ''}/>`;
+  return `${open}>\n${children}\n${indent}</${name}>`;
+}
+
+const MAX_WIDTHS = ['sm', 'md', 'lg', 'xl', '2xl', 'full'] as const;
+const DIRECTIONS = ['column', 'row', 'column-reverse', 'row-reverse'] as const;
+const JUSTIFY = ['flex-start', 'center', 'flex-end', 'space-between', 'space-around', 'space-evenly'] as const;
+const ALIGN = ['stretch', 'flex-start', 'center', 'flex-end'] as const;
+const TEXT_ALIGN = ['left', 'center', 'right'] as const;
+const GRID_ALIGN = ['stretch', 'start', 'center', 'end', 'flex-start', 'flex-end'] as const;
+const SURFACE_TONES = ['surface', 'low', 'container', 'high', 'primary-container', 'surface-low', 'surface-high'] as const;
+const PADDING_Y = ['sm', 'md', 'lg', 'xl'] as const;
+
+/** Base-style keys forwarded to a Section's inner container (mirrors PreviewRenderer.svelte). */
+const SECTION_INNER_LAYOUT_KEYS = [
+  'display',
+  'flexDirection',
+  'justifyContent',
+  'alignItems',
+  'flexWrap',
+  'gap',
+  'gridTemplateColumns',
+  'textAlign'
+] as const;
+
+/** Optional flex-layout props shared by Container / Section (only emitted when set). */
+function layoutAttrs(p: Record<string, unknown>): string[] {
+  return [
+    p.direction ? enumAttr('direction', p.direction, DIRECTIONS, 'column') : '',
+    p.justify ? enumAttr('justify', p.justify, JUSTIFY, 'flex-start') : '',
+    p.align ? enumAttr('align', p.align, ALIGN, 'stretch') : '',
+    p.textAlign ? enumAttr('textAlign', p.textAlign, TEXT_ALIGN, 'left') : '',
+    p.gap && sanitizeCssValue(p.gap) ? cssAttr('gap', p.gap) : ''
+  ];
+}
+
 function hasScopedStyles(node: BlueprintNode): boolean {
   const s = node.styles;
   const m = node.motionEffects;
@@ -64,10 +300,18 @@ function renderNodeToSvelte(
   const innerIndent = needsWrapper ? indent + '  ' : indent;
   const rendered = renderNodeInner(node, innerIndent, slotNode);
   if (needsWrapper) {
-    const clsAttr = node.customClasses?.trim() ? ` class="${node.customClasses.trim()}"` : '';
-    return `${indent}<div data-node-id="${node.id}"${clsAttr}>\n${rendered}\n${indent}</div>`;
+    const cls = sanitizeClassList(node.customClasses);
+    const clsAttr = cls ? ` class="${cls}"` : '';
+    return `${indent}<div data-node-id="${sanitizeNodeId(node.id)}"${clsAttr}>\n${rendered}\n${indent}</div>`;
   }
   return rendered;
+}
+
+function renderChildren(node: BlueprintNode, indent: string, slotNode?: BlueprintNode): string {
+  return (node.children || [])
+    .map((c: BlueprintNode) => renderNodeToSvelte(c, indent + '  ', slotNode))
+    .filter(Boolean)
+    .join('\n');
 }
 
 function renderNodeInner(
@@ -75,8 +319,10 @@ function renderNodeInner(
   indent = '  ',
   slotNode?: BlueprintNode
 ): string {
-  const inlineStyle = cssPropertiesToString(node.styles?.base || {});
-  const styleAttr = inlineStyle ? ` style="${inlineStyle}"` : '';
+  const baseCss = (node.styles?.base || {}) as Record<string, unknown>;
+  const inlineStyle = safeStyleString(baseCss);
+  const style = styleAttr(inlineStyle);
+  const p = (node.props || {}) as Record<string, unknown>;
 
   switch (node.componentType) {
     case 'structure/slot': {
@@ -87,243 +333,283 @@ function renderNodeInner(
     }
 
     case 'structure/container': {
-      const p = node.props;
-      const maxWidth = p.maxWidth || 'xl';
-      const extraProps = [
-        p.direction ? ` direction="${p.direction}"` : '',
-        p.justify ? ` justify="${p.justify}"` : '',
-        p.align ? ` align="${p.align}"` : '',
-        p.textAlign ? ` textAlign="${p.textAlign}"` : '',
-        p.gap ? ` gap="${p.gap}"` : ''
-      ].join('');
-      const inner = (node.children || [])
-        .map((c: BlueprintNode) => renderNodeToSvelte(c, indent + '  ', slotNode))
-        .filter(Boolean)
-        .join('\n');
-      return `${indent}<Container maxWidth="${maxWidth}"${extraProps}${styleAttr}>\n${inner}\n${indent}</Container>`;
+      return tag(
+        'Container',
+        indent,
+        [enumAttr('maxWidth', p.maxWidth, MAX_WIDTHS, 'xl'), ...layoutAttrs(p), style],
+        renderChildren(node, indent, slotNode)
+      );
     }
 
     case 'structure/section': {
-      const p = node.props;
-      const extraProps = [
-        p.direction ? ` direction="${p.direction}"` : '',
-        p.justify ? ` justify="${p.justify}"` : '',
-        p.align ? ` align="${p.align}"` : '',
-        p.textAlign ? ` textAlign="${p.textAlign}"` : '',
-        p.gap ? ` gap="${p.gap}"` : ''
-      ].join('');
-      const inner = (node.children || [])
-        .map((c: BlueprintNode) => renderNodeToSvelte(c, indent + '  ', slotNode))
-        .filter(Boolean)
-        .join('\n');
-      return `${indent}<Section variant="${p.variant || p.surfaceTone || 'surface'}" paddingY="${p.paddingY || 'lg'}" maxWidth="${p.maxWidth || 'xl'}"${extraProps}${styleAttr}>\n${inner}\n${indent}</Section>`;
+      const innerLayout: Record<string, unknown> = {};
+      for (const key of SECTION_INNER_LAYOUT_KEYS) innerLayout[key] = baseCss[key];
+      const contentStyle = safeStyleString(innerLayout);
+      return tag(
+        'Section',
+        indent,
+        [
+          enumAttr('surfaceTone', p.surfaceTone ?? p.variant, SURFACE_TONES, 'surface'),
+          enumAttr('paddingY', p.paddingY, PADDING_Y, 'lg'),
+          enumAttr('maxWidth', p.maxWidth, MAX_WIDTHS, 'xl'),
+          ...layoutAttrs(p),
+          style,
+          contentStyle ? `contentStyle={${safeJson(contentStyle)}}` : ''
+        ],
+        renderChildren(node, indent, slotNode)
+      );
     }
 
     case 'structure/grid': {
-      const p = node.props;
-      const extraProps = [
-        p.alignItems ? ` alignItems="${p.alignItems}"` : '',
-        p.justifyItems ? ` justifyItems="${p.justifyItems}"` : '',
-        p.textAlign ? ` textAlign="${p.textAlign}"` : ''
-      ].join('');
-      const inner = (node.children || [])
-        .map((c: BlueprintNode) => renderNodeToSvelte(c, indent + '  ', slotNode))
-        .filter(Boolean)
-        .join('\n');
-      return `${indent}<Grid columns={${p.columns || 3}} gap="${p.gap || 'md'}"${extraProps}${styleAttr}>\n${inner}\n${indent}</Grid>`;
+      return tag(
+        'Grid',
+        indent,
+        [
+          numAttr('columns', p.columns, 1, 4, 3),
+          cssAttr('gap', p.gap, 'md'),
+          p.alignItems ? enumAttr('alignItems', p.alignItems, GRID_ALIGN, 'stretch') : '',
+          p.justifyItems ? enumAttr('justifyItems', p.justifyItems, GRID_ALIGN, 'stretch') : '',
+          p.textAlign ? enumAttr('textAlign', p.textAlign, TEXT_ALIGN, 'left') : '',
+          style
+        ],
+        renderChildren(node, indent, slotNode)
+      );
     }
 
     case 'structure/divider': {
-      const p = node.props;
-      return `${indent}<Divider spacing="${p.spacing || 'md'}" label=${JSON.stringify(p.label || '')}${styleAttr} />`;
+      return tag('Divider', indent, [
+        enumAttr('spacing', p.spacing, ['sm', 'md', 'lg'], 'md'),
+        strAttr('label', p.label, ''),
+        style
+      ]);
     }
 
     case 'hero/split-hero': {
-      const p = node.props;
-      return `${indent}<SplitHero
-${indent}  eyebrow=${JSON.stringify(p.eyebrow || '')}
-${indent}  title=${JSON.stringify(p.title || '')}
-${indent}  subtitle=${JSON.stringify(p.subtitle || '')}
-${indent}  primaryCtaText=${JSON.stringify(p.primaryCtaText || 'Get Started')}
-${indent}  primaryCtaHref=${JSON.stringify(p.primaryCtaHref || '#')}
-${indent}  secondaryCtaText=${JSON.stringify(p.secondaryCtaText || '')}
-${indent}  secondaryCtaHref=${JSON.stringify(p.secondaryCtaHref || '#')}
-${indent}  badgeText=${JSON.stringify(p.badgeText || '')}${styleAttr}
-${indent}/>`;
+      return tag('SplitHero', indent, [
+        strAttr('eyebrow', p.eyebrow),
+        strAttr('title', p.title),
+        strAttr('subtitle', p.subtitle),
+        strAttr('primaryCtaText', p.primaryCtaText, 'Get Started'),
+        hrefAttr('primaryCtaHref', p.primaryCtaHref),
+        strAttr('secondaryCtaText', p.secondaryCtaText),
+        hrefAttr('secondaryCtaHref', p.secondaryCtaHref),
+        strAttr('badgeText', p.badgeText),
+        enumAttr('align', p.align, ['left', 'center'], 'left'),
+        style
+      ]);
     }
 
     case 'marketing/feature-grid': {
-      const p = node.props;
-      return `${indent}<FeatureGrid
-${indent}  sectionEyebrow=${JSON.stringify(p.sectionEyebrow || '')}
-${indent}  sectionTitle=${JSON.stringify(p.sectionTitle || '')}
-${indent}  sectionDescription=${JSON.stringify(p.sectionDescription || '')}
-${indent}  columns={${p.columns || 3}}
-${indent}  features={${JSON.stringify(p.features || [])}}${styleAttr}
-${indent}/>`;
+      return tag('FeatureGrid', indent, [
+        strAttr('sectionEyebrow', p.sectionEyebrow),
+        strAttr('sectionTitle', p.sectionTitle),
+        strAttr('sectionDescription', p.sectionDescription),
+        numAttr('columns', p.columns, 1, 4, 3),
+        jsonAttr('features', p.features),
+        style
+      ]);
     }
 
     case 'marketing/testimonials': {
-      const p = node.props;
-      return `${indent}<Testimonials
-${indent}  sectionEyebrow=${JSON.stringify(p.sectionEyebrow || '')}
-${indent}  sectionTitle=${JSON.stringify(p.sectionTitle || '')}
-${indent}  testimonials={${JSON.stringify(p.testimonials || [])}}${styleAttr}
-${indent}/>`;
+      return tag('Testimonials', indent, [
+        strAttr('sectionEyebrow', p.sectionEyebrow),
+        strAttr('sectionTitle', p.sectionTitle),
+        jsonAttr('testimonials', p.testimonials),
+        style
+      ]);
     }
 
     case 'marketing/faq-accordion': {
-      const p = node.props;
-      return `${indent}<FaqAccordion
-${indent}  sectionTitle=${JSON.stringify(p.sectionTitle || '')}
-${indent}  items={${JSON.stringify(p.items || [])}}${styleAttr}
-${indent}/>`;
+      return tag('FaqAccordion', indent, [
+        strAttr('sectionTitle', p.sectionTitle),
+        jsonAttr('items', p.items),
+        style
+      ]);
     }
 
     case 'marketing/pricing-table': {
-      const p = node.props;
-      return `${indent}<PricingTable
-${indent}  sectionEyebrow=${JSON.stringify(p.sectionEyebrow || '')}
-${indent}  sectionTitle=${JSON.stringify(p.sectionTitle || '')}
-${indent}  sectionDescription=${JSON.stringify(p.sectionDescription || '')}
-${indent}  plans={${JSON.stringify(p.plans || [])}}${styleAttr}
-${indent}/>`;
+      return tag('PricingTable', indent, [
+        strAttr('sectionEyebrow', p.sectionEyebrow),
+        strAttr('sectionTitle', p.sectionTitle),
+        strAttr('sectionDescription', p.sectionDescription),
+        jsonAttr('plans', p.plans),
+        style
+      ]);
     }
 
     case 'marketing/cta-banner': {
-      const p = node.props;
-      return `${indent}<CtaBanner
-${indent}  eyebrow=${JSON.stringify(p.eyebrow || '')}
-${indent}  title=${JSON.stringify(p.title || '')}
-${indent}  subtitle=${JSON.stringify(p.subtitle || '')}
-${indent}  primaryCtaText=${JSON.stringify(p.primaryCtaText || 'Get Started')}
-${indent}  primaryCtaHref=${JSON.stringify(p.primaryCtaHref || '/dashboard')}
-${indent}  secondaryCtaText=${JSON.stringify(p.secondaryCtaText || '')}
-${indent}  secondaryCtaHref=${JSON.stringify(p.secondaryCtaHref || '#')}${styleAttr}
-${indent}/>`;
+      return tag('CtaBanner', indent, [
+        strAttr('eyebrow', p.eyebrow),
+        strAttr('title', p.title),
+        strAttr('subtitle', p.subtitle),
+        strAttr('primaryCtaText', p.primaryCtaText, 'Get Started'),
+        hrefAttr('primaryCtaHref', p.primaryCtaHref, '/dashboard'),
+        strAttr('secondaryCtaText', p.secondaryCtaText),
+        hrefAttr('secondaryCtaHref', p.secondaryCtaHref),
+        style
+      ]);
     }
 
     case 'marketing/stats-bar': {
-      const p = node.props;
-      return `${indent}<StatsBar stats={${JSON.stringify(p.stats || [])}}${styleAttr} />`;
+      return tag('StatsBar', indent, [jsonAttr('stats', p.stats), style]);
     }
 
     case 'marketing/newsletter': {
-      const p = node.props;
-      return `${indent}<Newsletter
-${indent}  title=${JSON.stringify(p.title || '')}
-${indent}  subtitle=${JSON.stringify(p.subtitle || '')}
-${indent}  placeholder=${JSON.stringify(p.placeholder || 'you@company.com')}
-${indent}  buttonText=${JSON.stringify(p.buttonText || 'Subscribe')}${styleAttr}
-${indent}/>`;
+      return tag('Newsletter', indent, [
+        strAttr('title', p.title),
+        strAttr('subtitle', p.subtitle),
+        strAttr('placeholder', p.placeholder, 'you@company.com'),
+        strAttr('buttonText', p.buttonText, 'Subscribe'),
+        style
+      ]);
     }
 
     case 'marketing/contact-form': {
-      const p = node.props;
-      return `${indent}<ContactForm
-${indent}  sectionEyebrow=${JSON.stringify(p.sectionEyebrow || '')}
-${indent}  sectionTitle=${JSON.stringify(p.sectionTitle || '')}
-${indent}  sectionSubtitle=${JSON.stringify(p.sectionSubtitle || '')}
-${indent}  submitText=${JSON.stringify(p.submitText || 'Send Message')}${styleAttr}
-${indent}/>`;
+      return tag('ContactForm', indent, [
+        strAttr('sectionEyebrow', p.sectionEyebrow),
+        strAttr('sectionTitle', p.sectionTitle ?? p.title),
+        strAttr('sectionSubtitle', p.sectionSubtitle ?? p.subtitle),
+        strAttr('submitText', p.submitText, 'Send Message'),
+        style
+      ]);
     }
 
     case 'marketing/footer': {
-      const p = node.props;
-      return `${indent}<Footer
-${indent}  brandName=${JSON.stringify(p.brandName || '')}
-${indent}  tagline=${JSON.stringify(p.tagline || '')}
-${indent}  copyright=${JSON.stringify(p.copyright || '')}
-${indent}  columns={${JSON.stringify(p.columns || [])}}${styleAttr}
-${indent}/>`;
+      return tag('Footer', indent, [
+        strAttr('brandName', p.brandName),
+        strAttr('tagline', p.tagline),
+        strAttr('copyright', p.copyright),
+        jsonAttr('columns', p.columns),
+        style
+      ]);
     }
 
     case 'navigation/navbar': {
-      const p = node.props;
-      return `${indent}<Navbar
-${indent}  brandName=${JSON.stringify(p.brandName || '')}
-${indent}  logoUrl=${JSON.stringify(p.logoUrl || '')}
-${indent}  links={${JSON.stringify(p.links || [])}}
-${indent}  ctaText=${JSON.stringify(p.ctaText || 'Get Started')}
-${indent}  ctaHref=${JSON.stringify(p.ctaHref || '/dashboard')}${styleAttr}
-${indent}/>`;
+      return tag('Navbar', indent, [
+        strAttr('brandName', p.brandName),
+        `logoUrl={${safeJson(sanitizeSrc(p.logoUrl))}}`,
+        jsonAttr('links', p.links),
+        strAttr('ctaText', p.ctaText, 'Get Started'),
+        hrefAttr('ctaHref', p.ctaHref, '/dashboard'),
+        style
+      ]);
     }
 
     case 'app/dashboard-shell': {
-      const p = node.props;
-      const inner = (node.children || [])
-        .map((c: BlueprintNode) => renderNodeToSvelte(c, indent + '  ', slotNode))
-        .filter(Boolean)
-        .join('\n');
-      return `${indent}<DashboardShell title=${JSON.stringify(p.title || 'Dashboard')} activeNav=${JSON.stringify(p.activeNav || 'dashboard')}>\n${inner}\n${indent}</DashboardShell>`;
+      return tag(
+        'DashboardShell',
+        indent,
+        [
+          strAttr('title', p.title, 'Dashboard'),
+          strAttr('activeNav', p.activeNav, 'dashboard'),
+          style
+        ],
+        renderChildren(node, indent, slotNode)
+      );
     }
 
     case 'app/kpi-grid': {
-      const p = node.props;
-      return `${indent}<KpiGrid cards={${JSON.stringify(p.cards || [])}}${styleAttr} />`;
+      return tag('KpiGrid', indent, [jsonAttr('cards', p.cards), style]);
     }
 
     case 'app/data-table': {
-      const p = node.props;
-      return `${indent}<DataTable title=${JSON.stringify(p.title || '')} columns={${JSON.stringify(p.columns || [])}} rows={${JSON.stringify(p.rows || [])}}${styleAttr} />`;
+      return tag('DataTable', indent, [
+        strAttr('title', p.title),
+        jsonAttr('columns', p.columns),
+        jsonAttr('rows', p.rows),
+        style
+      ]);
     }
 
     case 'app/settings-form': {
-      const p = node.props;
-      return `${indent}<SettingsForm initialName=${JSON.stringify(p.initialName || '')} initialEmail=${JSON.stringify(p.initialEmail || '')} notificationsEnabled={${p.notificationsEnabled !== false}}${styleAttr} />`;
+      return tag('SettingsForm', indent, [
+        strAttr('initialName', p.initialName),
+        strAttr('initialEmail', p.initialEmail),
+        boolAttr('notificationsEnabled', p.notificationsEnabled !== false),
+        style
+      ]);
     }
 
     case 'app/auth-card': {
-      const p = node.props;
-      return `${indent}<AuthCard
-${indent}  mode=${JSON.stringify(p.mode || 'signin')}
-${indent}  brandName=${JSON.stringify(p.brandName || 'Acme Cloud')}
-${indent}  title=${JSON.stringify(p.title || 'Welcome back')}
-${indent}  subtitle=${JSON.stringify(p.subtitle || '')}
-${indent}  redirectHref=${JSON.stringify(p.redirectHref || '/dashboard')}${styleAttr}
-${indent}/>`;
+      return tag('AuthCard', indent, [
+        enumAttr('mode', p.mode, ['signin', 'signup'], 'signin'),
+        strAttr('brandName', p.brandName, 'Acme Cloud'),
+        strAttr('title', p.title, 'Welcome back'),
+        strAttr('subtitle', p.subtitle),
+        hrefAttr('redirectHref', p.redirectHref, '/dashboard'),
+        style
+      ]);
     }
 
     case 'ui/button': {
-      const p = node.props;
-      return `${indent}<Button variant="${p.variant || 'primary'}" size="${p.size || 'md'}" href="${p.href || ''}"${styleAttr}>${p.text || 'Button'}</Button>`;
+      const attrs = [
+        enumAttr(
+          'variant',
+          p.variant,
+          ['primary', 'secondary', 'outline', 'ghost', 'filled', 'outlined', 'text', 'tonal', 'elevated'],
+          'primary'
+        ),
+        enumAttr('size', p.size, ['sm', 'md', 'lg'], 'md'),
+        `href={${safeJson(sanitizeHref(p.href, '#'))}}`,
+        style
+      ].filter(Boolean);
+      return `${indent}<Button ${attrs.join(' ')}>{${safeJson(toText(p.text, 'Button') || 'Button')}}</Button>`;
     }
 
     case 'ui/badge': {
-      const p = node.props;
-      return `${indent}<Badge text=${JSON.stringify(p.text || 'Badge')} tone="${p.tone || 'primary'}"${styleAttr} />`;
+      return tag('Badge', indent, [
+        strAttr('text', p.text, 'Badge'),
+        enumAttr('tone', p.tone, ['primary', 'secondary', 'tertiary', 'error', 'success', 'outline'], 'primary'),
+        style
+      ]);
     }
 
     case 'ui/card': {
-      const p = node.props;
-      return `${indent}<Card
-${indent}  variant="${p.variant || 'elevated'}"
-${indent}  eyebrow=${JSON.stringify(p.eyebrow || '')}
-${indent}  title=${JSON.stringify(p.title || '')}
-${indent}  body=${JSON.stringify(p.body || '')}
-${indent}  actionText=${JSON.stringify(p.actionText || '')}
-${indent}  actionHref=${JSON.stringify(p.actionHref || '#')}${styleAttr}
-${indent}/>`;
+      return tag('Card', indent, [
+        enumAttr('variant', p.variant, ['elevated', 'filled', 'outlined'], 'elevated'),
+        strAttr('eyebrow', p.eyebrow),
+        strAttr('title', p.title),
+        strAttr('body', p.body),
+        strAttr('ctaText', p.ctaText ?? p.actionText),
+        hrefAttr('ctaHref', p.ctaHref ?? p.actionHref),
+        enumAttr('align', p.align, TEXT_ALIGN, 'left'),
+        style
+      ]);
     }
 
     case 'ui/alert': {
-      const p = node.props;
-      return `${indent}<Alert tone="${p.tone || 'info'}" title=${JSON.stringify(p.title || '')} message=${JSON.stringify(p.message || '')} dismissible={${p.dismissible !== false}}${styleAttr} />`;
+      return tag('Alert', indent, [
+        enumAttr('tone', p.tone, ['info', 'success', 'warning', 'error'], 'info'),
+        strAttr('title', p.title),
+        strAttr('message', p.message),
+        boolAttr('dismissible', p.dismissible === true),
+        style
+      ]);
     }
 
     case 'ui/tabs': {
-      const p = node.props;
-      return `${indent}<Tabs tabs={${JSON.stringify(p.tabs || [])}}${styleAttr} />`;
+      return tag('Tabs', indent, [jsonAttr('tabs', p.tabs), style]);
     }
 
     default: {
-      const inner = (node.children || [])
-        .map((c: BlueprintNode) => renderNodeToSvelte(c, indent + '  ', slotNode))
-        .filter(Boolean)
-        .join('\n');
-      return `${indent}<div${styleAttr}>\n${inner}\n${indent}</div>`;
+      const inner = renderChildren(node, indent, slotNode);
+      return `${indent}<div${style ? ` ${style}` : ''}>\n${inner}\n${indent}</div>`;
     }
   }
+}
+
+/** Sanitizes an interaction payload for embedding in the generated runtime. */
+function sanitizeInteractionPayload(payload: unknown): Record<string, unknown> {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return {};
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
+    if (key === 'path' || /href$/i.test(key) || /url$/i.test(key)) {
+      out[key] = sanitizeHref(value, '#');
+    } else if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      out[key] = typeof value === 'string' ? value : String(value);
+    }
+  }
+  return out;
 }
 
 export function generatePageRoute(page: PageRoute, blueprint?: ProjectBlueprint): string {
@@ -340,13 +626,30 @@ export function generatePageRoute(page: PageRoute, blueprint?: ProjectBlueprint)
   if (layout) collectNodeInteractions(layout.rootNode, pageInteractions);
 
   const hasInteractiveRules = pageInteractions.length > 0;
-  const serializedRules = JSON.stringify(
-    pageInteractions.map(({ nodeId, rule }) => ({
-      nodeId,
-      actionType: rule.actionType || rule.action?.type || 'navigate',
-      payload: rule.payload || rule.action?.payload || {}
-    }))
+  const ACTION_TYPES = new Set([
+    'navigate',
+    'openModal',
+    'open_modal',
+    'toggleDrawer',
+    'showToast',
+    'show_toast',
+    'setState',
+    'toggle_state'
+  ]);
+  // safeJson: this is serialized inside <script>, so `</script>` must never appear raw.
+  const serializedRules = safeJson(
+    pageInteractions.map(({ nodeId, rule }) => {
+      const actionType = String(rule.actionType || rule.action?.type || 'navigate');
+      return {
+        nodeId: sanitizeNodeId(nodeId),
+        actionType: ACTION_TYPES.has(actionType) ? actionType : 'navigate',
+        payload: sanitizeInteractionPayload(rule.payload || rule.action?.payload || {})
+      };
+    })
   );
+
+  const headTitle = escapeSvelteText(page.title || '');
+  const headDescription = escapeSvelteText(page.description || '');
 
   const interactionScriptBlock = hasInteractiveRules
     ? `
@@ -465,8 +768,8 @@ export function generatePageRoute(page: PageRoute, blueprint?: ProjectBlueprint)
 </script>
 
 <svelte:head>
-  <title>${page.title}</title>
-  <meta name="description" content="${page.description || ''}" />
+  <title>${headTitle}</title>
+  <meta name="description" content="${headDescription}" />
 </svelte:head>${windowListenerTag}
 <main style="min-height: 100vh;">
 ${content}

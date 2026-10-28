@@ -60,24 +60,20 @@ export function getAllNodeIds(root: BlueprintNode): string[] {
 }
 
 function generateUUID(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+  return globalThis.crypto.randomUUID();
 }
 
-export function cloneSubtreeWithNewIds(node: BlueprintNode): BlueprintNode {
+/** Deep clone with fresh IDs for every node and interaction rule. Only the root is renamed. */
+export function cloneSubtreeWithNewIds(node: BlueprintNode, isRoot = true): BlueprintNode {
   return {
-    ...node,
+    ...structuredClone(node),
     id: generateUUID(),
-    name: `${node.name} (Copy)`,
-    props: JSON.parse(JSON.stringify(node.props || {})),
-    styles: JSON.parse(JSON.stringify(node.styles || { base: {} })),
-    children: (node.children || []).map(cloneSubtreeWithNewIds)
+    name: isRoot ? `${node.name} (Copy)` : node.name,
+    interactions: (node.interactions || []).map((rule) => ({
+      ...structuredClone(rule),
+      id: generateUUID()
+    })),
+    children: (node.children || []).map((child) => cloneSubtreeWithNewIds(child, false))
   };
 }
 

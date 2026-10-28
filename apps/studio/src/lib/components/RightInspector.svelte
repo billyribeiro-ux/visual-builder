@@ -6,6 +6,39 @@
   let activeTab = $state<'props' | 'style' | 'interactions'>('props');
   let styleTargetMode = $state<'base' | 'breakpoint' | 'hover' | 'focus' | 'active'>('base');
   let rawJsonToggles = $state<Record<string, boolean>>({});
+  let jsonParseErrors = $state<Record<string, string>>({});
+
+  function getZodEnumOptions(
+    schema: unknown,
+    propKey: string
+  ): Array<{ value: string; label: string }> | undefined {
+    try {
+      const shape = (schema as { shape?: Record<string, unknown> })?.shape;
+      if (!shape || !(propKey in shape)) return undefined;
+      let field: any = shape[propKey];
+      while (field?._zod?.def?.innerType || field?._def?.innerType) {
+        field = field._zod?.def?.innerType ?? field._def?.innerType;
+      }
+      const entries = field?._zod?.def?.entries ?? field?.options ?? field?._def?.values;
+      const values: string[] | undefined = Array.isArray(entries)
+        ? entries
+        : entries && typeof entries === 'object'
+          ? Object.values(entries)
+          : undefined;
+      if (!values || values.length === 0) return undefined;
+      const fallback = ENUM_PROP_OPTIONS[propKey];
+      return values.map((val) => {
+        const strVal = String(val);
+        const match = fallback?.find((f) => f.value === strVal);
+        return {
+          value: strVal,
+          label: match?.label || humanizeLabel(strVal)
+        };
+      });
+    } catch {
+      return undefined;
+    }
+  }
 
   function humanizeLabel(raw: string): string {
     return raw
@@ -490,11 +523,12 @@
                 ] as dir (dir.val)}
                   <button
                     type="button"
-                    onclick={() => {
-                      updateProp('direction', dir.val);
-                      updateStyle('display', 'flex');
-                      updateStyle('flexDirection', dir.val);
-                    }}
+                    onclick={() =>
+                      editor.transact(() => {
+                        updateProp('direction', dir.val);
+                        updateStyle('display', 'flex');
+                        updateStyle('flexDirection', dir.val);
+                      })}
                     class="bp-target-btn {(selectedNode.props?.direction || readStyle('flexDirection') || 'column') === dir.val ? 'bp-target-btn--active' : ''}"
                   >
                     {dir.label}
@@ -514,15 +548,16 @@
                 ] as al (al.val)}
                   <button
                     type="button"
-                    onclick={() => {
-                      updateProp('align', al.val);
-                      updateStyle('display', 'flex');
-                      updateStyle('alignItems', al.val);
-                      if (al.val === 'center') {
-                        updateProp('textAlign', 'center');
-                        updateStyle('textAlign', 'center');
-                      }
-                    }}
+                    onclick={() =>
+                      editor.transact(() => {
+                        updateProp('align', al.val);
+                        updateStyle('display', 'flex');
+                        updateStyle('alignItems', al.val);
+                        if (al.val === 'center') {
+                          updateProp('textAlign', 'center');
+                          updateStyle('textAlign', 'center');
+                        }
+                      })}
                     class="bp-target-btn {(selectedNode.props?.align || readStyle('alignItems') || 'stretch') === al.val ? 'bp-target-btn--active' : ''}"
                   >
                     {al.label}
@@ -544,11 +579,12 @@
                 ] as jc (jc.val)}
                   <button
                     type="button"
-                    onclick={() => {
-                      updateProp('justify', jc.val);
-                      updateStyle('display', 'flex');
-                      updateStyle('justifyContent', jc.val);
-                    }}
+                    onclick={() =>
+                      editor.transact(() => {
+                        updateProp('justify', jc.val);
+                        updateStyle('display', 'flex');
+                        updateStyle('justifyContent', jc.val);
+                      })}
                     class="bp-target-btn {(selectedNode.props?.justify || readStyle('justifyContent') || 'flex-start') === jc.val ? 'bp-target-btn--active' : ''}"
                   >
                     {jc.label}
@@ -561,7 +597,10 @@
 
         {#each Object.entries(selectedNode.props || {}) as [propKey, propVal] (propKey)}
           {@const controlMeta = manifest?.propControls?.[propKey]}
-          {@const enumOptions = controlMeta?.options || ENUM_PROP_OPTIONS[propKey]}
+          {@const enumOptions =
+            controlMeta?.options ||
+            getZodEnumOptions(manifest?.propsSchema, propKey) ||
+            ENUM_PROP_OPTIONS[propKey]}
           <div class="field-item">
             <div class="field-label-row">
               <label for="prop-{propKey}" class="field-label">
@@ -588,19 +627,21 @@
                 value={String(propVal ?? '')}
                 onchange={(e) => {
                   const val = (e.target as HTMLSelectElement).value;
-                  updateProp(propKey, val);
-                  if (propKey === 'direction') {
-                    updateStyle('display', 'flex');
-                    updateStyle('flexDirection', val);
-                  } else if (propKey === 'align') {
-                    updateStyle('display', 'flex');
-                    updateStyle('alignItems', val);
-                  } else if (propKey === 'justify') {
-                    updateStyle('display', 'flex');
-                    updateStyle('justifyContent', val);
-                  } else if (propKey === 'textAlign') {
-                    updateStyle('textAlign', val);
-                  }
+                  editor.transact(() => {
+                    updateProp(propKey, val);
+                    if (propKey === 'direction') {
+                      updateStyle('display', 'flex');
+                      updateStyle('flexDirection', val);
+                    } else if (propKey === 'align') {
+                      updateStyle('display', 'flex');
+                      updateStyle('alignItems', val);
+                    } else if (propKey === 'justify') {
+                      updateStyle('display', 'flex');
+                      updateStyle('justifyContent', val);
+                    } else if (propKey === 'textAlign') {
+                      updateStyle('textAlign', val);
+                    }
+                  });
                 }}
                 class="studio-select"
               >
@@ -623,9 +664,16 @@
               <input
                 id="prop-{propKey}"
                 type="number"
+                min={propKey === 'columns' ? 1 : undefined}
+                max={propKey === 'columns' ? 4 : undefined}
                 value={propVal}
-                oninput={(e) =>
-                  updateProp(propKey, parseFloat((e.target as HTMLInputElement).value) || 0)}
+                oninput={(e) => {
+                  let num = parseFloat((e.target as HTMLInputElement).value);
+                  if (Number.isNaN(num)) num = 0;
+                  if (propKey === 'columns') num = Math.min(4, Math.max(1, Math.round(num)));
+                  updateProp(propKey, num);
+                }}
+                onblur={() => editor.endContinuousEdit()}
                 class="studio-input"
               />
             {:else if Array.isArray(propVal) && !rawJsonToggles[propKey]}
@@ -782,19 +830,31 @@
                 onchange={(e) => {
                   try {
                     const parsed = JSON.parse((e.target as HTMLTextAreaElement).value);
+                    const nextErrors = { ...jsonParseErrors };
+                    delete nextErrors[propKey];
+                    jsonParseErrors = nextErrors;
                     updateProp(propKey, parsed);
-                  } catch {
-                    // Keep valid state on syntax error
+                  } catch (err) {
+                    jsonParseErrors = {
+                      ...jsonParseErrors,
+                      [propKey]: err instanceof Error ? err.message : 'Invalid JSON syntax'
+                    };
                   }
                 }}
                 class="studio-textarea font-mono"
               ></textarea>
+              {#if jsonParseErrors[propKey]}
+                <div role="alert" style="font-size: 0.6875rem; color: var(--md-sys-color-error); margin-top: 0.25rem;">
+                  Invalid JSON: {jsonParseErrors[propKey]}
+                </div>
+              {/if}
             {:else}
               <input
                 id="prop-{propKey}"
                 type="text"
                 value={String(propVal ?? '')}
                 oninput={(e) => updateProp(propKey, (e.target as HTMLInputElement).value)}
+                onblur={() => editor.endContinuousEdit()}
                 class="studio-input"
               />
             {/if}

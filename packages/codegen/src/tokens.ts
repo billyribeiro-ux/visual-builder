@@ -3,7 +3,7 @@ import { compileNodeScopedCss } from '@app-viz/engine';
 
 /**
  * Generates pure Vanilla CSS implementing the official Google Material Design 3 (MD3) Design System
- * (Locked: October 25, 2026). Zero Tailwind, zero PostCSS.
+ * (Locked: October 28, 2026). Zero Tailwind, zero PostCSS.
  */
 export function generateAppCss(tokens: DesignTokens, blueprint?: ProjectBlueprint): string {
   const colorVars = Object.entries(tokens.colors || {})
@@ -24,7 +24,7 @@ export function generateAppCss(tokens: DesignTokens, blueprint?: ProjectBlueprin
 
   return `/* ==========================================================================
    Google Material Design 3 (MD3) Design System — Pure Vanilla CSS
-   Generated on 2026-10-25. No Tailwind or external runtime CSS required.
+   Generated on 2026-10-28. No Tailwind or external runtime CSS required.
    ========================================================================== */
 
 :root {

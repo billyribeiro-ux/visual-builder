@@ -42,7 +42,8 @@ export const COMPONENT_REGISTRY: Record<string, ComponentManifest<any>> = {
       primaryCtaHref: z.string().default('/dashboard'),
       secondaryCtaText: z.string().default('View Pricing'),
       secondaryCtaHref: z.string().default('/pricing'),
-      badgeText: z.string().default('Svelte 5 Runes Native')
+      badgeText: z.string().default('Svelte 5 Runes Native'),
+      align: z.enum(['left', 'center']).default('left')
     }),
     defaultProps: {
       eyebrow: 'Introducing Acme SaaS 2.0',
@@ -52,7 +53,8 @@ export const COMPONENT_REGISTRY: Record<string, ComponentManifest<any>> = {
       primaryCtaHref: '/dashboard',
       secondaryCtaText: 'View Pricing',
       secondaryCtaHref: '/pricing',
-      badgeText: 'Built for Svelte 5 Runes'
+      badgeText: 'Built for Svelte 5 Runes',
+      align: 'left'
     },
     slots: []
   },
@@ -418,12 +420,12 @@ export const COMPONENT_REGISTRY: Record<string, ComponentManifest<any>> = {
     description: 'Material Design 3 horizontal outline-variant divider line with configurable spacing.',
     icon: 'Minus',
     propsSchema: z.object({
-      inset: z.boolean().default(false),
-      spacingY: z.string().default('2rem')
+      spacing: z.enum(['sm', 'md', 'lg']).default('md'),
+      label: z.string().default('')
     }),
     defaultProps: {
-      inset: false,
-      spacingY: '2rem'
+      spacing: 'md',
+      label: ''
     },
     slots: []
   },
@@ -436,6 +438,7 @@ export const COMPONENT_REGISTRY: Record<string, ComponentManifest<any>> = {
     icon: 'Megaphone',
     isSection: true,
     propsSchema: z.object({
+      eyebrow: z.string().default(''),
       title: z.string().default('Ready to accelerate your Svelte 5 workflow?'),
       subtitle: z.string().default('Export a deterministic, self-contained SvelteKit 3 handoff package for your AI coding agents in one click.'),
       primaryCtaText: z.string().default('Launch Studio Free'),
@@ -444,6 +447,7 @@ export const COMPONENT_REGISTRY: Record<string, ComponentManifest<any>> = {
       secondaryCtaHref: z.string().default('/pricing')
     }),
     defaultProps: {
+      eyebrow: '',
       title: 'Ready to accelerate your Svelte 5 workflow?',
       subtitle: 'Export a deterministic, self-contained SvelteKit 3 handoff package for your AI coding agents in one click.',
       primaryCtaText: 'Launch Studio Free',
@@ -509,13 +513,15 @@ export const COMPONENT_REGISTRY: Record<string, ComponentManifest<any>> = {
     icon: 'Send',
     isSection: true,
     propsSchema: z.object({
-      title: z.string().default('Talk to our Architecture Team'),
-      subtitle: z.string().default('Questions about custom component registries, enterprise handoffs, or self-hosted deployments?'),
+      sectionEyebrow: z.string().default('Contact'),
+      sectionTitle: z.string().default('Talk to our Architecture Team'),
+      sectionSubtitle: z.string().default('Questions about custom component registries, enterprise handoffs, or self-hosted deployments?'),
       submitText: z.string().default('Send Message')
     }),
     defaultProps: {
-      title: 'Talk to our Architecture Team',
-      subtitle: 'Questions about custom component registries, enterprise handoffs, or self-hosted deployments?',
+      sectionEyebrow: 'Contact',
+      sectionTitle: 'Talk to our Architecture Team',
+      sectionSubtitle: 'Questions about custom component registries, enterprise handoffs, or self-hosted deployments?',
       submitText: 'Send Message'
     },
     slots: []
@@ -529,11 +535,15 @@ export const COMPONENT_REGISTRY: Record<string, ComponentManifest<any>> = {
     icon: 'Lock',
     isSection: true,
     propsSchema: z.object({
+      mode: z.enum(['signin', 'signup']).default('signin'),
+      brandName: z.string().default('Acme SaaS'),
       title: z.string().default('Welcome back to Acme SaaS'),
       subtitle: z.string().default('Sign in to your workspace to manage visual blueprints and deployments.'),
       redirectHref: z.string().default('/dashboard')
     }),
     defaultProps: {
+      mode: 'signin',
+      brandName: 'Acme SaaS',
       title: 'Welcome back to Acme SaaS',
       subtitle: 'Sign in to your workspace to manage visual blueprints and deployments.',
       redirectHref: '/dashboard'
@@ -549,7 +559,7 @@ export const COMPONENT_REGISTRY: Record<string, ComponentManifest<any>> = {
     icon: 'Tag',
     propsSchema: z.object({
       text: z.string().default('MD3 Verified'),
-      tone: z.enum(['primary', 'secondary', 'success', 'error', 'outline']).default('primary')
+      tone: z.enum(['primary', 'secondary', 'tertiary', 'error']).default('primary')
     }),
     defaultProps: {
       text: 'MD3 Verified',
@@ -570,9 +580,11 @@ export const COMPONENT_REGISTRY: Record<string, ComponentManifest<any>> = {
       title: z.string().default('Composable Architecture'),
       body: z.string().default('Built with pure Vanilla CSS and Google Material Design 3 tokens for zero runtime overhead.'),
       ctaText: z.string().default('Learn more'),
-      ctaHref: z.string().default('/features')
+      ctaHref: z.string().default('/features'),
+      align: z.enum(['left', 'center', 'right']).default('left')
     }),
     defaultProps: {
+      align: 'left',
       variant: 'elevated',
       eyebrow: 'Feature Module',
       title: 'Composable Architecture',
@@ -590,14 +602,16 @@ export const COMPONENT_REGISTRY: Record<string, ComponentManifest<any>> = {
     description: 'Semantic alert banner for informational, success, or error callouts.',
     icon: 'AlertCircle',
     propsSchema: z.object({
-      tone: z.enum(['info', 'success', 'error']).default('info'),
+      tone: z.enum(['info', 'success', 'warning', 'error']).default('info'),
       title: z.string().default('System Status Nominal'),
-      message: z.string().default('All SvelteKit 3 routes and Google MD3 design tokens are synchronized.')
+      message: z.string().default('All SvelteKit 3 routes and Google MD3 design tokens are synchronized.'),
+      dismissible: z.boolean().default(false)
     }),
     defaultProps: {
       tone: 'info',
       title: 'System Status Nominal',
-      message: 'All SvelteKit 3 routes and Google MD3 design tokens are synchronized.'
+      message: 'All SvelteKit 3 routes and Google MD3 design tokens are synchronized.',
+      dismissible: false
     },
     slots: []
   },

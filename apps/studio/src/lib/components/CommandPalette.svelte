@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { editor, isContainerComponent } from '../state/editor.svelte.js';
+  import { editor } from '../state/editor.svelte.js';
   import { getAllManifests } from '@app-viz/components';
-  import { MD3_THEME_PRESETS, type BlueprintNode } from '@app-viz/schema';
+  import { MD3_THEME_PRESETS } from '@app-viz/schema';
 
   let query = $state('');
   let activeMode = $state<'commands' | 'composer'>('composer');
@@ -126,31 +126,7 @@
         label: `Insert ${m.displayName}`,
         hint: m.type,
         run: () => {
-          if (!editor.activePage) return;
-          const newNode: BlueprintNode = {
-            id: crypto.randomUUID(),
-            componentType: m.type,
-            name: m.displayName,
-            props: JSON.parse(JSON.stringify(m.defaultProps)),
-            styles: { base: {} },
-            interactions: [],
-            children: [],
-            locked: false,
-            hidden: false,
-            customClasses: ''
-          };
-          const selected = editor.selectedNode;
-          const targetParentId =
-            selected && isContainerComponent(selected.componentType)
-              ? selected.id
-              : editor.activePage.rootNode.id;
-
-          editor.dispatch({
-            type: 'INSERT_NODE',
-            targetParentId,
-            node: newNode
-          });
-          editor.selectNode(newNode.id);
+          editor.insertComponent(m.type);
           editor.showCommandPalette = false;
         }
       });

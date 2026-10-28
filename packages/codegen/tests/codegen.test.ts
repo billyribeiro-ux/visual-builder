@@ -9,7 +9,7 @@ describe('Codegen Engine', () => {
     const result = generateFullExport(project);
 
     // Verify Agent & Section 10 handoff docs
-    expect(result.files['AGENTS.md']).toContain('Svelte 5.57.2 + SvelteKit 3.1.0');
+    expect(result.files['AGENTS.md']).toMatch(/Svelte 5\.57\.\d+ \+ SvelteKit 3\.1\.\d+/);
     expect(result.files['AGENTS.md']).toContain('/dashboard');
     expect(result.files['README.md']).toBeDefined();
     expect(result.files['PROJECT_OVERVIEW.md']).toBeDefined();

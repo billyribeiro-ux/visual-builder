@@ -5,7 +5,8 @@
     quote: string;
     author: string;
     role: string;
-    company: string;
+    /** Legacy field (not in the registry); rendered only when present. */
+    company?: string;
   }
 
   interface Props {
@@ -42,11 +43,11 @@
           </p>
           <div style="display: flex; align-items: center; gap: 0.75rem;">
             <div style="width: 40px; height: 40px; border-radius: var(--md-sys-shape-corner-full, 9999px); background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); display: flex; align-items: center; justify-content: center; font-weight: 700;">
-              {item.author.charAt(0)}
+              {(item.author || '?').charAt(0)}
             </div>
             <div>
               <div style="font-weight: 700; font-size: 0.875rem;">{item.author}</div>
-              <div style="font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant);">{item.role}, {item.company}</div>
+              <div style="font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant);">{[item.role, item.company].filter(Boolean).join(', ')}</div>
             </div>
           </div>
         </div>

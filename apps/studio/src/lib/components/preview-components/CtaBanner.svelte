@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { sanitizeHref } from '../../canvas/messages.js';
   interface Props {
     eyebrow?: string;
     title?: string;
@@ -23,8 +24,11 @@
     onNavigate
   }: Props = $props();
 
+  const safePrimaryHref = $derived(sanitizeHref(primaryCtaHref));
+  const safeSecondaryHref = $derived(sanitizeHref(secondaryCtaHref));
+
   function handleNav(e: MouseEvent, href: string) {
-    if (onNavigate && href.startsWith('/')) {
+    if (onNavigate && href.startsWith('/') && !href.startsWith('//')) {
       e.preventDefault();
       onNavigate(href);
     }
@@ -46,16 +50,16 @@
       {/if}
       <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem;">
         <a
-          href={primaryCtaHref}
-          onclick={(e) => handleNav(e, primaryCtaHref)}
+          href={safePrimaryHref}
+          onclick={(e) => handleNav(e, safePrimaryHref)}
           class="md-btn md-btn-filled md-btn-lg"
         >
           {primaryCtaText}
         </a>
         {#if secondaryCtaText}
           <a
-            href={secondaryCtaHref}
-            onclick={(e) => handleNav(e, secondaryCtaHref)}
+            href={safeSecondaryHref}
+            onclick={(e) => handleNav(e, safeSecondaryHref)}
             class="md-btn md-btn-outlined md-btn-lg"
           >
             {secondaryCtaText}

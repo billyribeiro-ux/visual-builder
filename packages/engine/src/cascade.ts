@@ -5,12 +5,41 @@ import type {
   BlueprintNode
 } from '@app-viz/schema';
 
-const BREAKPOINT_ORDER: BreakpointKey[] = ['mobile', 'tablet', 'desktop', 'wide'];
+/**
+ * Responsive cascade contract (shared by the canvas, the SvelteKit export and the build spec):
+ *
+ *   base     applies at every width
+ *   tablet   applies at <= 1023px  (tablet AND mobile — Elementor-style, desktop-first)
+ *   mobile   applies at <= 767px   (wins over tablet)
+ *   desktop  applies at >= 1024px
+ *   wide     applies at >= 1280px  (wins over desktop)
+ *
+ * Device visibility toggles (hideOnMobile/Tablet/Desktop) are exact ranges, not cascades.
+ */
+export const BREAKPOINT_MEDIA = {
+  tablet: '(max-width: 1023px)',
+  mobile: '(max-width: 767px)',
+  desktop: '(min-width: 1024px)',
+  wide: '(min-width: 1280px)'
+} as const;
+
+export const VISIBILITY_MEDIA = {
+  mobile: '(max-width: 767px)',
+  tablet: '(min-width: 768px) and (max-width: 1023px)',
+  desktop: '(min-width: 1024px)'
+} as const;
+
+/** Which override buckets apply (in order) when previewing a given breakpoint. */
+export const BREAKPOINT_CASCADE: Record<BreakpointKey, BreakpointKey[]> = {
+  mobile: ['tablet', 'mobile'],
+  tablet: ['tablet'],
+  desktop: ['desktop'],
+  wide: ['desktop', 'wide']
+};
 
 /**
- * Resolves effective CSS styles for a node given the active breakpoint
- * and whether a state variant (hover, focus, active) is engaged.
- * Implements standard mobile-first cascading overrides.
+ * Resolves effective CSS styles for a node given the active breakpoint and an optional
+ * engaged state variant (hover, focus, active). See the cascade contract above.
  */
 export function resolveEffectiveStyles(
   style: ResponsiveStyle | undefined,
@@ -20,15 +49,9 @@ export function resolveEffectiveStyles(
   if (!style) return {};
   const result: CSSProperties = { ...(style.base || {}) };
 
-  const targetIndex = BREAKPOINT_ORDER.indexOf(activeBreakpoint);
-
-  // Cascade up to active breakpoint
-  for (let i = 0; i <= targetIndex; i++) {
-    const bp = BREAKPOINT_ORDER[i];
+  for (const bp of BREAKPOINT_CASCADE[activeBreakpoint] ?? []) {
     const bpStyles = style[bp];
-    if (bpStyles) {
-      Object.assign(result, bpStyles);
-    }
+    if (bpStyles) Object.assign(result, bpStyles);
   }
 
   // Apply state variant override if requested
@@ -70,6 +93,9 @@ export function compileNodeScopedCss(
   const tabletRules: string[] = [];
   const desktopRules: string[] = [];
   const wideRules: string[] = [];
+  const hideMobile: string[] = [];
+  const hideTablet: string[] = [];
+  const hideDesktop: string[] = [];
   const stateRules: string[] = [];
   const customCssBlocks: string[] = [];
   let hasEntranceAnimations = false;
@@ -155,15 +181,9 @@ export function compileNodeScopedCss(
       }
 
       if (options.includeMediaQueries !== false) {
-        if (m.hideOnMobile) {
-          mobileRules.push(`  ${sel} { display: none !important; }`);
-        }
-        if (m.hideOnTablet) {
-          tabletRules.push(`  ${sel} { display: none !important; }`);
-        }
-        if (m.hideOnDesktop) {
-          desktopRules.push(`  ${sel} { display: none !important; }`);
-        }
+        if (m.hideOnMobile) hideMobile.push(`  ${sel} { display: none !important; }`);
+        if (m.hideOnTablet) hideTablet.push(`  ${sel} { display: none !important; }`);
+        if (m.hideOnDesktop) hideDesktop.push(`  ${sel} { display: none !important; }`);
       }
     }
 
@@ -207,18 +227,17 @@ export function compileNodeScopedCss(
   }
 
   if (baseRules.length > 0) blocks.push(...baseRules);
-  if (mobileRules.length > 0) {
-    blocks.push(`@media (max-width: 767px) {\n${mobileRules.join('\n')}\n}`);
-  }
-  if (tabletRules.length > 0) {
-    blocks.push(`@media (min-width: 768px) and (max-width: 1023px) {\n${tabletRules.join('\n')}\n}`);
-  }
-  if (desktopRules.length > 0) {
-    blocks.push(`@media (min-width: 1024px) {\n${desktopRules.join('\n')}\n}`);
-  }
-  if (wideRules.length > 0) {
-    blocks.push(`@media (min-width: 1280px) {\n${wideRules.join('\n')}\n}`);
-  }
+  // Order matters: tablet before mobile, desktop before wide (later wins at equal specificity).
+  const media = (query: string, rules: string[]) => {
+    if (rules.length > 0) blocks.push(`@media ${query} {\n${rules.join('\n')}\n}`);
+  };
+  media(BREAKPOINT_MEDIA.tablet, tabletRules);
+  media(BREAKPOINT_MEDIA.mobile, mobileRules);
+  media(BREAKPOINT_MEDIA.desktop, desktopRules);
+  media(BREAKPOINT_MEDIA.wide, wideRules);
+  media(VISIBILITY_MEDIA.mobile, hideMobile);
+  media(VISIBILITY_MEDIA.tablet, hideTablet);
+  media(VISIBILITY_MEDIA.desktop, hideDesktop);
   if (stateRules.length > 0) {
     blocks.push(...stateRules);
   }

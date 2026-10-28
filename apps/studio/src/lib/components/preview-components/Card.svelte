@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { sanitizeHref } from '../../canvas/messages.js';
   interface Props {
     variant?: 'elevated' | 'filled' | 'outlined';
     eyebrow?: string;
@@ -28,10 +29,12 @@
   }: Props = $props();
 
   const resolvedActionText = $derived(actionText || ctaText);
-  const resolvedActionHref = $derived(actionHref !== '#' ? actionHref : ctaHref);
+  const resolvedActionHref = $derived(
+    sanitizeHref(actionHref && actionHref !== '#' ? actionHref : ctaHref)
+  );
 
   function handleNav(e: MouseEvent, href: string) {
-    if (onNavigate && href.startsWith('/')) {
+    if (onNavigate && href.startsWith('/') && !href.startsWith('//')) {
       e.preventDefault();
       onNavigate(href);
     }

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const CSSPropertiesSchema = z.record(z.string(), z.union([z.string(), z.number()])).default({});
+export const CSSPropertiesSchema = z.record(z.string(), z.union([z.string(), z.number()]));
 export type CSSProperties = z.infer<typeof CSSPropertiesSchema>;
 
 export const ResponsiveStyleSchema = z.object({
@@ -13,6 +13,6 @@ export const ResponsiveStyleSchema = z.object({
   focus: CSSPropertiesSchema.optional(),
   active: CSSPropertiesSchema.optional(),
   disabled: CSSPropertiesSchema.optional()
-}).default({ base: {} });
+}).prefault({});
 
 export type ResponsiveStyle = z.infer<typeof ResponsiveStyleSchema>;
