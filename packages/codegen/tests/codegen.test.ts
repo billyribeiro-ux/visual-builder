@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createDefaultAcmeSaaSProject, createPageFromTemplate, PAGE_TEMPLATE_CATALOG } from '@app-viz/schema';
 import { executeCommand } from '@app-viz/engine';
-import { generateFullExport, createDeterministicZip } from '../src/index.js';
+import { generateFullExport, createDeterministicZip, COMPONENT_SOURCES } from '../src/index.js';
 
 describe('Codegen Engine', () => {
   it('generates complete self-contained AI Agent handoff and SvelteKit 3 app', async () => {
@@ -102,27 +102,29 @@ describe('Codegen Engine', () => {
 
     const result = generateFullExport(project);
     const appCss = result.files['generated-app/src/app.css'];
+    const nodesCss = result.files['generated-app/src/lib/styles/nodes.css'];
 
-    // Verify both single-hyphen and double-hyphen MD3 classes and typography scales exist
-    expect(appCss).toContain('.md-section');
-    expect(appCss).toContain('.md-grid');
-    expect(appCss).toContain('.md-grid-cols-3');
-    expect(appCss).toContain('.md-btn-filled');
-    expect(appCss).toContain('.md-btn--filled');
-    expect(appCss).toContain('.md-card-outlined');
-    expect(appCss).toContain('.md-card--outlined');
-    expect(appCss).toContain('.md-container-xl');
-    expect(appCss).toContain('.md-container--xl');
-    expect(appCss).toContain('.md-headline-large');
-    expect(appCss).toContain('.md-title-medium');
-    expect(appCss).toContain('.md-body-medium');
-    expect(appCss).toContain('.md-label-large');
-    expect(appCss).toContain('.md-badge');
+    // app.css = shared site runtime (verbatim) + project tokens, all scoped under .site-root.
+    expect(appCss).toContain(COMPONENT_SOURCES['runtime.css'].trim());
+    for (const cls of ['.md-container', '.md-btn', '.md-btn--filled', '.md-card--outlined', '.md-badge', '.md-headline-large', '.md-title-medium', '.md-body-medium', '.md-label-large', '.el-glass']) {
+      expect(appCss).toContain(cls);
+    }
+    expect(appCss).toContain('@keyframes el-fadeInUp');
+    expect(appCss).toContain('.site-root {\n  --md-sys-color-');
 
-    // Verify responsive and stateful node rules are emitted into app.css and node wrapper has data-node-id
-    expect(appCss).toContain(`[data-node-id="${heroNodeId}"]:hover { opacity: 0.96 !important; }`);
-    expect(appCss).toContain(`[data-node-id="${heroNodeId}"] { padding-bottom: 40px !important; }`);
+    // Node styles are compiled into ONE stylesheet with the canvas' compiler; the root layout imports it.
+    expect(nodesCss).toContain(`[data-node-id="${heroNodeId}"]:hover { opacity: 0.96 !important; }`);
+    expect(nodesCss).toContain(`@media (max-width: 1023px) {\n  [data-node-id="${heroNodeId}"] { padding-bottom: 40px !important; }`);
+    expect(result.files['generated-app/src/routes/+layout.svelte']).toContain("import '../lib/styles/nodes.css';");
+    expect(result.files['generated-app/src/routes/+layout.svelte']).toContain('<div class="site-root">');
     expect(result.files['generated-app/src/routes/+page.svelte']).toContain(`data-node-id="${heroNodeId}"`);
+
+    // Every page template renders (no unknown component placeholders in the seed templates).
+    for (const tpl of PAGE_TEMPLATE_CATALOG) {
+      const file = result.files[`generated-app/src/routes/tpl-${tpl.key}/+page.svelte`];
+      expect(file, tpl.key).toBeDefined();
+      expect(file, tpl.key).not.toContain('<UnknownComponent');
+    }
 
     // Verify bundled static SVG assets are emitted into generated-app/static/assets/
     expect(result.files['generated-app/static/assets/analytics-pulse.svg']).toContain('<svg');
@@ -153,9 +155,21 @@ describe('Codegen Engine', () => {
 
     const result = generateFullExport(project);
     const homeSvelte = result.files['generated-app/src/routes/+page.svelte'];
-    expect(homeSvelte).toContain('let activeModal = $state');
-    expect(homeSvelte).toContain('let activeDrawer = $state');
-    expect(homeSvelte).toContain('let activeToast = $state');
-    expect(homeSvelte).toContain('Live Product Walkthrough');
+    // The page mounts the shared interaction runtime with its sanitized rules…
+    expect(homeSvelte).toContain("import InteractionLayer from '#lib/components/lib/InteractionLayer.svelte';");
+    expect(homeSvelte).toContain('<InteractionLayer rules={interactionRules} />');
+    const rulesLine = homeSvelte.split('\n').find((l) => l.includes('const interactionRules'));
+    expect(rulesLine).toContain(`"nodeId":"${heroNodeId}"`);
+    expect(rulesLine).toContain('"actionType":"openModal"');
+    expect(rulesLine).toContain('Live Product Walkthrough');
+    // …and that runtime (shipped in the app) implements modal, drawer, toast and state actions.
+    const runtime = result.files['generated-app/src/lib/components/lib/InteractionLayer.svelte'];
+    expect(runtime).toContain('let modal = $state');
+    expect(runtime).toContain('let drawer = $state');
+    expect(runtime).toContain('let toast = $state');
+    expect(runtime).toContain('let appState = $state');
+    for (const action of ['navigate', 'openModal', 'toggleDrawer', 'showToast', 'setState']) {
+      expect(runtime).toContain(`case '${action}':`);
+    }
   });
 });

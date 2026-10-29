@@ -1,4 +1,5 @@
 <script lang="ts">
+  import '#lib/styles/studio.css';
   import TopToolbar from '#lib/components/TopToolbar.svelte';
   import LeftSidebar from '#lib/components/LeftSidebar.svelte';
   import CanvasArea from '#lib/components/CanvasArea.svelte';
@@ -8,8 +9,23 @@
   import NavigatorModal from '#lib/components/NavigatorModal.svelte';
   import BuildSpecExportModal from '#lib/components/BuildSpecExportModal.svelte';
   import ProjectLibraryModal from '#lib/components/ProjectLibraryModal.svelte';
+  import PreflightDialog from '#lib/components/PreflightDialog.svelte';
+  import CodeViewDialog from '#lib/components/CodeViewDialog.svelte';
+  import ShortcutsDialog from '#lib/components/ShortcutsDialog.svelte';
   import { editor } from '#lib/state/editor.svelte.js';
   import { onMount } from 'svelte';
+  import CheckCircleIcon from 'phosphor-svelte/lib/CheckCircleIcon';
+  import WarningCircleIcon from 'phosphor-svelte/lib/WarningCircleIcon';
+  import WarningIcon from 'phosphor-svelte/lib/WarningIcon';
+  import InfoIcon from 'phosphor-svelte/lib/InfoIcon';
+  import XIcon from 'phosphor-svelte/lib/XIcon';
+
+  const NOTICE_ICONS = {
+    success: CheckCircleIcon,
+    error: WarningCircleIcon,
+    warning: WarningIcon,
+    info: InfoIcon
+  } as const;
 
   /** True when focus is in a control that owns its own keyboard behaviour. */
   function isEditableTarget(target: EventTarget | null): boolean {
@@ -29,6 +45,9 @@
 
   /** Closes the top-most overlay. Returns true if something was closed. */
   function closeTopOverlay(): boolean {
+    if (editor.showShortcuts) return !(editor.showShortcuts = false);
+    if (editor.showCodeView) return !(editor.showCodeView = false);
+    if (editor.showPreflight) return !(editor.showPreflight = false);
     if (editor.showExportDialog) return !(editor.showExportDialog = false);
     if (editor.showProjectLibrary) return !(editor.showProjectLibrary = false);
     if (editor.showCommandPalette) return !(editor.showCommandPalette = false);
@@ -37,106 +56,166 @@
     return false;
   }
 
-  onMount(() => {
-    void editor.init();
+  const anyOverlayOpen = $derived(
+    editor.showShortcuts ||
+      editor.showCodeView ||
+      editor.showPreflight ||
+      editor.showExportDialog ||
+      editor.showProjectLibrary ||
+      editor.showCommandPalette ||
+      editor.showBlockLibraryModal
+  );
 
-    function handleKeyDown(e: KeyboardEvent) {
-      const mod = e.metaKey || e.ctrlKey;
-      const key = e.key.toLowerCase();
+  function handleKeyDown(e: KeyboardEvent) {
+    const mod = e.metaKey || e.ctrlKey;
+    const key = e.key.toLowerCase();
 
-      if (mod && key === 'k') {
+    if (mod && key === 'k') {
+      e.preventDefault();
+      editor.showCommandPalette = !editor.showCommandPalette;
+      return;
+    }
+    if (mod && key === 's') {
+      e.preventDefault();
+      void editor.saveNow().then(() => editor.saveStatus === 'saved' && editor.notify('success', 'Saved.', 1500));
+      return;
+    }
+    if (mod && key === 'e') {
+      e.preventDefault();
+      editor.showExportDialog = true;
+      return;
+    }
+    if (mod && key === 'i') {
+      e.preventDefault();
+      editor.showNavigator = !editor.showNavigator;
+      return;
+    }
+    if (mod && (key === '=' || key === '+')) {
+      e.preventDefault();
+      editor.stepZoom(1);
+      return;
+    }
+    if (mod && key === '-') {
+      e.preventDefault();
+      editor.stepZoom(-1);
+      return;
+    }
+    if (e.key === 'Escape') {
+      if (closeTopOverlay()) {
         e.preventDefault();
-        editor.showCommandPalette = !editor.showCommandPalette;
         return;
       }
-      if (mod && key === 's') {
-        e.preventDefault();
-        void editor.saveNow().then(() => editor.saveStatus === 'saved' && editor.notify('success', 'Saved.', 1500));
+      if (editor.isInteractiveMode && !isEditableTarget(e.target)) {
+        editor.toggleInteractiveMode();
         return;
       }
-      if (mod && key === 'e') {
+      if (!isEditableTarget(e.target)) editor.selectNode(null);
+      return;
+    }
+
+    if (mod && key === 'z') {
+      if (isEditableTarget(e.target)) return;
+      e.preventDefault();
+      if (e.shiftKey) editor.redo();
+      else editor.undo();
+      return;
+    }
+    if (mod && key === 'y') {
+      if (isEditableTarget(e.target)) return;
+      e.preventDefault();
+      editor.redo();
+      return;
+    }
+
+    if (isEditableTarget(e.target)) return;
+
+    // Single-key and shifted shortcuts (never while typing; never while a dialog is open).
+    if (!mod && !e.altKey && !anyOverlayOpen) {
+      if (e.shiftKey && e.code === 'Digit1') {
         e.preventDefault();
-        editor.showExportDialog = true;
+        editor.zoomToFit();
         return;
       }
-      if (mod && key === 'i') {
+      if (e.shiftKey && e.code === 'Digit0') {
         e.preventDefault();
-        editor.showNavigator = !editor.showNavigator;
+        editor.setZoom(100);
         return;
       }
-      if (e.key === 'Escape') {
-        if (closeTopOverlay()) {
+      if (e.key === '?') {
+        e.preventDefault();
+        editor.showShortcuts = true;
+        return;
+      }
+      // Tree navigation only when nothing in the chrome has focus (Tab stays a focus key there).
+      if (e.key === 'Enter' && editor.selectedNodeId && document.activeElement === document.body && !editor.isInteractiveMode) {
+        e.preventDefault();
+        if (e.shiftKey) editor.selectParent();
+        else editor.selectFirstChild();
+        return;
+      }
+      if (!e.shiftKey) {
+        const panel = ({ a: 'library', l: 'layers', g: 'pages', m: 'assets', s: 'tokens' } as const)[key as 'a' | 'l' | 'g' | 'm' | 's'];
+        if (panel) {
           e.preventDefault();
+          editor.openLeftTab(panel);
           return;
         }
-        if (!isEditableTarget(e.target)) editor.selectNode(null);
-        return;
-      }
-
-      if (mod && key === 'z') {
-        if (isEditableTarget(e.target)) return;
-        e.preventDefault();
-        if (e.shiftKey) editor.redo();
-        else editor.undo();
-        return;
-      }
-      if (mod && key === 'y') {
-        if (isEditableTarget(e.target)) return;
-        e.preventDefault();
-        editor.redo();
-        return;
-      }
-
-      if (isEditableTarget(e.target)) return;
-
-      if (mod && key === 'd') {
-        e.preventDefault();
-        editor.duplicateSelectedNode();
-      } else if (mod && key === 'c') {
-        if (hasTextSelection()) return; // let the browser copy selected text
-        e.preventDefault();
-        if (e.shiftKey) editor.copyNodeStyle();
-        else editor.copySelectedNode();
-      } else if (mod && key === 'v') {
-        e.preventDefault();
-        if (e.shiftKey) editor.pasteNodeStyle();
-        else editor.pasteNode();
-      } else if (e.altKey && e.key === 'ArrowUp') {
-        e.preventDefault();
-        editor.reorderSelectedNode('up');
-      } else if (e.altKey && e.key === 'ArrowDown') {
-        e.preventDefault();
-        editor.reorderSelectedNode('down');
-      } else if ((e.key === 'Delete' || e.key === 'Backspace') && !isInteractiveTarget(e.target)) {
-        if (editor.selectedNodeId && !editor.isInteractiveMode) {
+        if (key === 'p') {
           e.preventDefault();
-          editor.deleteSelectedNode();
+          editor.toggleInteractiveMode();
+          return;
         }
       }
     }
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    if (mod && key === 'd') {
+      e.preventDefault();
+      editor.duplicateSelectedNode();
+    } else if (mod && key === 'c') {
+      if (hasTextSelection()) return; // let the browser copy selected text
+      e.preventDefault();
+      if (e.shiftKey) editor.copyNodeStyle();
+      else editor.copySelectedNode();
+    } else if (mod && key === 'v') {
+      e.preventDefault();
+      if (e.shiftKey) editor.pasteNodeStyle();
+      else editor.pasteNode();
+    } else if (e.altKey && e.key === 'ArrowUp') {
+      e.preventDefault();
+      editor.reorderSelectedNode('up');
+    } else if (e.altKey && e.key === 'ArrowDown') {
+      e.preventDefault();
+      editor.reorderSelectedNode('down');
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && !isInteractiveTarget(e.target)) {
+      if (editor.selectedNodeId && !editor.isInteractiveMode) {
+        e.preventDefault();
+        editor.deleteSelectedNode();
+      }
+    }
+  }
+
+  onMount(() => {
+    void editor.init();
   });
 </script>
 
+<svelte:window onkeydown={handleKeyDown} />
+
 <svelte:head>
-  <title>{editor.blueprint.meta.name} — Visual Builder</title>
+  <title>{editor.blueprint.meta.name} · Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+  />
 </svelte:head>
 
-<div class="studio-app studio-app--{editor.studioTheme}">
+<div class="sx" data-theme={editor.studioTheme}>
   <TopToolbar />
 
-  {#if editor.externalChange}
-    <div class="studio-banner" role="status">
-      <span>This project was changed in another tab.</span>
-      <button type="button" class="studio-btn" onclick={() => editor.reloadFromStorage()}>Load latest</button>
-      <button type="button" class="studio-btn" onclick={() => { editor.externalChange = false; void editor.saveNow(); }}>Keep mine</button>
-    </div>
-  {/if}
-
   {#if editor.ready}
-    <div class="studio-workspace" style={editor.isInteractiveMode ? 'grid-template-columns: 1fr;' : ''}>
+    <div class={['sx-workspace', editor.isInteractiveMode && 'sx-workspace--preview']}>
       {#if !editor.isInteractiveMode}
         <LeftSidebar />
       {/if}
@@ -146,7 +225,10 @@
       {/if}
     </div>
   {:else}
-    <div class="studio-loading" aria-busy="true" aria-live="polite">Loading your projects…</div>
+    <div class="sx-boot" aria-busy="true" aria-live="polite">
+      <span class="sx-boot__spinner"></span>
+      <span>Opening your workspace…</span>
+    </div>
   {/if}
 
   <CommandPalette />
@@ -154,74 +236,44 @@
   <NavigatorModal />
   <BuildSpecExportModal />
   <ProjectLibraryModal />
+  <PreflightDialog />
+  <CodeViewDialog />
+  <ShortcutsDialog />
 
-  <div class="studio-notices" aria-live="polite" aria-relevant="additions">
+  <div class="sx-toasts" aria-live="polite" aria-relevant="additions">
     {#each editor.notices as notice (notice.id)}
-      <div class="studio-notice studio-notice--{notice.kind}" role={notice.kind === 'error' ? 'alert' : 'status'}>
-        <span>{notice.message}</span>
-        <button type="button" aria-label="Dismiss notification" onclick={() => editor.dismissNotice(notice.id)}>✕</button>
+      {@const Icon = NOTICE_ICONS[notice.kind]}
+      <div class={['sx-toast', `sx-toast--${notice.kind}`]} role={notice.kind === 'error' ? 'alert' : 'status'}>
+        <span class="sx-toast__icon"><Icon size={16} weight="fill" /></span>
+        <span class="sx-toast__msg">{notice.message}</span>
+        <button type="button" class="sx-icon-btn sx-icon-btn--sm" aria-label="Dismiss notification" onclick={() => editor.dismissNotice(notice.id)}>
+          <XIcon size={12} />
+        </button>
       </div>
     {/each}
   </div>
 </div>
 
 <style>
-  .studio-banner {
+  .sx-boot {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    margin: 0 8px 8px;
-    padding: 0.5rem 0.9rem;
-    border-radius: 14px;
-    font-size: 0.8125rem;
-    background: var(--md-sys-color-tertiary-container);
-    color: var(--md-sys-color-on-tertiary-container);
+    justify-content: center;
+    gap: 10px;
+    color: var(--sx-text-2);
+    font-size: var(--sx-text-md);
   }
-  .studio-loading {
-    flex: 1;
-    display: grid;
-    place-items: center;
-    color: var(--md-sys-color-on-surface-variant);
-    font-size: 0.875rem;
+  .sx-boot__spinner {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--sx-border-strong);
+    border-top-color: var(--sx-accent);
+    animation: sx-spin 0.8s linear infinite;
   }
-  .studio-notices {
-    position: fixed;
-    bottom: 1rem;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 300;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    width: min(36rem, calc(100vw - 2rem));
-    pointer-events: none;
-  }
-  .studio-notice {
-    pointer-events: auto;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding: 0.7rem 0.9rem 0.7rem 1rem;
-    border-radius: 14px;
-    font-size: 0.8125rem;
-    background: var(--md-sys-color-inverse-surface, #2f3033);
-    color: var(--md-sys-color-inverse-on-surface, #f1f0f4);
-    box-shadow: var(--md-sys-elevation-level3, 0 8px 24px rgba(0, 0, 0, 0.25));
-  }
-  .studio-notice--error {
-    background: var(--md-sys-color-error-container);
-    color: var(--md-sys-color-on-error-container);
-  }
-  .studio-notice--warning {
-    background: var(--md-sys-color-tertiary-container);
-    color: var(--md-sys-color-on-tertiary-container);
-  }
-  .studio-notice button {
-    width: 28px;
-    height: 28px;
-    border-radius: 9999px;
-    color: inherit;
-    flex-shrink: 0;
+  @keyframes sx-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>

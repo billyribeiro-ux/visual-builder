@@ -18,6 +18,13 @@ export async function createDeterministicZip(project: GeneratedProject): Promise
       createFolders: true
     });
   }
+  for (const filePath of Object.keys(project.binaryFiles ?? {}).sort()) {
+    zip.file(filePath, project.binaryFiles![filePath], {
+      date: normalizedDate,
+      createFolders: true,
+      binary: true
+    });
+  }
 
   return await zip.generateAsync({
     type: 'uint8array',

@@ -12,8 +12,13 @@ import {
   type PageRoute,
   type BlueprintAsset
 } from './blueprint.js';
-import { DEFAULT_MD3_LIGHT_COLORS } from './tokens.js';
+import { DEFAULT_LIGHT_COLORS, DEFAULT_FONTS, DEFAULT_RADII, DEFAULT_SHADOWS, DEFAULT_SPACING, DEFAULT_BREAKPOINTS } from './tokens.js';
 
+/**
+ * Reference demo project: the marketing site and app area of "Halden", a fictional operational
+ * analytics product (every company and person named in its copy is invented). Node IDs are
+ * deterministic — tests, the parity script and saved selections rely on them.
+ */
 export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
   const projectId = '00000000-0000-0000-0000-000000000001';
   const homePageId = '10000000-0000-0000-0000-000000000001';
@@ -21,6 +26,7 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
   const pricingPageId = '10000000-0000-0000-0000-000000000003';
   const dashboardPageId = '10000000-0000-0000-0000-000000000004';
   const settingsPageId = '10000000-0000-0000-0000-000000000005';
+  const publicLayoutId = '20000000-0000-0000-0000-000000000001';
 
   const raw: ProjectBlueprintInput = {
     schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -34,63 +40,24 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
     },
     meta: {
       id: projectId,
-      name: 'Acme SaaS',
-      slug: 'acme-saas',
-      description: 'Production-ready AI-powered analytics platform for modern engineering teams.',
-      author: 'Principal Studio Architect',
+      name: 'Halden',
+      slug: 'halden',
+      description: 'Operational analytics for modern teams: live dashboards, anomaly alerts and one trusted definition for every metric.',
+      author: 'Demo project',
       createdAt: '2026-10-25T12:00:00.000Z',
       updatedAt: '2026-10-25T12:00:00.000Z'
     },
     tokens: {
-      colors: { ...DEFAULT_MD3_LIGHT_COLORS },
-      fonts: {
-        heading: 'Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-        body: 'Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-        mono: '"Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
-      },
-      radii: {
-        none: '0px',
-        'extra-small': '4px',
-        small: '8px',
-        medium: '12px',
-        large: '16px',
-        'extra-large': '28px',
-        full: '9999px',
-        sm: '4px',
-        md: '12px',
-        lg: '16px',
-        xl: '28px'
-      },
-      shadows: {
-        level0: 'none',
-        level1: '0px 1px 3px 1px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.30)',
-        level2: '0px 2px 6px 2px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.30)',
-        level3: '0px 4px 8px 3px rgba(0, 0, 0, 0.15), 0px 1px 3px 0px rgba(0, 0, 0, 0.30)',
-        level4: '0px 6px 10px 4px rgba(0, 0, 0, 0.15), 0px 2px 3px 0px rgba(0, 0, 0, 0.30)',
-        level5: '0px 8px 12px 6px rgba(0, 0, 0, 0.15), 0px 4px 4px 0px rgba(0, 0, 0, 0.30)'
-      },
-      spacing: {
-        xs: '4px',
-        sm: '8px',
-        md: '16px',
-        lg: '24px',
-        xl: '32px',
-        '2xl': '48px',
-        '3xl': '64px'
-      },
-      breakpoints: {
-        compact: '600px',
-        medium: '840px',
-        expanded: '1200px',
-        mobile: '600px',
-        tablet: '840px',
-        desktop: '1200px',
-        wide: '1440px'
-      }
+      colors: { ...DEFAULT_LIGHT_COLORS },
+      fonts: { ...DEFAULT_FONTS },
+      radii: { ...DEFAULT_RADII },
+      shadows: { ...DEFAULT_SHADOWS },
+      spacing: { ...DEFAULT_SPACING },
+      breakpoints: { ...DEFAULT_BREAKPOINTS }
     },
     layouts: [
       {
-        id: '20000000-0000-0000-0000-000000000001',
+        id: publicLayoutId,
         name: 'Public Site Layout',
         isDefault: true,
         rootNode: {
@@ -105,14 +72,14 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
               componentType: 'navigation/navbar',
               name: 'Site Navbar',
               props: {
-                brandName: 'Acme SaaS',
+                brandName: 'Halden',
                 logoUrl: '',
                 links: [
                   { label: 'Features', href: '/features' },
                   { label: 'Pricing', href: '/pricing' },
                   { label: 'Dashboard', href: '/dashboard' }
                 ],
-                ctaText: 'Get Started',
+                ctaText: 'Start free trial',
                 ctaHref: '/dashboard'
               },
               styles: { base: {} },
@@ -131,16 +98,18 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
               componentType: 'marketing/footer',
               name: 'Site Footer',
               props: {
-                brandName: 'Acme SaaS',
-                tagline: 'Engineering velocity for high-growth tech companies.',
-                copyright: '© 2026 Acme SaaS Inc. All rights reserved.',
+                brandName: 'Halden',
+                tagline: 'Operational analytics for teams that want one trusted view of their business.',
+                copyright: '© 2026 Halden Labs, Inc. All rights reserved.',
+                newsletterTitle: 'Product updates, once a month',
+                newsletterButtonText: 'Subscribe',
                 columns: [
                   {
                     title: 'Product',
                     links: [
                       { label: 'Features', href: '/features' },
                       { label: 'Pricing', href: '/pricing' },
-                      { label: 'Changelog', href: '/features#changelog' }
+                      { label: 'Dashboard', href: '/dashboard' }
                     ]
                   },
                   {
@@ -148,9 +117,22 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
                     links: [
                       { label: 'About', href: '#about' },
                       { label: 'Careers', href: '#careers' },
-                      { label: 'Privacy Policy', href: '#privacy' }
+                      { label: 'Contact', href: 'mailto:hello@halden.example' }
+                    ]
+                  },
+                  {
+                    title: 'Resources',
+                    links: [
+                      { label: 'Documentation', href: '#docs' },
+                      { label: 'Security', href: '#security' },
+                      { label: 'Status', href: '#status' }
                     ]
                   }
+                ],
+                legalLinks: [
+                  { label: 'Privacy', href: '#privacy' },
+                  { label: 'Terms', href: '#terms' },
+                  { label: 'Cookies', href: '#cookies' }
                 ]
               },
               styles: { base: {} },
@@ -165,13 +147,13 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
         id: homePageId,
         path: '/',
         slug: 'home',
-        title: 'Acme SaaS — Visual Development for AI Coding Agents',
-        description: 'Build full-stack Svelte apps visually and export machine-readable packages for AI agents.',
-        layoutId: '20000000-0000-0000-0000-000000000001',
+        title: 'Halden — Operational analytics for modern teams',
+        description: 'Live dashboards, anomaly alerts and one trusted definition for every metric your team runs on.',
+        layoutId: publicLayoutId,
         isDynamic: false,
         seo: {
-          title: 'Acme SaaS — Build Svelte Applications at the Speed of Thought',
-          metaDescription: 'Visual editor delivering pixel-perfect Svelte 5 and SvelteKit 3 handoffs for AI coding agents.'
+          title: 'Halden — Operational analytics for modern teams',
+          metaDescription: 'Halden brings product, revenue and infrastructure metrics into one live workspace, flags anomalies the moment they happen and routes them to the right owner.'
         },
         rootNode: {
           id: '30000000-0000-0000-0000-000000000001',
@@ -185,21 +167,35 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
               componentType: 'hero/split-hero',
               name: 'Hero Section',
               props: {
-                eyebrow: 'Introducing Acme SaaS 2.0',
-                title: 'Design Visually. Export Pure SvelteKit 3.',
-                subtitle: 'The first visual development platform that creates verifiable, versioned blueprints and runnable Svelte 5 code for AI coding agents.',
-                primaryCtaText: 'Launch Dashboard',
+                eyebrow: '',
+                title: 'Know what changed, why, and what to do next.',
+                subtitle: 'Halden unifies product, revenue and infrastructure metrics into live dashboards, flags anomalies the moment they happen and routes them to the right owner.',
+                primaryCtaText: 'Start free trial',
                 primaryCtaHref: '/dashboard',
-                secondaryCtaText: 'View Pricing',
+                secondaryCtaText: 'View pricing',
                 secondaryCtaHref: '/pricing',
-                badgeText: 'Built for Svelte 5 Runes'
+                badgeText: 'New: anomaly detection for every metric',
+                proofText: '14-day free trial · No credit card required',
+                align: 'left',
+                visual: 'app'
               },
-              styles: {
-                base: {
-                  paddingTop: '4rem',
-                  paddingBottom: '4rem'
-                }
+              styles: { base: {} },
+              children: []
+            },
+            {
+              id: '30000000-0000-0000-0000-000000000006',
+              componentType: 'marketing/stats-bar',
+              name: 'Proof Points',
+              props: {
+                sectionTitle: 'Built for teams that measure what matters',
+                stats: [
+                  { value: '1 min', label: 'Data freshness', detail: 'Metrics refresh every minute' },
+                  { value: '60+', label: 'Native connectors', detail: 'Warehouses, billing and product events' },
+                  { value: '99.9%', label: 'Uptime target', detail: 'Published monthly on our status page' },
+                  { value: '< 1 hr', label: 'Time to first dashboard', detail: 'With guided onboarding' }
+                ]
               },
+              styles: { base: {} },
               children: []
             },
             {
@@ -207,29 +203,44 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
               componentType: 'marketing/feature-grid',
               name: 'Core Features Grid',
               props: {
-                sectionEyebrow: 'Capabilities',
-                sectionTitle: 'Everything required to build modern web applications',
-                sectionDescription: 'From responsive layouts to declarative interactions and full AI agent documentation packages.',
+                sectionEyebrow: 'Platform',
+                sectionTitle: 'Everything your team needs to run on data',
+                sectionDescription: 'Connect your sources in minutes. Halden models, monitors and explains your numbers so you can focus on decisions.',
                 columns: 3,
                 features: [
                   {
-                    icon: 'Layers',
-                    title: 'Svelte 5 Runes Native',
-                    description: 'Reactive state management with $state, $derived, and snippets. No virtual DOM overhead.'
+                    icon: 'Plugs',
+                    title: 'Connect any source',
+                    description: 'Native connectors for your warehouse, billing system, product events and cloud provider — no pipelines to maintain.'
                   },
                   {
-                    icon: 'Cpu',
-                    title: 'Deterministic AI Handoff',
-                    description: 'Generates comprehensive AGENTS.md, IMPLEMENTATION_SPEC.md, and machine-readable blueprints.'
+                    icon: 'ChartLineUp',
+                    title: 'Live dashboards',
+                    description: 'Metrics refresh every minute. Start from proven templates and share a board with a single link.'
+                  },
+                  {
+                    icon: 'Bell',
+                    title: 'Anomaly alerts',
+                    description: 'Halden learns the normal range of every metric and alerts its owner by email or chat the moment something drifts.'
+                  },
+                  {
+                    icon: 'MagnifyingGlass',
+                    title: 'Root cause in one click',
+                    description: 'Break any change down by segment, region or release to see exactly what moved the number.'
+                  },
+                  {
+                    icon: 'UsersThree',
+                    title: 'Shared metric definitions',
+                    description: 'One reviewed, versioned definition per metric, so every team reports the same number.'
                   },
                   {
                     icon: 'ShieldCheck',
-                    title: '100% Preview-Export Parity',
-                    description: 'What you see in the studio preview is bit-for-bit identical to the generated SvelteKit project.'
+                    title: 'Enterprise-ready security',
+                    description: 'SSO, role-based access, audit logs and a choice of US or EU data residency.'
                   }
                 ]
               },
-              styles: { base: { paddingTop: '3rem', paddingBottom: '3rem' } },
+              styles: { base: {} },
               children: []
             },
             {
@@ -237,18 +248,25 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
               componentType: 'marketing/testimonials',
               name: 'Customer Testimonials',
               props: {
-                sectionEyebrow: 'Social Proof',
-                sectionTitle: 'Trusted by world-class software teams',
+                sectionEyebrow: 'Customers',
+                sectionTitle: 'Teams run their week on Halden',
+                sectionDescription: 'From operations to finance, teams use Halden to replace scattered reports with one live view.',
+                showRating: false,
                 testimonials: [
                   {
-                    quote: 'This visual builder eliminated days of back-and-forth between design and engineering. The AI agent export is incredible.',
-                    author: 'Sarah Chen',
-                    role: 'VP of Product at ScaleFlow'
+                    quote: 'We replaced four internal dashboards and a weekly reporting spreadsheet. Our Monday metrics review went from an hour to fifteen minutes.',
+                    author: 'Priya Raman',
+                    role: 'Head of Operations, Fernway Logistics'
                   },
                   {
-                    quote: 'We fed the exported ZIP directly to an AI agent, and it implemented our payment integrations in 20 minutes without visual drift.',
-                    author: 'Marcus Vance',
-                    role: 'Founder at HyperStack'
+                    quote: 'An anomaly alert caught a billing regression minutes after a release. Before, we would have found it at month-end close.',
+                    author: 'Daniel Okafor',
+                    role: 'VP Engineering, Copperline'
+                  },
+                  {
+                    quote: 'Finance, product and success finally report the same number for active customers. The debates about whose figure is right have stopped.',
+                    author: 'Elena Marquez',
+                    role: 'Director of Analytics, Northfold'
                   }
                 ]
               },
@@ -260,23 +278,46 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
               componentType: 'marketing/faq-accordion',
               name: 'Frequently Asked Questions',
               props: {
-                sectionTitle: 'Frequently Asked Questions',
+                sectionEyebrow: 'FAQ',
+                sectionTitle: 'Frequently asked questions',
+                sectionDescription: 'Everything you need to know before you start. Can’t find an answer? Our team replies within one business day.',
                 items: [
                   {
-                    question: 'How does the AI Agent handoff package work?',
-                    answer: 'The export contains a complete SvelteKit 3 app, a validated project.blueprint.json, and comprehensive AGENTS.md documentation instructing coding agents on requirements, contracts, and test gates.'
+                    question: 'How long does setup take?',
+                    answer: 'Most teams connect their first source and publish a dashboard in under an hour. During the trial our onboarding team helps you model your core metrics.'
                   },
                   {
-                    question: 'Can I run the generated code locally without an internet connection?',
-                    answer: 'Yes! The generated SvelteKit 3 application has zero external runtime dependencies on the builder backend and compiles completely offline.'
+                    question: 'Where is my data stored?',
+                    answer: 'You choose a US or EU region when you create a workspace. Data is encrypted in transit and at rest, and access to the sources you connect is read-only.'
                   },
                   {
-                    question: 'Does this support responsive breakpoints?',
-                    answer: 'Yes, full cascading responsive overrides for Mobile (640px), Tablet (768px), and Desktop (1024px) are supported.'
+                    question: 'Can I share dashboards with people outside my team?',
+                    answer: 'Yes. Viewers are free on every plan, and you can share read-only dashboards with guests through expiring links.'
+                  },
+                  {
+                    question: 'What happens when the trial ends?',
+                    answer: 'Choose a plan, or your workspace moves to the free Starter plan. Nothing is deleted, and you can upgrade again at any time.'
                   }
                 ]
               },
-              styles: { base: { paddingBottom: '4rem' } },
+              styles: { base: {} },
+              children: []
+            },
+            {
+              id: '30000000-0000-0000-0000-000000000007',
+              componentType: 'marketing/cta-banner',
+              name: 'Closing Call to Action',
+              props: {
+                eyebrow: '',
+                title: 'See your business clearly, starting today',
+                subtitle: 'Connect a source and publish your first live dashboard in under an hour. Free for 14 days.',
+                primaryCtaText: 'Start free trial',
+                primaryCtaHref: '/dashboard',
+                secondaryCtaText: 'Compare plans',
+                secondaryCtaHref: '/pricing',
+                variant: 'primary'
+              },
+              styles: { base: {} },
               children: []
             }
           ]
@@ -286,51 +327,98 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
         id: featuresPageId,
         path: '/features',
         slug: 'features',
-        title: 'Features — Acme SaaS',
-        description: 'Deep dive into our visual builder capabilities, component registry, and AI code generation.',
-        layoutId: '20000000-0000-0000-0000-000000000001',
+        title: 'Features — Halden',
+        description: 'Connectors, live dashboards, anomaly alerts, governed metrics and enterprise controls.',
+        layoutId: publicLayoutId,
         isDynamic: false,
         seo: {
-          title: 'Features & Architecture — Acme SaaS'
+          title: 'Features — Halden'
         },
         rootNode: {
           id: '31000000-0000-0000-0000-000000000001',
           componentType: 'structure/container',
           name: 'Features Page Root',
           props: { maxWidth: 'full' },
-          styles: { base: { paddingTop: '3rem', paddingBottom: '4rem' } },
+          styles: { base: {} },
           children: [
+            {
+              id: '31000000-0000-0000-0000-000000000003',
+              componentType: 'hero/split-hero',
+              name: 'Features Page Header',
+              props: {
+                eyebrow: 'Features',
+                title: 'Built for how operations teams actually work',
+                subtitle: 'From the first connector to the weekly business review, Halden covers the full loop: collect, monitor, explain and share.',
+                primaryCtaText: 'Start free trial',
+                primaryCtaHref: '/dashboard',
+                secondaryCtaText: 'View pricing',
+                secondaryCtaHref: '/pricing',
+                badgeText: '',
+                proofText: '',
+                align: 'center',
+                visual: 'none'
+              },
+              styles: { base: {} },
+              children: []
+            },
             {
               id: '31000000-0000-0000-0000-000000000002',
               componentType: 'marketing/feature-grid',
               name: 'Expanded Features Grid',
               props: {
-                sectionEyebrow: 'Architectural Excellence',
-                sectionTitle: 'Built on the SvelteKit 3 & Vite 8 standard',
-                sectionDescription: 'Every component complies with modern TypeScript, Google Material Design 3 (MD3) Pure Vanilla CSS, and WCAG AA accessibility standards.',
-                columns: 2,
+                sectionEyebrow: 'Capabilities',
+                sectionTitle: 'One workspace from raw data to decisions',
+                sectionDescription: 'Every capability works together, so a metric you define once powers dashboards, alerts and reports everywhere.',
+                columns: 3,
                 features: [
                   {
-                    icon: 'Palette',
-                    title: 'Google MD3 Pure Vanilla CSS',
-                    description: 'Zero external CSS runtime. Built on Google Material Design 3 design system tokens with native CSS custom properties.'
+                    icon: 'Database',
+                    title: 'Warehouse-native modeling',
+                    description: 'Define metrics on top of the tables you already have. Halden pushes queries down to your warehouse.'
                   },
                   {
-                    icon: 'Code',
-                    title: 'Subpath Imports with #lib',
-                    description: 'Modern Node & SvelteKit 3 imports map standard replacing legacy $lib.'
+                    icon: 'Gauge',
+                    title: 'Minute-level refresh',
+                    description: 'Incremental syncs keep every board current without overloading your sources.'
                   },
                   {
-                    icon: 'Zap',
-                    title: 'Fine-Grained Signals',
-                    description: 'Svelte 5 runes provide instantaneous UI updates even with hundreds of nested layer nodes.'
+                    icon: 'Lightning',
+                    title: 'Smart alert routing',
+                    description: 'Send each alert to the metric owner, with on-call schedules and quiet hours respected.'
                   },
                   {
-                    icon: 'Lock',
-                    title: 'Security-Hardened Runtime',
-                    description: 'CSS sanitization, safe zip archive extraction, and origin-verified postMessage communication.'
+                    icon: 'Funnel',
+                    title: 'Segment drill-downs',
+                    description: 'Slice any chart by plan, region, channel or release and compare periods side by side.'
+                  },
+                  {
+                    icon: 'CalendarCheck',
+                    title: 'Scheduled reports',
+                    description: 'Deliver dashboard snapshots to inboxes and chat channels every morning or week.'
+                  },
+                  {
+                    icon: 'LockKey',
+                    title: 'Granular permissions',
+                    description: 'Control access by team, workspace and dataset, with every change recorded in the audit log.'
                   }
                 ]
+              },
+              styles: { base: {} },
+              children: []
+            },
+            {
+              id: '31000000-0000-0000-0000-000000000004',
+              componentType: 'marketing/cta-banner',
+              name: 'Features Call to Action',
+              props: {
+                eyebrow: '',
+                title: 'Ready to see it with your own data?',
+                subtitle: 'Start a free trial or book a walkthrough with our team.',
+                primaryCtaText: 'Start free trial',
+                primaryCtaHref: '/dashboard',
+                secondaryCtaText: 'View pricing',
+                secondaryCtaHref: '/pricing',
+                variant: 'dark'
               },
               styles: { base: {} },
               children: []
@@ -342,58 +430,85 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
         id: pricingPageId,
         path: '/pricing',
         slug: 'pricing',
-        title: 'Pricing Plans — Acme SaaS',
-        description: 'Transparent pricing plans for solo founders, growing startups, and enterprise engineering teams.',
-        layoutId: '20000000-0000-0000-0000-000000000001',
+        title: 'Pricing — Halden',
+        description: 'Simple plans for every stage: a free Starter plan, Growth for scaling teams and Enterprise for advanced security needs.',
+        layoutId: publicLayoutId,
         isDynamic: false,
         seo: {
-          title: 'Pricing — Acme SaaS'
+          title: 'Pricing — Halden'
         },
         rootNode: {
           id: '32000000-0000-0000-0000-000000000001',
           componentType: 'structure/container',
           name: 'Pricing Page Root',
           props: { maxWidth: 'full' },
-          styles: { base: { paddingTop: '3rem', paddingBottom: '4rem' } },
+          styles: { base: {} },
           children: [
             {
               id: '32000000-0000-0000-0000-000000000002',
               componentType: 'marketing/pricing-table',
               name: 'Pricing Plans Section',
               props: {
-                sectionEyebrow: 'Simple Pricing',
-                sectionTitle: 'Invest in engineering velocity',
-                sectionDescription: 'Choose the tier that matches your team size. All plans include full AI Agent ZIP export.',
+                sectionEyebrow: 'Pricing',
+                sectionTitle: 'Simple plans that scale with your team',
+                sectionDescription: 'Start free, upgrade when you need more sources and seats. Every plan includes unlimited viewers.',
+                popularLabel: 'Most popular',
                 plans: [
                   {
                     name: 'Starter',
                     price: '$0',
-                    period: 'forever',
-                    description: 'Perfect for individual founders and prototypes.',
-                    features: ['Up to 5 Pages', 'Export to SvelteKit 3', '50+ Component Library', 'Community Support'],
-                    ctaText: 'Start Free',
+                    period: 'per month',
+                    description: 'For small teams getting their first metrics in one place.',
+                    features: ['3 data sources', '5 dashboards', 'Daily refresh', 'Community support'],
+                    ctaText: 'Get started',
                     ctaHref: '/dashboard',
                     isPopular: false
                   },
                   {
-                    name: 'Pro',
+                    name: 'Growth',
                     price: '$49',
-                    period: 'per month',
-                    description: 'Designed for high-output engineering teams.',
-                    features: ['Unlimited Pages', 'Full AI Agent Handoff Package', 'Custom Design Tokens', 'Visual Parity Regression Suite', 'Priority Support'],
-                    ctaText: 'Upgrade to Pro',
+                    period: 'per seat / month',
+                    description: 'For teams that run their week on live metrics.',
+                    features: ['Unlimited data sources', 'Unlimited dashboards', 'Anomaly alerts', 'Minute-level refresh', 'Priority support'],
+                    ctaText: 'Start free trial',
                     ctaHref: '/dashboard',
                     isPopular: true
                   },
                   {
                     name: 'Enterprise',
-                    price: '$199',
-                    period: 'per month',
-                    description: 'For organizations building multi-brand design systems.',
-                    features: ['Custom Component Manifests', 'Self-hosted On-Premises Option', 'SLA Guarantee', 'Dedicated Architect'],
-                    ctaText: 'Contact Sales',
-                    ctaHref: 'mailto:sales@acme.test',
+                    price: 'Custom',
+                    period: '',
+                    description: 'For organizations with advanced security and compliance needs.',
+                    features: ['SSO and SCIM provisioning', 'Audit logs', 'EU or US data residency', 'Uptime SLA', 'Dedicated success manager'],
+                    ctaText: 'Contact sales',
+                    ctaHref: 'mailto:sales@halden.example',
                     isPopular: false
+                  }
+                ]
+              },
+              styles: { base: {} },
+              children: []
+            },
+            {
+              id: '32000000-0000-0000-0000-000000000003',
+              componentType: 'marketing/faq-accordion',
+              name: 'Pricing Questions',
+              props: {
+                sectionEyebrow: 'Billing',
+                sectionTitle: 'Pricing questions',
+                sectionDescription: 'Straight answers about seats, billing and plan changes.',
+                items: [
+                  {
+                    question: 'What counts as a seat?',
+                    answer: 'Anyone who can create or edit dashboards, metrics or alerts. Viewers are always free and unlimited.'
+                  },
+                  {
+                    question: 'Can I switch plans later?',
+                    answer: 'Yes. Upgrades apply immediately and are prorated; downgrades take effect at the end of the billing period.'
+                  },
+                  {
+                    question: 'Do you offer annual billing?',
+                    answer: 'Annual billing is available on Growth and Enterprise and includes two months free.'
                   }
                 ]
               },
@@ -407,19 +522,21 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
         id: dashboardPageId,
         path: '/dashboard',
         slug: 'dashboard',
-        title: 'Analytics Dashboard — Acme SaaS',
-        description: 'Interactive SaaS dashboard with KPI metrics, real-time activity table, and filtering.',
+        title: 'Overview — Halden',
+        description: 'Workspace overview with key revenue and account metrics and recently changed accounts.',
         isDynamic: false,
         seo: {
-          title: 'Dashboard — Acme SaaS'
+          title: 'Overview — Halden'
         },
         rootNode: {
           id: '40000000-0000-0000-0000-000000000001',
           componentType: 'app/dashboard-shell',
           name: 'Dashboard App Shell',
           props: {
-            title: 'Analytics Overview',
-            activeNav: 'dashboard'
+            title: 'Overview',
+            activeNav: 'dashboard',
+            brandName: 'Halden',
+            userName: 'Jordan Lee'
           },
           styles: { base: { minHeight: '100vh' } },
           children: [
@@ -428,11 +545,12 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
               componentType: 'app/kpi-grid',
               name: 'KPI Metric Cards',
               props: {
+                comparisonLabel: 'vs. last month',
                 cards: [
-                  { label: 'Total Revenue', title: 'Total Revenue', value: '$124,592', delta: '+14.2%', change: '+14.2%', trend: 'up' },
-                  { label: 'Active AI Sessions', title: 'Active AI Sessions', value: '8,421', delta: '+28.4%', change: '+28.4%', trend: 'up' },
-                  { label: 'Export Parity Score', title: 'Export Parity Score', value: '99.9%', delta: '+0.1%', change: '+0.1%', trend: 'up' },
-                  { label: 'Avg Build Time', title: 'Avg Build Time', value: '1.2s', delta: '-18.5%', change: '-18.5%', trend: 'up' }
+                  { title: 'Monthly recurring revenue', value: '$184,920', change: '+12.4%', trend: 'up' },
+                  { title: 'Active accounts', value: '2,431', change: '+4.1%', trend: 'up' },
+                  { title: 'Net revenue retention', value: '118%', change: '+2.3 pts', trend: 'up' },
+                  { title: 'Churned accounts', value: '14', change: '+3', trend: 'down' }
                 ]
               },
               styles: { base: { marginBottom: '1.5rem' } },
@@ -441,14 +559,18 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
             {
               id: '40000000-0000-0000-0000-000000000003',
               componentType: 'app/data-table',
-              name: 'Projects Data Table',
+              name: 'Accounts Data Table',
               props: {
-                title: 'Recent Production Deployments',
-                columns: ['Project Name', 'Framework', 'Pages', 'Status', 'Last Exported'],
+                title: 'Recent accounts',
+                description: 'Accounts with billing or usage changes in the last 7 days.',
+                columns: ['Account', 'Plan', 'Seats', 'MRR', 'Status'],
                 rows: [
-                  ['Acme SaaS Production', 'SvelteKit 3.1.0', '5 pages', 'Active', '2 mins ago'],
-                  ['Developer Docs Hub', 'SvelteKit 3.1.0', '18 pages', 'Active', '1 hour ago'],
-                  ['Mobile Billing Portal', 'SvelteKit 3.1.0', '3 pages', 'Active', 'Yesterday']
+                  ['Fernway Logistics', 'Growth', '48', '$2,352', 'Active'],
+                  ['Copperline', 'Enterprise', '210', '$11,400', 'Active'],
+                  ['Northfold', 'Growth', '36', '$1,764', 'Trial'],
+                  ['Kettle & Pine', 'Starter', '6', '$0', 'Past due'],
+                  ['Brightwater Clinics', 'Growth', '22', '$1,078', 'Active'],
+                  ['Atlas Freight', 'Enterprise', '140', '$7,600', 'Canceled']
                 ]
               },
               styles: { base: {} },
@@ -461,29 +583,33 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
         id: settingsPageId,
         path: '/dashboard/settings',
         slug: 'settings',
-        title: 'Workspace Settings — Acme SaaS',
-        description: 'Configure workspace preferences, API keys, and notification channels.',
+        title: 'Settings — Halden',
+        description: 'Workspace name, alert delivery email and notification preferences.',
         isDynamic: false,
         seo: {
-          title: 'Settings — Acme SaaS'
+          title: 'Settings — Halden'
         },
         rootNode: {
           id: '41000000-0000-0000-0000-000000000001',
           componentType: 'app/dashboard-shell',
           name: 'Settings App Shell',
           props: {
-            title: 'Workspace Settings',
-            activeNav: 'settings'
+            title: 'Settings',
+            activeNav: 'settings',
+            brandName: 'Halden',
+            userName: 'Jordan Lee'
           },
           styles: { base: { minHeight: '100vh' } },
           children: [
             {
               id: '41000000-0000-0000-0000-000000000002',
               componentType: 'app/settings-form',
-              name: 'Account & Integration Settings Form',
+              name: 'Workspace Settings Form',
               props: {
-                initialName: 'Acme SaaS Engineering',
-                initialEmail: 'engineering@acme.test',
+                title: 'Workspace preferences',
+                description: 'Update how your workspace appears and where alerts are delivered.',
+                initialName: 'Halden Operations',
+                initialEmail: 'ops@halden.example',
                 notificationsEnabled: true
               },
               styles: { base: {} },
@@ -493,79 +619,71 @@ export function createDefaultAcmeSaaSProject(): ProjectBlueprint {
         }
       }
     ],
-    interactions: [
-      {
-        id: '50000000-0000-0000-0000-000000000001',
-        name: 'Launch Dashboard CTA Navigation',
-        sourceNodeId: '30000000-0000-0000-0000-000000000002',
-        trigger: 'click',
-        action: {
-          type: 'navigate',
-          payload: { targetPath: '/dashboard' }
-        }
-      }
-    ],
+    interactions: [],
     assets: CURATED_PROJECT_ASSETS.map((a) => ({ ...a })),
     notes: {
-      implementation: 'Preloaded production reference project implementing the complete 11-step user journey.'
+      implementation:
+        'Reference demo: a marketing site (home, features, pricing) and an app area (dashboard, settings) for Halden, a fictional analytics product. All companies, people and figures in the copy are invented.'
     }
   };
   return ProjectBlueprintSchema.parse(raw);
 }
 
+/** SVG asset entry with its byte size and data URL derived from the markup. */
+function svgAsset(input: Omit<BlueprintAsset, 'mimeType' | 'size' | 'dataUrl'> & { svgContent: string }): BlueprintAsset {
+  return {
+    ...input,
+    mimeType: 'image/svg+xml',
+    size: new TextEncoder().encode(input.svgContent).length,
+    dataUrl: `data:image/svg+xml;utf8,${encodeURIComponent(input.svgContent)}`
+  };
+}
+
 export const CURATED_PROJECT_ASSETS: BlueprintAsset[] = [
-  {
+  svgAsset({
     id: '80000000-0000-4000-8000-000000000001',
     filename: 'analytics-pulse.svg',
-    mimeType: 'image/svg+xml',
-    size: 642,
     localPath: '/assets/analytics-pulse.svg',
-    alt: 'Real-time analytics velocity chart',
+    alt: 'Line chart trending upward',
     category: 'illustration',
     width: 320,
     height: 180,
-    svgContent: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" fill="none"><rect width="320" height="180" rx="16" fill="#EDF2FC"/><path d="M28 136L88 96L142 114L212 54L292 34" stroke="#0B57D0" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="212" cy="54" r="7" fill="#0B57D0"/><circle cx="292" cy="34" r="7" fill="#146C2E"/></svg>`,
-    dataUrl: `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" fill="none"><rect width="320" height="180" rx="16" fill="#EDF2FC"/><path d="M28 136L88 96L142 114L212 54L292 34" stroke="#0B57D0" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="212" cy="54" r="7" fill="#0B57D0"/><circle cx="292" cy="34" r="7" fill="#146C2E"/></svg>')}`
-  },
-  {
+    svgContent:
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" fill="none"><rect width="320" height="180" rx="16" fill="#F8FAFC"/><path d="M28 40H292M28 80H292M28 120H292" stroke="#E2E8F0" stroke-width="1.5"/><path d="M28 136L88 104L142 116L212 66L292 42V152H28Z" fill="#EEF2FF"/><path d="M28 136L88 104L142 116L212 66L292 42" stroke="#4F46E5" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="212" cy="66" r="6" fill="#FFFFFF" stroke="#4F46E5" stroke-width="3"/><circle cx="292" cy="42" r="6" fill="#4F46E5"/></svg>'
+  }),
+  svgAsset({
     id: '80000000-0000-4000-8000-000000000002',
     filename: 'ai-agent-flow.svg',
-    mimeType: 'image/svg+xml',
-    size: 718,
     localPath: '/assets/ai-agent-flow.svg',
-    alt: 'Autonomous AI agent orchestration graph',
+    alt: 'Workflow diagram with four connected steps',
     category: 'illustration',
     width: 320,
     height: 180,
-    svgContent: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" fill="none"><rect width="320" height="180" rx="16" fill="#F3E8FD"/><rect x="30" y="66" width="68" height="48" rx="12" fill="#6D28D9"/><rect x="126" y="34" width="68" height="44" rx="12" fill="#0B57D0"/><rect x="126" y="102" width="68" height="44" rx="12" fill="#0B57D0"/><rect x="222" y="66" width="68" height="48" rx="12" fill="#146C2E"/><path d="M98 90H126M194 56L222 90M194 124L222 90" stroke="#444746" stroke-width="3"/></svg>`,
-    dataUrl: `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" fill="none"><rect width="320" height="180" rx="16" fill="#F3E8FD"/><rect x="30" y="66" width="68" height="48" rx="12" fill="#6D28D9"/><rect x="126" y="34" width="68" height="44" rx="12" fill="#0B57D0"/><rect x="126" y="102" width="68" height="44" rx="12" fill="#0B57D0"/><rect x="222" y="66" width="68" height="48" rx="12" fill="#146C2E"/><path d="M98 90H126M194 56L222 90M194 124L222 90" stroke="#444746" stroke-width="3"/></svg>')}`
-  },
-  {
+    svgContent:
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" fill="none"><rect width="320" height="180" rx="16" fill="#F8FAFC"/><path d="M98 90H126M194 58L222 90M194 122L222 90" stroke="#CBD5E1" stroke-width="2.5" stroke-linecap="round"/><rect x="30" y="66" width="68" height="48" rx="12" fill="#4F46E5"/><rect x="126" y="36" width="68" height="44" rx="12" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5"/><rect x="126" y="100" width="68" height="44" rx="12" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5"/><rect x="222" y="66" width="68" height="48" rx="12" fill="#0F766E"/><rect x="140" y="54" width="40" height="8" rx="4" fill="#CBD5E1"/><rect x="140" y="118" width="40" height="8" rx="4" fill="#CBD5E1"/></svg>'
+  }),
+  svgAsset({
     id: '80000000-0000-4000-8000-000000000003',
     filename: 'security-vault.svg',
-    mimeType: 'image/svg+xml',
-    size: 590,
     localPath: '/assets/security-vault.svg',
-    alt: 'Zero-trust security shield badge',
+    alt: 'Shield with a check mark',
     category: 'icon',
     width: 240,
     height: 180,
-    svgContent: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none"><rect width="240" height="180" rx="16" fill="#E6F4EA"/><path d="M120 32L172 54V98C172 130 149 152 120 162C91 152 68 130 68 98V54L120 32Z" fill="#146C2E"/><path d="M103 98L115 110L140 82" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-    dataUrl: `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none"><rect width="240" height="180" rx="16" fill="#E6F4EA"/><path d="M120 32L172 54V98C172 130 149 152 120 162C91 152 68 130 68 98V54L120 32Z" fill="#146C2E"/><path d="M103 98L115 110L140 82" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>')}`
-  },
-  {
+    svgContent:
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" fill="none"><rect width="240" height="180" rx="16" fill="#F0FDF4"/><path d="M120 32L172 54V98C172 130 149 152 120 162C91 152 68 130 68 98V54L120 32Z" fill="#15803D"/><path d="M103 98L115 110L140 82" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+  }),
+  svgAsset({
     id: '80000000-0000-4000-8000-000000000004',
     filename: 'brand-mark.svg',
-    mimeType: 'image/svg+xml',
-    size: 480,
     localPath: '/assets/brand-mark.svg',
-    alt: 'Acme MD3 geometric logo mark',
+    alt: 'Geometric logo mark',
     category: 'logo',
     width: 120,
     height: 120,
-    svgContent: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none"><rect width="120" height="120" rx="28" fill="#0B57D0"/><path d="M60 24L92 88H28L60 24Z" fill="#D3E3FD"/><circle cx="60" cy="68" r="12" fill="#0B57D0"/></svg>`,
-    dataUrl: `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none"><rect width="120" height="120" rx="28" fill="#0B57D0"/><path d="M60 24L92 88H28L60 24Z" fill="#D3E3FD"/><circle cx="60" cy="68" r="12" fill="#0B57D0"/></svg>')}`
-  }
+    svgContent:
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none"><rect width="120" height="120" rx="28" fill="#4F46E5"/><path d="M36 84V36H50V54H70V36H84V84H70V66H50V84Z" fill="#FFFFFF"/></svg>'
+  })
 ];
 
 export function createBlankProject(name = 'Untitled App'): ProjectBlueprint {
@@ -583,7 +701,7 @@ export function createBlankProject(name = 'Untitled App'): ProjectBlueprint {
       id: createId(),
       name,
       slug,
-      description: `${name} — built with the Visual Builder`,
+      description: `${name} — new project`,
       createdAt: now,
       updatedAt: now
     },
@@ -609,14 +727,17 @@ export function createBlankProject(name = 'Untitled App'): ProjectBlueprint {
               componentType: 'hero/split-hero',
               name: 'Welcome Hero',
               props: {
-                eyebrow: 'New Project',
+                eyebrow: '',
                 title: `Welcome to ${name}`,
-                subtitle: 'Drag or insert sections from the left library drawer to build your application.',
-                primaryCtaText: 'Get Started',
+                subtitle: 'Replace this headline and text with the promise your product makes, then add sections from the Elements panel.',
+                primaryCtaText: 'Get started',
                 primaryCtaHref: '/',
-                secondaryCtaText: 'Learn More',
+                secondaryCtaText: 'Learn more',
                 secondaryCtaHref: '#features',
-                badgeText: 'New project'
+                badgeText: 'New project',
+                proofText: '',
+                align: 'left',
+                visual: 'app'
               }
             }
           ]
@@ -660,22 +781,22 @@ export function validateBlueprintPreflight(blueprint: ProjectBlueprint): Preflig
   checks.push({
     id: 'schema-valid',
     category: 'schema',
-    label: 'Zod Blueprint Schema Contract',
+    label: 'Blueprint schema',
     status: parsed.success ? 'pass' : 'fail',
     detail: parsed.success
       ? `Valid v${blueprint.schemaVersion} Blueprint (${blueprint.pages.length} routes)`
       : parsed.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join('; ')
   });
 
-  // 2. Target & Styling Policy Check
-  const isMd3 = blueprint.target?.styling === 'vanilla-md3';
+  // 2. Target & Styling Policy Check (`vanilla-md3` is the persisted id of the vanilla CSS target)
+  const isVanillaCss = blueprint.target?.styling === 'vanilla-md3';
   checks.push({
     id: 'styling-policy',
     category: 'tokens',
-    label: 'Google MD3 Pure Vanilla CSS Policy',
-    status: isMd3 ? 'pass' : 'fail',
-    detail: isMd3
-      ? `Target Svelte ${blueprint.target.svelteVersion} + SvelteKit ${blueprint.target.sveltekitVersion} (vanilla-md3)`
+    label: 'Styling policy',
+    status: isVanillaCss ? 'pass' : 'fail',
+    detail: isVanillaCss
+      ? `Target Svelte ${blueprint.target.svelteVersion} + SvelteKit ${blueprint.target.sveltekitVersion}, vanilla CSS with design tokens`
       : 'Invalid styling target'
   });
 
@@ -710,7 +831,7 @@ export function validateBlueprintPreflight(blueprint: ProjectBlueprint): Preflig
   checks.push({
     id: 'route-integrity',
     category: 'routing',
-    label: 'Internal Route Link Integrity',
+    label: 'Internal links',
     status: brokenLinks.length === 0 ? 'pass' : 'warn',
     detail:
       brokenLinks.length === 0
@@ -723,11 +844,11 @@ export function validateBlueprintPreflight(blueprint: ProjectBlueprint): Preflig
   checks.push({
     id: 'a11y-landmarks',
     category: 'accessibility',
-    label: 'Semantic Landmarks & Page Metadata',
+    label: 'Page titles',
     status: missingTitles.length === 0 ? 'pass' : 'warn',
     detail:
       missingTitles.length === 0
-        ? 'All routes declare document titles, ARIA landmarks, and keyboard-accessible controls.'
+        ? `All ${blueprint.pages.length} routes declare a document title.`
         : `${missingTitles.length} page(s) missing document title.`
   });
 
@@ -735,9 +856,9 @@ export function validateBlueprintPreflight(blueprint: ProjectBlueprint): Preflig
   checks.push({
     id: 'export-determinism',
     category: 'codegen',
-    label: 'SvelteKit 3 + AGENTS.md Handoff Readiness',
+    label: 'Export readiness',
     status: 'pass',
-    detail: 'Ready to emit standalone SvelteKit 3 source, AGENTS.md, and deterministic ZIP archive.'
+    detail: 'Ready to emit the SvelteKit 3 app, AGENTS.md handoff docs and a deterministic ZIP archive.'
   });
 
   const passCount = checks.filter((c) => c.status === 'pass').length;
@@ -768,6 +889,7 @@ export type PageTemplateKey =
   | 'dashboard'
   | 'auth-contact';
 
+/** Each description lists exactly the sections `createPageFromTemplate` builds for that key. */
 export const PAGE_TEMPLATE_CATALOG: Array<{
   key: PageTemplateKey;
   label: string;
@@ -776,38 +898,38 @@ export const PAGE_TEMPLATE_CATALOG: Array<{
 }> = [
   {
     key: 'blank',
-    label: 'Blank Container Page',
-    description: 'Clean MD3 container ready for custom sections.',
+    label: 'Blank page',
+    description: 'An empty container, ready for your own sections.',
     usesSharedLayout: true
   },
   {
     key: 'saas-landing',
-    label: 'SaaS Marketing Landing',
-    description: 'Split Hero, Stats Bar, Feature Grid, Testimonials, FAQ & CTA Banner.',
+    label: 'SaaS landing',
+    description: 'Split hero with product preview, stats bar, feature grid, testimonials, FAQ accordion and CTA banner.',
     usesSharedLayout: true
   },
   {
     key: 'features',
-    label: 'Product Features & Specs',
-    description: 'Interactive Tabs, 3-Column Feature Grid, and Newsletter signup.',
+    label: 'Product features',
+    description: 'Centered page header, six-card feature grid and a dark CTA banner.',
     usesSharedLayout: true
   },
   {
     key: 'pricing',
-    label: 'Pricing Tiers & FAQ',
-    description: '3-tier Pricing Table with Popular highlight and FAQ Accordion.',
+    label: 'Pricing',
+    description: 'Three-plan pricing table with a highlighted plan, followed by a pricing FAQ.',
     usesSharedLayout: true
   },
   {
     key: 'dashboard',
-    label: 'Executive Analytics Dashboard',
-    description: 'Standalone Dashboard Shell with KPI Metric Cards and filterable Data Table.',
+    label: 'Analytics dashboard',
+    description: 'Standalone app shell with KPI cards and a searchable data table.',
     usesSharedLayout: false
   },
   {
     key: 'auth-contact',
-    label: 'Authentication & Contact Portal',
-    description: 'Sign-In Card and MD3 Contact Form for customer onboarding.',
+    label: 'Sign-in & contact',
+    description: 'Sign-in card followed by a contact form.',
     usesSharedLayout: true
   }
 ];
@@ -845,22 +967,22 @@ export function createPageFromTemplate(
 
   switch (templateKey) {
     case 'saas-landing':
-      return pageFromNode(acme.pages[0].rootNode, normalizedPath, slug, title, `${title} — SaaS Landing Page`, layoutId);
+      return pageFromNode(acme.pages[0].rootNode, normalizedPath, slug, title, `${title} — landing page`, layoutId);
     case 'features':
-      return pageFromNode(acme.pages[1].rootNode, normalizedPath, slug, title, `${title} — Product Features`, layoutId);
+      return pageFromNode(acme.pages[1].rootNode, normalizedPath, slug, title, `${title} — product features`, layoutId);
     case 'pricing':
-      return pageFromNode(acme.pages[2].rootNode, normalizedPath, slug, title, `${title} — Pricing Plans`, layoutId);
+      return pageFromNode(acme.pages[2].rootNode, normalizedPath, slug, title, `${title} — pricing plans`, layoutId);
     case 'dashboard':
       // Dashboard pages render their own application shell, so they never use the public layout.
-      return pageFromNode(acme.pages[3].rootNode, normalizedPath, slug, title, `${title} — Analytics Dashboard`, undefined);
+      return pageFromNode(acme.pages[3].rootNode, normalizedPath, slug, title, `${title} — analytics dashboard`, undefined);
     case 'auth-contact':
       return pageFromNode(
         {
           id: createId(),
           componentType: 'structure/container',
           name: `${title} Root Container`,
-          props: { maxWidth: 'xl' },
-          styles: { base: { paddingTop: '2rem', paddingBottom: '4rem' } },
+          props: { maxWidth: 'full' },
+          styles: { base: {} },
           children: [
             {
               id: createId(),
@@ -868,21 +990,21 @@ export function createPageFromTemplate(
               name: 'Workspace Sign-In Card',
               props: {
                 mode: 'signin',
-                brandName: 'Acme Cloud',
-                title: 'Sign in to your account',
-                subtitle: 'Enter your work credentials to access the console.',
+                brandName: 'Halden',
+                title: 'Sign in to your workspace',
+                subtitle: 'Welcome back. Enter your work email and password to continue.',
                 redirectHref: '/dashboard'
               }
             },
             {
               id: createId(),
               componentType: 'marketing/contact-form',
-              name: 'Enterprise Contact Form',
+              name: 'Sales Contact Form',
               props: {
-                sectionEyebrow: 'ENTERPRISE SUPPORT',
-                sectionTitle: 'Need a custom deployment?',
-                sectionSubtitle: 'Reach out to our solutions engineering team.',
-                submitText: 'Send Request'
+                sectionEyebrow: 'Contact sales',
+                sectionTitle: 'Planning a larger rollout?',
+                sectionSubtitle: 'Tell us about your team and data stack. A solutions engineer will reply within one business day.',
+                submitText: 'Send message'
               }
             }
           ]
@@ -890,7 +1012,7 @@ export function createPageFromTemplate(
         normalizedPath,
         slug,
         title,
-        `${title} — Portal`,
+        `${title} — sign-in and contact`,
         layoutId
       );
     case 'blank':
@@ -944,7 +1066,7 @@ export function composeNodesFromPrompt(prompt: string): PromptCompositionResult 
         ? 'google-blue-dark'
         : undefined;
 
-  const domainBrand = isFintech ? 'FinPulse Treasury' : isAi ? 'Nexus AI Agents' : 'Acme Cloud';
+  const domainBrand = isFintech ? 'FinPulse Treasury' : isAi ? 'Nexus AI' : 'Halden';
 
   const heroProps = (title: string, subtitle: string, badgeText: string) => ({
     eyebrow: domainBrand,
@@ -966,11 +1088,13 @@ export function composeNodesFromPrompt(prompt: string): PromptCompositionResult 
           ? 'Programmable treasury and real-time liquidity at scale.'
           : isAi
             ? 'Deploy autonomous AI workflows in minutes, not quarters.'
-            : 'Ship production web apps with visual precision.',
+            : 'Know what changed, why, and what to do next.',
         isFintech
           ? 'Automate multi-currency reconciliation, yield optimization, and enterprise spend controls from one unified ledger.'
-          : 'Compose responsive sections visually and hand a precise build spec to your coding agent.',
-        isFintech ? 'Instant global settlement' : isAi ? 'Autonomous agents' : 'Material Design 3'
+          : isAi
+            ? 'Design, test and monitor AI agents that work alongside your team, with every action logged and reviewable.'
+            : 'Bring product, revenue and infrastructure metrics into one live workspace with alerts that reach the right owner.',
+        isFintech ? 'Instant global settlement' : isAi ? 'Autonomous agents' : 'Live dashboards'
       )
     });
   }
@@ -981,10 +1105,10 @@ export function composeNodesFromPrompt(prompt: string): PromptCompositionResult 
       name: `${domainBrand} Stats Bar`,
       props: {
         stats: [
-          { value: '99.99%', label: 'SLA Uptime Guarantee', detail: '+0.04% YoY' },
-          { value: '18ms', label: 'Global Edge Latency', detail: '-42% P99' },
-          { value: '42,000+', label: 'Active Engineering Teams', detail: '+128% growth' },
-          { value: 'SOC 2 II', label: 'Zero-Trust Compliance', detail: 'Verified' }
+          { value: '99.99%', label: 'Uptime target', detail: 'Published monthly' },
+          { value: '18 ms', label: 'Median API latency', detail: 'Measured at the edge' },
+          { value: '42,000+', label: 'Teams onboarded', detail: 'Across 30 countries' },
+          { value: '24/7', label: 'Support coverage', detail: 'For every paid plan' }
         ]
       }
     });
@@ -996,9 +1120,9 @@ export function composeNodesFromPrompt(prompt: string): PromptCompositionResult 
       name: `${domainBrand} KPI Cards`,
       props: {
         cards: [
-          { title: 'Net Revenue Retention', value: '138.4%', change: '+12.1%', trend: 'up' },
-          { title: 'Active Workspaces', value: '8,940', change: '+19.4%', trend: 'up' },
-          { title: 'Avg Resolution Time', value: '1.4m', change: '-38.0%', trend: 'up' }
+          { title: 'Net revenue retention', value: '138.4%', change: '+12.1%', trend: 'up' },
+          { title: 'Active workspaces', value: '8,940', change: '+19.4%', trend: 'up' },
+          { title: 'Avg. resolution time', value: '1.4 min', change: '-38.0%', trend: 'up' }
         ]
       }
     });
@@ -1011,12 +1135,12 @@ export function composeNodesFromPrompt(prompt: string): PromptCompositionResult 
       props: {
         sectionEyebrow: 'Capabilities',
         sectionTitle: `Why leading teams run on ${domainBrand}`,
-        sectionDescription: 'Architected for speed, observability, and deterministic handoff.',
+        sectionDescription: 'Built for speed, visibility and control from the first day.',
         columns: 3,
         features: [
-          { icon: '⚡', title: 'Real-Time Streaming Engine', description: 'Sub-20ms state synchronization across every client.' },
-          { icon: '🛡️', title: 'Enterprise Role Controls', description: 'Granular RBAC permissions, audit logs, and hardware key enforcement.' },
-          { icon: '🤖', title: 'Deterministic AI Handoff', description: 'Export a precise, stack-agnostic build spec for coding agents.' }
+          { icon: 'Zap', title: 'Real-time streaming', description: 'Changes reach every dashboard and client in milliseconds.' },
+          { icon: 'ShieldCheck', title: 'Enterprise role controls', description: 'Granular permissions, audit logs and hardware security key enforcement.' },
+          { icon: 'Bot', title: 'Built-in automation', description: 'Trigger workflows from any metric, with every run logged and reviewable.' }
         ]
       }
     });
@@ -1036,7 +1160,7 @@ export function composeNodesFromPrompt(prompt: string): PromptCompositionResult 
             price: '$0',
             period: 'per month',
             description: 'For solo founders and rapid prototyping.',
-            features: ['Up to 3 active projects', 'Build spec export', 'Community support'],
+            features: ['Up to 3 active projects', 'Core dashboards', 'Community support'],
             ctaText: 'Start Free',
             ctaHref: '/dashboard',
             isPopular: false
@@ -1046,8 +1170,8 @@ export function composeNodesFromPrompt(prompt: string): PromptCompositionResult 
             price: '$79',
             period: 'per month',
             description: 'For product teams shipping weekly.',
-            features: ['Unlimited routes & symbols', 'Full AI agent handoff', 'Custom design tokens', 'Priority support'],
-            ctaText: 'Start 14-Day Trial',
+            features: ['Unlimited projects', 'Automation and alerts', 'Custom roles', 'Priority support'],
+            ctaText: 'Start 14-day trial',
             ctaHref: '/dashboard',
             isPopular: true
           },
@@ -1057,7 +1181,7 @@ export function composeNodesFromPrompt(prompt: string): PromptCompositionResult 
             period: 'annual',
             description: 'Dedicated infrastructure and custom SLAs.',
             features: ['SSO / SAML 2.0', 'Dedicated solutions engineer', '99.99% uptime SLA'],
-            ctaText: 'Contact Sales',
+            ctaText: 'Contact sales',
             ctaHref: '/contact',
             isPopular: false
           }
@@ -1074,7 +1198,7 @@ export function composeNodesFromPrompt(prompt: string): PromptCompositionResult 
       componentType: 'app/data-table',
       name: `${domainBrand} Activity Table`,
       props: {
-        title: 'Live Production Deployments & Events',
+        title: 'Live deployments',
         columns: ['Deployment ID', 'Service', 'Status', 'Latency'],
         rows: [
           ['dep-9482a', 'auth-edge-gateway', 'Healthy', '12ms'],
@@ -1091,17 +1215,17 @@ export function composeNodesFromPrompt(prompt: string): PromptCompositionResult 
       name: 'Customer Testimonials',
       props: {
         sectionEyebrow: 'Social Proof',
-        sectionTitle: 'Trusted by staff engineers and design leaders',
+        sectionTitle: 'Trusted by operations and engineering leaders',
         testimonials: [
           {
-            quote: 'We cut our design-to-production implementation cycle from 3 weeks to 20 minutes.',
+            quote: 'We cut our weekly reporting cycle from three days to a single morning.',
             author: 'Elena Rostova',
-            role: 'VP Engineering, LinearFlow'
+            role: 'VP Operations, Fernway Logistics'
           },
           {
-            quote: 'The exported build spec let our coding agents implement features with zero guesswork.',
+            quote: 'Alerts reach the right owner within minutes, so incidents no longer wait for the next standup.',
             author: 'Marcus Vance',
-            role: 'Principal Architect, RaycastCloud'
+            role: 'Principal Engineer, Copperline'
           }
         ]
       }
@@ -1113,15 +1237,15 @@ export function composeNodesFromPrompt(prompt: string): PromptCompositionResult 
       componentType: 'marketing/faq-accordion',
       name: 'FAQ Accordion',
       props: {
-        sectionTitle: 'Frequently Asked Questions',
+        sectionTitle: 'Frequently asked questions',
         items: [
           {
-            question: 'Can I build the exported layout in any framework?',
-            answer: 'Yes. The build spec is stack-agnostic: pick Next.js, SvelteKit, Nuxt, Astro, or plain HTML.'
+            question: 'How long does setup take?',
+            answer: 'Most teams are up and running in under an hour, with guided onboarding during the trial.'
           },
           {
-            question: 'Is a CSS framework required?',
-            answer: 'No. Design tokens are exported as CSS variables and W3C design-token JSON.'
+            question: 'Can I cancel at any time?',
+            answer: 'Yes. Plans are month to month unless you choose annual billing, and you keep access until the period ends.'
           }
         ]
       }
@@ -1133,10 +1257,10 @@ export function composeNodesFromPrompt(prompt: string): PromptCompositionResult 
       componentType: 'marketing/contact-form',
       name: 'Contact & Inquiry Form',
       props: {
-        sectionEyebrow: 'Get in touch',
-        sectionTitle: 'Talk to our engineering team',
-        sectionSubtitle: 'Tell us about your architecture and timeline.',
-        submitText: 'Send Message'
+        sectionEyebrow: 'Contact',
+        sectionTitle: 'Talk to our team',
+        sectionSubtitle: 'Tell us about your goals and timeline, and we will reply within one business day.',
+        submitText: 'Send message'
       }
     });
   }
@@ -1160,8 +1284,8 @@ export function composeNodesFromPrompt(prompt: string): PromptCompositionResult 
       componentType: 'marketing/newsletter',
       name: 'Newsletter Signup',
       props: {
-        title: 'Get monthly architecture deep-dives',
-        subtitle: 'Zero spam. Unsubscribe in one click.',
+        title: 'Get the monthly product brief',
+        subtitle: 'New features, customer stories and practical guides — one email a month.',
         placeholder: 'you@company.com',
         buttonText: 'Subscribe'
       }
@@ -1172,10 +1296,10 @@ export function composeNodesFromPrompt(prompt: string): PromptCompositionResult 
       name: 'Conversion CTA Banner',
       props: {
         title: `Ready to build with ${domainBrand}?`,
-        subtitle: 'Export a precise build spec and ship it in the stack of your choice.',
-        primaryCtaText: 'Launch Studio',
+        subtitle: 'Start a free trial today, or talk to our team about a guided rollout.',
+        primaryCtaText: 'Start free trial',
         primaryCtaHref: '/dashboard',
-        secondaryCtaText: 'Compare Plans',
+        secondaryCtaText: 'Compare plans',
         secondaryCtaHref: '/pricing'
       }
     });
@@ -1186,20 +1310,20 @@ export function composeNodesFromPrompt(prompt: string): PromptCompositionResult 
       componentType: 'hero/split-hero',
       name: `${prompt.slice(0, 28) || 'Custom'} Hero`,
       props: heroProps(
-        prompt.length > 8 ? prompt : 'Build modern responsive web apps at 10x speed.',
-        'Crafted with Material Design 3 tokens.',
-        'AI composer'
+        prompt.length > 8 ? prompt : 'A clear promise for the people you serve.',
+        'Explain in one or two sentences who this is for and what changes for them.',
+        'New'
       )
     });
     add('CTA Banner', {
       componentType: 'marketing/cta-banner',
       name: 'Follow-up CTA Banner',
       props: {
-        title: 'Take your project to production',
-        subtitle: 'Export the build spec and hand it to your coding agent.',
-        primaryCtaText: 'Open Dashboard',
+        title: 'Ready to get started?',
+        subtitle: 'Create an account in minutes and invite your team when you are ready.',
+        primaryCtaText: 'Get started',
         primaryCtaHref: '/dashboard',
-        secondaryCtaText: 'Pricing',
+        secondaryCtaText: 'View pricing',
         secondaryCtaHref: '/pricing'
       }
     });

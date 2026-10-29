@@ -26,6 +26,7 @@ export const ActionTypeSchema = z.enum([
   'show_toast',
   'submit_mock_form',
   'scroll_to',
+  'scrollTo',
   'set_tab'
 ]);
 export type ActionType = z.infer<typeof ActionTypeSchema>;

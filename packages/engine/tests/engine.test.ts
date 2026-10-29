@@ -5,7 +5,7 @@ import {
   executeCommand,
   findNodeById,
   resolveEffectiveStyles,
-  compileNodeScopedCss
+  compileNodeCss
 } from '../src/index.js';
 
 describe('Editor Engine & Reducer', () => {
@@ -27,9 +27,9 @@ describe('Editor Engine & Reducer', () => {
     expect(history.canUndo).toBe(true);
     expect(history.current.tokens.colors.primary).toBe('#FF0000');
 
-    // Undo restores Google MD3 primary (#0B57D0)
+    // Undo restores the default theme primary (#4F46E5)
     history.undo();
-    expect(history.current.tokens.colors.primary).toBe('#0B57D0');
+    expect(history.current.tokens.colors.primary).toBe('#4F46E5');
     expect(history.canRedo).toBe(true);
 
     // Redo
@@ -143,7 +143,7 @@ describe('Editor Engine & Reducer', () => {
     expect(homeAfterUnwrap.rootNode.children[0]?.id).toBe(heroNodeId);
   });
 
-  it('compiles responsive and stateful node styles via compileNodeScopedCss', () => {
+  it('compiles responsive and stateful node styles via compileNodeCss', () => {
     const project = createDefaultAcmeSaaSProject();
     const heroNodeId = '30000000-0000-0000-0000-000000000002';
 
@@ -161,7 +161,7 @@ describe('Editor Engine & Reducer', () => {
       styles: { backgroundColor: '#EDF2FC' }
     });
 
-    const css = compileNodeScopedCss([updated.pages[0].rootNode]);
+    const css = compileNodeCss([updated.pages[0].rootNode]);
     expect(css).toContain(`[data-node-id="${heroNodeId}"]:hover { background-color: #EDF2FC !important; }`);
     expect(css).toContain(`@media (max-width: 767px)`);
     expect(css).toContain(`[data-node-id="${heroNodeId}"] { padding-top: 24px !important; }`);
@@ -227,10 +227,16 @@ describe('Editor Engine & Reducer', () => {
       }
     });
 
-    const css = compileNodeScopedCss([project.pages[0].rootNode]);
-    expect(css).toContain(`@keyframes el-fadeInUp`);
+    const css = compileNodeCss([project.pages[0].rootNode]);
+    // Keyframes live in the shared site runtime (packages/components/src/svelte/runtime.css);
+    // the node stylesheet only references them.
+    expect(css).not.toContain('@keyframes');
     expect(css).toContain(`[data-node-id="${heroNodeId}"] { position: sticky !important; top: 0 !important; z-index: 45 !important; }`);
-    expect(css).toContain(`[data-node-id="${heroNodeId}"] { animation: el-fadeInUp 220ms cubic-bezier(0.2, 0, 0, 1) both; }`);
+    expect(css).toContain(`[data-node-id="${heroNodeId}"] { animation: el-fadeInUp 220ms cubic-bezier(0.2, 0, 0, 1) both !important; }`);
+    // Base styles are compiled too (no inline styles anywhere), with !important.
+    expect(css).toContain('border-radius: 20px !important;');
+    // Motion is disabled for users who prefer reduced motion.
+    expect(css).toContain('@media (prefers-reduced-motion: reduce)');
     expect(css).toContain(`[data-node-id="${heroNodeId}"]:hover { transform: translateY(-5px) !important;`);
     expect(css).toContain(`[data-node-id="${heroNodeId}"] { display: none !important; }`);
     expect(css).toContain(`[data-node-id="${heroNodeId}"] { border-left: 4px solid #0B57D0; }`);

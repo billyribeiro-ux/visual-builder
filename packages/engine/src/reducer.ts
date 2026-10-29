@@ -54,6 +54,7 @@ function commandTargetNodeIds(command: EditorCommand): string[] {
     case 'UNWRAP_NODE':
     case 'UPDATE_PROPS':
     case 'UPDATE_STYLES':
+    case 'REMOVE_STYLE_KEYS':
     case 'DELETE_NODE':
     case 'PASTE_NODE_STYLE':
     case 'RESET_NODE_STYLE':
@@ -226,6 +227,24 @@ export function executeCommand(
         } else {
           target.styles[bp] = { ...(target.styles[bp] || {}), ...command.styles };
         }
+      }
+      return next;
+    }
+
+    case 'REMOVE_STYLE_KEYS': {
+      const target = findNodeInBlueprint(next, command.nodeId)?.node;
+      const bucket = target?.styles?.[command.breakpoint] as Record<string, unknown> | undefined;
+      if (!target || !bucket) return prev;
+      let changed = false;
+      for (const key of command.keys) {
+        if (Object.prototype.hasOwnProperty.call(bucket, key)) {
+          delete bucket[key];
+          changed = true;
+        }
+      }
+      if (!changed) return prev;
+      if (command.breakpoint !== 'base' && Object.keys(bucket).length === 0) {
+        delete (target.styles as Record<string, unknown>)[command.breakpoint];
       }
       return next;
     }
@@ -498,12 +517,88 @@ export function executeCommand(
       return next;
     }
 
+    case 'SET_NOTE': {
+      // Invalid keys are a no-op (returning `prev` keeps history untouched).
+      if (!isValidNoteKey(command.key)) return prev;
+      const value = command.value.replace(/\r\n?/g, '\n').slice(0, 20_000);
+      next.notes = { ...(next.notes ?? {}) };
+      if (value.trim() === '') delete next.notes[command.key];
+      else next.notes[command.key] = value;
+      return next;
+    }
+
     case 'LOAD_BLUEPRINT': {
       return JSON.parse(JSON.stringify(command.blueprint));
     }
 
     default:
       return next;
+  }
+}
+
+const GUID = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
+const NOTE_KEY_RE = new RegExp(`^(?:project|page:${GUID}|node:${GUID}|[a-z][a-z0-9_-]{0,63})$`);
+
+/** Designer-note keys: `project`, `page:<uuid>`, `node:<uuid>` or a short lowercase slug. */
+export function isValidNoteKey(key: string): boolean {
+  return NOTE_KEY_RE.test(key);
+}
+
+/** Generic, node-agnostic label for a command (callers can pass a richer `label`). */
+export function describeCommandType(command: EditorCommand): string {
+  switch (command.type) {
+    case 'INSERT_NODE':
+      return `Add ${command.node.name}`;
+    case 'MOVE_NODE':
+      return 'Move element';
+    case 'REORDER_NODE':
+      return command.direction === 'up' ? 'Move element up' : 'Move element down';
+    case 'WRAP_NODE':
+      return 'Wrap element';
+    case 'UNWRAP_NODE':
+      return 'Unwrap element';
+    case 'UPDATE_NODE_META':
+      return 'Edit element settings';
+    case 'PASTE_NODE_STYLE':
+      return 'Paste style';
+    case 'RESET_NODE_STYLE':
+      return 'Reset style';
+    case 'REMOVE_STYLE_KEYS':
+      return `Clear ${command.keys.join(', ')}`;
+    case 'UPDATE_PROPS':
+      return `Edit ${Object.keys(command.props).join(', ') || 'content'}`;
+    case 'UPDATE_STYLES':
+      return `Style ${Object.keys(command.styles).join(', ') || 'element'}`;
+    case 'DELETE_NODE':
+      return 'Delete element';
+    case 'DUPLICATE_NODE':
+      return 'Duplicate element';
+    case 'ADD_PAGE':
+      return `Add page ${command.page.path}`;
+    case 'DELETE_PAGE':
+      return 'Delete page';
+    case 'UPDATE_PAGE_META':
+      return 'Edit page settings';
+    case 'UPDATE_PROJECT_META':
+      return 'Edit project settings';
+    case 'UPDATE_TOKENS':
+      return 'Edit global styles';
+    case 'ADD_INTERACTION':
+    case 'DELETE_INTERACTION':
+    case 'UPDATE_INTERACTIONS':
+      return 'Edit interactions';
+    case 'ADD_ASSET':
+      return `Add asset ${command.asset.filename}`;
+    case 'DELETE_ASSET':
+      return 'Delete asset';
+    case 'SET_NOTE':
+      return 'Edit notes';
+    case 'LOAD_BLUEPRINT':
+      return 'Restore version';
+    case 'BATCH':
+      return command.label ?? 'Multiple changes';
+    default:
+      return 'Change';
   }
 }
 
@@ -516,6 +611,8 @@ export interface ExecuteOptions {
   coalesceWindowMs?: number;
   /** Injectable clock for deterministic tests. */
   now?: number;
+  /** Human-readable label for the history panel, e.g. "Edit Hero · title". */
+  label?: string;
 }
 
 /**
@@ -532,6 +629,10 @@ export class HistoryManager {
   private present: ProjectBlueprint;
   private presentJson: string;
   private future: ProjectBlueprint[] = [];
+  /** Labels parallel to `past` / `future` (same length, same order). */
+  private pastLabels: string[] = [];
+  private futureLabels: string[] = [];
+  private txLabel: string | undefined;
   private readonly maxHistory: number;
 
   private lastCoalesceKey: string | null = null;
@@ -567,6 +668,16 @@ export class HistoryManager {
     return this.future.length;
   }
 
+  /** Labels of undoable steps, oldest first (last entry = the step `undo()` reverts). */
+  public get undoLabels(): readonly string[] {
+    return this.pastLabels.slice();
+  }
+
+  /** Labels of redoable steps, next first (first entry = the step `redo()` re-applies). */
+  public get redoLabels(): readonly string[] {
+    return this.futureLabels.slice();
+  }
+
   public get inTransaction(): boolean {
     return this.txDepth > 0;
   }
@@ -574,6 +685,9 @@ export class HistoryManager {
   public reset(initial: ProjectBlueprint): ProjectBlueprint {
     this.past = [];
     this.future = [];
+    this.pastLabels = [];
+    this.futureLabels = [];
+    this.txLabel = undefined;
     this.present = structuredClone(initial);
     this.presentJson = JSON.stringify(this.present);
     this.breakCoalescing();
@@ -587,8 +701,10 @@ export class HistoryManager {
     this.lastCoalesceKey = null;
   }
 
-  public begin(): void {
+  /** Starts a transaction; `label` names the resulting single undo step (outermost wins). */
+  public begin(label?: string): void {
     if (this.txDepth++ === 0) {
+      this.txLabel = label;
       this.txBase = this.present;
       this.txBaseJson = this.presentJson;
       this.breakCoalescing();
@@ -600,9 +716,12 @@ export class HistoryManager {
     if (--this.txDepth > 0) return;
     const base = this.txBase!;
     this.txBase = null;
+    const label = this.txLabel ?? 'Multiple changes';
+    this.txLabel = undefined;
     if (this.presentJson !== this.txBaseJson) {
-      this.pushPast(base);
+      this.pushPast(base, label);
       this.future = [];
+      this.futureLabels = [];
     }
   }
 
@@ -612,6 +731,7 @@ export class HistoryManager {
     this.present = this.txBase!;
     this.presentJson = this.txBaseJson;
     this.txBase = null;
+    this.txLabel = undefined;
     return this.present;
   }
 
@@ -637,8 +757,11 @@ export class HistoryManager {
       now - this.lastCoalesceAt <= windowMs &&
       this.past.length > 0;
 
-    if (!coalesce) this.pushPast(previous);
+    const label = options.label ?? describeCommandType(command);
+    if (!coalesce) this.pushPast(previous, label);
+    else this.pastLabels[this.pastLabels.length - 1] = label;
     this.future = [];
+    this.futureLabels = [];
     this.lastCoalesceKey = options.coalesceKey ?? null;
     this.lastCoalesceAt = now;
     return this.present;
@@ -648,6 +771,7 @@ export class HistoryManager {
     if (this.txDepth > 0 || !this.canUndo) return null;
     const previous = this.past.pop()!;
     this.future.unshift(this.present);
+    this.futureLabels.unshift(this.pastLabels.pop() ?? 'Change');
     this.setPresent(previous);
     return this.present;
   }
@@ -656,6 +780,7 @@ export class HistoryManager {
     if (this.txDepth > 0 || !this.canRedo) return null;
     const next = this.future.shift()!;
     this.past.push(this.present);
+    this.pastLabels.push(this.futureLabels.shift() ?? 'Change');
     this.setPresent(next);
     return this.present;
   }
@@ -666,8 +791,12 @@ export class HistoryManager {
     this.breakCoalescing();
   }
 
-  private pushPast(doc: ProjectBlueprint): void {
+  private pushPast(doc: ProjectBlueprint, label: string): void {
     this.past.push(doc);
-    if (this.past.length > this.maxHistory) this.past.shift();
+    this.pastLabels.push(label);
+    if (this.past.length > this.maxHistory) {
+      this.past.shift();
+      this.pastLabels.shift();
+    }
   }
 }

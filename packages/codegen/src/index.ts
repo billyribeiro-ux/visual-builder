@@ -6,3 +6,4 @@ export * from './docs.js';
 export * from './generator.js';
 export * from './zip.js';
 export * from './spec/index.js';
+export * from './assets.js';

@@ -1,5 +1,5 @@
 import type { ProjectBlueprint } from '@app-viz/schema';
-import { generateAppCss } from './tokens.js';
+import { generateAppCss, generateNodesCss } from './tokens.js';
 import {
   generatePackageJson,
   generateViteConfig,
@@ -7,6 +7,8 @@ import {
   generateAppHtml
 } from './project-files.js';
 import { getComponentSources } from './components.js';
+import { normalizeAssetPath, dedupePaths } from './paths.js';
+import { collectAssetFiles } from './assets.js';
 import { generatePageRoute, generateRootLayout, generateErrorRoute } from './routes.js';
 import {
   generateAgentsMarkdown,
@@ -26,8 +28,12 @@ import {
   generateManifest
 } from './docs.js';
 
+export { normalizeAssetPath, dedupePaths } from './paths.js';
+
 export interface GeneratedProject {
   files: Record<string, string>;
+  /** Binary files (uploaded raster images), keyed like `files`. */
+  binaryFiles?: Record<string, Uint8Array>;
 }
 
 /* ==========================================================================
@@ -69,59 +75,6 @@ export function normalizeRoutePath(path: string): string {
     .join('/');
 }
 
-function normalizeAssetSegment(raw: string): string {
-  const seg = raw.trim();
-  if (!seg || seg === '.' || seg === '..') return '';
-  return seg
-    .replace(/[^A-Za-z0-9._-]+/g, '-')
-    .replace(/-{2,}/g, '-')
-    .replace(/^[.-]+/, '') // no hidden files / leading dashes
-    .replace(/[.-]+$/, '');
-}
-
-/**
- * Normalizes a static asset path (relative to `static/`). Same rules as routes,
- * except case and `.` inside file names are preserved (e.g. `assets/Logo.svg`).
- */
-export function normalizeAssetPath(path: string): string {
-  return String(path ?? '')
-    .replace(/\\/g, '/')
-    .split(/[?#]/)[0]
-    .split('/')
-    .map(normalizeAssetSegment)
-    .filter(Boolean)
-    .join('/');
-}
-
-/**
- * Deterministically de-duplicates normalized paths: the first occurrence keeps
- * its path, later collisions get `-2`, `-3`, ... appended to the last segment
- * (before the file extension when `keepExtension` is set).
- */
-export function dedupePaths(paths: string[], keepExtension = false): string[] {
-  const used = new Set<string>();
-  return paths.map((path) => {
-    const key = path.toLowerCase();
-    if (!used.has(key)) {
-      used.add(key);
-      return path;
-    }
-    const base = path || 'index';
-    const slash = base.lastIndexOf('/');
-    const dir = slash === -1 ? '' : base.slice(0, slash + 1);
-    const last = base.slice(slash + 1);
-    const dot = keepExtension ? last.lastIndexOf('.') : -1;
-    const stem = dot > 0 ? last.slice(0, dot) : last;
-    const ext = dot > 0 ? last.slice(dot) : '';
-    for (let n = 2; ; n++) {
-      const candidate = `${dir}${stem}-${n}${ext}`;
-      if (!used.has(candidate.toLowerCase())) {
-        used.add(candidate.toLowerCase());
-        return candidate;
-      }
-    }
-  });
-}
 
 export function generateFullExport(blueprint: ProjectBlueprint): GeneratedProject {
   const files: Record<string, string> = {};
@@ -199,7 +152,8 @@ export function generateFullExport(blueprint: ProjectBlueprint): GeneratedProjec
   files[`${appPrefix}vite.config.ts`] = generateViteConfig();
   files[`${appPrefix}tsconfig.json`] = generateTsConfig();
   files[`${appPrefix}src/app.html`] = generateAppHtml(blueprint);
-  files[`${appPrefix}src/app.css`] = generateAppCss(blueprint.tokens, blueprint);
+  files[`${appPrefix}src/app.css`] = generateAppCss(blueprint.tokens);
+  files[`${appPrefix}src/lib/styles/nodes.css`] = generateNodesCss(blueprint);
   files[`${appPrefix}src/routes/+layout.svelte`] = generateRootLayout(blueprint);
   files[`${appPrefix}src/routes/+error.svelte`] = generateErrorRoute();
 
@@ -210,32 +164,26 @@ export function generateFullExport(blueprint: ProjectBlueprint): GeneratedProjec
     files[`${appPrefix}${routeFile}`] = generatePageRoute(page, blueprint);
   });
 
-  // Add library components
+  // Canonical site components (the exact files the studio canvas renders)
   const components = getComponentSources();
   for (const [compPath, source] of Object.entries(components)) {
     files[`${appPrefix}${compPath}`] = source;
   }
 
-  // Add bundled project SVG / media assets into generated-app/static/
-  const svgAssets = (blueprint.assets || [])
-    .filter((a) => a.svgContent && a.localPath)
-    .map((a) => ({ content: a.svgContent as string, rel: normalizeAssetPath(a.localPath) }))
-    .filter((a) => a.rel);
-  const assetPaths = dedupePaths(
-    svgAssets.map((a) => a.rel),
-    true
-  );
-  svgAssets.forEach((asset, idx) => {
-    files[`${appPrefix}static/${assetPaths[idx]}`] = asset.content;
-  });
+  // Project assets (uploaded images, SVGs) → generated-app/static/<normalized path>
+  const assets = collectAssetFiles(blueprint);
+  for (const [rel, content] of Object.entries(assets.text)) files[`${appPrefix}static/${rel}`] = content;
+  const binaryFiles: Record<string, Uint8Array> = {};
+  for (const [rel, bytes] of Object.entries(assets.binary)) binaryFiles[`${appPrefix}static/${rel}`] = bytes;
 
   // 5. Parity and Audit Report
   files['reference/preview-parity-report.json'] = JSON.stringify(
     {
       projectId: blueprint.meta.id,
       pageCount: blueprint.pages.length,
-      componentCount: Object.keys(components).length,
-      parityStatus: 'VERIFIED',
+      componentFileCount: Object.keys(components).length,
+      componentSource: 'packages/components/src/svelte (shared with the studio canvas)',
+      nodeStyles: 'src/lib/styles/nodes.css (compileNodeCss, shared with the studio canvas)',
       generatedAt: '2026-10-28T12:00:00.000Z'
     },
     null,
@@ -243,7 +191,7 @@ export function generateFullExport(blueprint: ProjectBlueprint): GeneratedProjec
   );
 
   // 6. Final Manifest with total file count
-  files['MANIFEST.json'] = generateManifest(blueprint, Object.keys(files).length + 1);
+  files['MANIFEST.json'] = generateManifest(blueprint, Object.keys(files).length + Object.keys(binaryFiles).length + 1);
 
-  return { files };
+  return Object.keys(binaryFiles).length > 0 ? { files, binaryFiles } : { files };
 }

@@ -19,9 +19,18 @@
  * Pure function: same input → byte-identical output (no clocks, no randomness).
  */
 import { z } from 'zod';
-import type { BlueprintNode, ProjectBlueprint, PageRoute, InteractionRule, ResponsiveStyle } from '@app-viz/schema';
-import { getManifest } from '@app-viz/components';
-import { BREAKPOINT_MEDIA, VISIBILITY_MEDIA } from '@app-viz/engine';
+import {
+  isValidHtmlId,
+  sanitizeNodeAttributes,
+  type BlueprintNode,
+  type ProjectBlueprint,
+  type PageRoute,
+  type InteractionRule,
+  type ResponsiveStyle
+} from '@app-viz/schema';
+import { getAllManifests, getManifest } from '@app-viz/components';
+import { collectAssetFiles, rewriteAssetReferences } from '../assets.js';
+import { BREAKPOINT_MEDIA, VISIBILITY_MEDIA, CANVAS_DEVICE_WIDTHS, LAYOUT_STYLE_KEYS, scrollKeyframesCss } from '@app-viz/engine';
 import {
   STACK_PRESETS,
   STYLING_GUIDANCE,
@@ -45,6 +54,8 @@ export interface BuildSpecOptions {
 
 export interface BuildSpecResult {
   files: Record<string, string>;
+  /** Binary files (uploaded raster images under `spec/static/`), keyed like `files`. */
+  binaryFiles?: Record<string, Uint8Array>;
   /** Single self-contained Markdown prompt (CLAUDE.md + all spec docs) for pasting. */
   prompt: string;
   stats: { pages: number; sections: number; components: number; interactions: number; hiddenOmitted: number };
@@ -57,7 +68,7 @@ export interface BuildSpecResult {
 const STRUCTURE_TYPES = new Set(['structure/container', 'structure/section', 'structure/grid', 'structure/slot']);
 
 const ATOMIC_CLASS_MEANINGS: Record<string, string> = {
-  'el-glass': 'frosted glass surface: semi-transparent white background, 16px backdrop blur, 1px primary-tinted border',
+  'el-glass': 'frosted glass surface: semi-transparent surface-colored background (72%), 16px backdrop blur, 1px primary-tinted border',
   'el-gradient-border': '2px solid primary-colored border with 16px radius',
   'el-shadow-float': 'large soft floating shadow (0 16px 36px rgba(0,0,0,.12))',
   'el-surface-tint': 'primary-container background with on-primary-container text',
@@ -73,34 +84,10 @@ const HOVER_TRANSFORMS: Record<string, string> = {
 
 const DURATIONS: Record<string, string> = { fast: '220ms', normal: '460ms', slow: '760ms' };
 
-/** Hand-written behavioural contracts for components whose behaviour is not visible in props. */
-const BEHAVIOUR_NOTES: Record<string, string[]> = {
-  'navigation/navbar': [
-    'Sticky top bar. Brand on the left, links in the middle/right, primary CTA button on the right.',
-    'Below 768px collapse links into a menu button that toggles an accessible disclosure (aria-expanded, Escape closes, focus returns to the button).'
-  ],
-  'marketing/faq-accordion': [
-    'Single-open accordion; the first item is open initially.',
-    'Each trigger is a <button> with aria-expanded and aria-controls; panels are regions labelled by their trigger.'
-  ],
-  'ui/tabs': ['WAI-ARIA tabs pattern: role=tablist/tab/tabpanel, arrow-key navigation with roving tabindex, first tab active.'],
-  'app/data-table': [
-    'Renders a search input above the table that filters rows client-side (case-insensitive match on any cell).',
-    'Show an empty state row when no rows match. Table has a <caption> or aria-label with the title.'
-  ],
-  'app/settings-form': ['Controlled form initialised from props; on submit validate (required name, valid email) and show an inline success message for ~4s.'],
-  'marketing/contact-form': ['Fields: name, work email, company, message. Validate required fields and email format; on submit show an inline success state. Wire to a real endpoint if the stack has one (otherwise leave a clearly marked integration point).'],
-  'marketing/newsletter': ['Email input + submit button. Validate email; show a success confirmation in place of the form.'],
-  'app/auth-card': ['Card with a Sign in / Sign up toggle (initial state from `mode`). Email + password (+ name on sign up). On submit navigate to `redirectHref`. Auth provider integration is out of scope unless the user instructions say otherwise.'],
-  'ui/alert': ['Role "status" (info/success) or "alert" (warning/error). When `dismissible` is true, render a close button that removes the alert.'],
-  'marketing/pricing-table': ['Plans render as equal-height cards in a responsive grid; the plan with `isPopular: true` is visually emphasised (primary border + "Most popular" badge) and its CTA uses the filled style.'],
-  'app/dashboard-shell': ['Application shell: left sidebar navigation (collapses to a top bar below 1024px), top header with the page title, and a main content region that renders the child sections listed under it.'],
-  'hero/split-hero': ['Two columns on desktop (copy left, visual right); stacks on tablet/mobile. When `align` is "center" use a single centered column. The primary CTA is the filled button, the secondary is outlined.'],
-  'marketing/stats-bar': ['Responsive row of metric tiles (value large, label below, optional detail muted).'],
-  'app/kpi-grid': ['Responsive grid of metric cards; `trend: "up"` uses success color for the change value, "down" uses error color.'],
-  'marketing/footer': ['Brand + tagline column followed by link columns; copyright row at the bottom.'],
-  'marketing/feature-grid': ['Each feature `icon` is either a Lucide icon name (e.g. "Layers", "ShieldCheck") or an emoji — render the matching icon (any equivalent icon set is fine) inside a tonal rounded tile above the title.']
-};
+/** Behaviour contract of a component type, read from its manifest (`manifest.behaviour`). */
+function behaviourNotes(type: string): string[] {
+  return getManifest(type)?.behaviour ?? [];
+}
 
 function pascal(componentType: string): string {
   const last = componentType.split('/').pop() || componentType;
@@ -176,7 +163,10 @@ function describeInteraction(rule: InteractionRule): string {
       return `On ${trigger}: set client state \`${p.stateKey ?? 'status'}\` = \`${p.stateValue ?? 'active'}\` and show a confirmation toast.`;
     case 'submitForm':
     case 'submit_mock_form':
-      return `On ${trigger}: submit the enclosing form and show "${p.toastMessage ?? 'Form submitted successfully!'}".`;
+      return `On ${trigger}: submit the enclosing form and show "${p.toastMessage ?? 'Form submitted successfully!'}". The prototype sends nothing — wire this to a real endpoint and surface server errors inline.`;
+    case 'scrollTo':
+    case 'scroll_to':
+      return `On ${trigger}: smooth-scroll to the element with id \`${p.anchor ?? p.targetId ?? ''}\` (instant when prefers-reduced-motion is set).`;
     default:
       return `On ${trigger}: ${action} ${JSON.stringify(p)}.`;
   }
@@ -222,6 +212,8 @@ interface Ctx {
   hiddenOmitted: number;
   sectionCount: number;
   interactions: Array<{ where: string; node: BlueprintNode; rule: InteractionRule }>;
+  /** Asset references (stored path or data URL) → public path served from `spec/static/`. */
+  assetPaths: ReadonlyMap<string, string>;
 }
 
 function outline(node: BlueprintNode, prefix: string, isLast: boolean, isRoot: boolean, lines: string[], slotLabel?: string): void {
@@ -256,11 +248,22 @@ function renderNode(ctx: Ctx, node: BlueprintNode, number: string, depth: number
     `- **Kind:** ${isStructure ? 'layout primitive' : 'component'} \`${node.componentType}\`${manifest ? ` (${manifest.displayName})` : ' (custom / unknown type — implement from props below)'}`
   );
   lines.push(`- **Node id:** \`${node.id}\``);
+  if (isValidHtmlId(node.htmlId)) {
+    lines.push(`- **HTML id:** \`${node.htmlId}\` — render \`id="${node.htmlId}"\` on this element's root; in-page links \`#${node.htmlId}\` must scroll here.`);
+  }
+  const attrs = sanitizeNodeAttributes(node.attributes);
+  if (Object.keys(attrs).length) {
+    lines.push(`- **Extra attributes on the root:** ${Object.entries(attrs).map(([k, v]) => `\`${k}="${mdEscape(v)}"\``).join(', ')}`);
+  }
   if (node.locked) lines.push('- **Locked in editor** (no implementation impact).');
+  const nodeNote = ctx.bp.notes?.[`node:${node.id}`]?.trim();
+  if (nodeNote) {
+    lines.push('', '**Designer notes for this element (requirements — follow them):**', '', ...nodeNote.split('\n').map((l) => `> ${mdEscape(l)}`));
+  }
 
   const props = node.props ?? {};
   if (Object.keys(props).length) {
-    lines.push('', '**Content & props (use verbatim):**', '', fence('json', stableJson(props)));
+    lines.push('', '**Content & props (use verbatim):**', '', fence('json', stableJson(rewriteAssetReferences(props, ctx.assetPaths))));
   }
 
   const css = describeStyles(node.styles);
@@ -269,12 +272,19 @@ function renderNode(ctx: Ctx, node: BlueprintNode, number: string, depth: number
   }
 
   const behaviour: string[] = [];
-  for (const note of BEHAVIOUR_NOTES[node.componentType] ?? []) behaviour.push(note);
+  for (const note of behaviourNotes(node.componentType)) behaviour.push(note);
   const m = node.motionEffects;
   if (m) {
     if (m.entranceAnimation && m.entranceAnimation !== 'none') {
       behaviour.push(
-        `Entrance animation \`${m.entranceAnimation}\` over ${DURATIONS[m.animationDuration] ?? '460ms'} (ease cubic-bezier(0.2,0,0,1)); disable under prefers-reduced-motion.`
+        m.entranceTrigger === 'load'
+          ? `Entrance animation \`${m.entranceAnimation}\` on page load over ${DURATIONS[m.animationDuration] ?? '460ms'} (ease cubic-bezier(0.2,0,0,1)); disable under prefers-reduced-motion.`
+          : `Entrance animation \`${m.entranceAnimation}\` that plays as the element scrolls into view (CSS \`animation-timeline: view()\`, range \`entry 0% → entry 100%\`; fall back to playing once on load over ${DURATIONS[m.animationDuration] ?? '460ms'} where view timelines are unsupported); disable under prefers-reduced-motion.`
+      );
+    }
+    if (m.scrollEffect && m.scrollEffect !== 'none') {
+      behaviour.push(
+        `Scroll effect \`${m.scrollEffect}\` (${m.scrollIntensity ?? 'medium'} intensity) linked to the element's position while it crosses the viewport (CSS \`animation-timeline: view()\`, range \`cover 0% → cover 100%\`); static under prefers-reduced-motion. Keyframes: \`${scrollKeyframesCss(`el-scroll-${m.scrollEffect}-${m.scrollIntensity ?? 'medium'}`)}\``
       );
     }
     if (m.hoverTransform && m.hoverTransform !== 'none') behaviour.push(`Hover effect: ${HOVER_TRANSFORMS[m.hoverTransform] ?? m.hoverTransform}.`);
@@ -371,7 +381,7 @@ function tokensJson(bp: ProjectBlueprint): string {
       tablet: { $type: 'dimension', $value: '1023px', $description: 'max-width for tablet overrides' },
       mobile: { $type: 'dimension', $value: '767px', $description: 'max-width for mobile overrides' },
       desktop: { $type: 'dimension', $value: '1024px', $description: 'min-width for desktop overrides' },
-      wide: { $type: 'dimension', $value: '1280px', $description: 'min-width for wide overrides' }
+      wide: { $type: 'dimension', $value: '1440px', $description: 'min-width for wide overrides' }
     }
   });
 }
@@ -420,7 +430,33 @@ export function generateBuildSpec(input: ProjectBlueprint, options: BuildSpecOpt
   const layouts = input.layouts.filter((l) => layoutIds.has(l.id));
   const bp: ProjectBlueprint = { ...input, pages, layouts };
 
-  const ctx: Ctx = { bp, preset, styling, usedTypes: new Set(), hiddenOmitted: 0, sectionCount: 0, interactions: [] };
+  // Designer notes that will actually be rendered (visible nodes / pages in scope).
+  const visibleNodeIds = new Set<string>();
+  const collectVisible = (n: BlueprintNode) => {
+    if (n.hidden) return;
+    visibleNodeIds.add(n.id);
+    (n.children ?? []).forEach(collectVisible);
+  };
+  pages.forEach((p) => collectVisible(p.rootNode));
+  layouts.forEach((l) => collectVisible(l.rootNode));
+  const pageIds = new Set(pages.map((p) => p.id));
+  const noteCount = Object.entries(bp.notes ?? {}).filter(
+    ([key, value]) =>
+      value.trim() !== '' &&
+      ((key.startsWith('node:') && visibleNodeIds.has(key.slice(5))) || (key.startsWith('page:') && pageIds.has(key.slice(5))))
+  ).length;
+
+  const assetFiles = collectAssetFiles(bp);
+  const ctx: Ctx = {
+    bp,
+    preset,
+    styling,
+    usedTypes: new Set(),
+    hiddenOmitted: 0,
+    sectionCount: 0,
+    interactions: [],
+    assetPaths: assetFiles.publicPathFor
+  };
   const files: Record<string, string> = {};
 
   // ---- Layouts & pages -----------------------------------------------------
@@ -451,6 +487,7 @@ export function generateBuildSpec(input: ProjectBlueprint, options: BuildSpecOpt
     outline(page.rootNode, '', true, true, tree);
     const file = preset.routeFile(page.path);
     pageIndex.push({ page, file, slug, layout: layout?.name });
+    const pageNote = bp.notes?.[`page:${page.id}`]?.trim();
     files[`spec/pages/${slug}.md`] = [
       `# Page: ${page.title} (\`${page.path}\`)`,
       '',
@@ -459,6 +496,9 @@ export function generateBuildSpec(input: ProjectBlueprint, options: BuildSpecOpt
       `- **Document title:** ${page.seo?.title || page.title}`,
       `- **Meta description:** ${page.seo?.metaDescription || page.description || '—'}`,
       `- **Layout:** ${layout ? `${layout.name} — see spec/layouts.md (page content renders in the layout's content slot)` : 'none (standalone; renders its own chrome)'}`,
+      ...(pageNote
+        ? ['', '## Designer notes for this page (requirements — follow them)', '', ...pageNote.split('\n').map((l) => `> ${mdEscape(l)}`)]
+        : []),
       '',
       '## Outline (render order, top to bottom)',
       '',
@@ -487,7 +527,7 @@ export function generateBuildSpec(input: ProjectBlueprint, options: BuildSpecOpt
       manifest?.slots?.length ? `- **Slots:** ${manifest.slots.map((s) => `\`${s.name}\` (${s.displayName})`).join(', ')}` : '- **Slots:** none',
       '',
       propRows(type),
-      ...(BEHAVIOUR_NOTES[type]?.length ? ['', '**Behaviour contract:**', '', ...BEHAVIOUR_NOTES[type].map((n) => `- ${n}`)] : [])
+      ...(behaviourNotes(type).length ? ['', '**Behaviour contract:**', '', ...behaviourNotes(type).map((n) => `- ${n}`)] : [])
     ].join('\n');
   });
   files['spec/components.md'] = [
@@ -499,9 +539,9 @@ export function generateBuildSpec(input: ProjectBlueprint, options: BuildSpecOpt
     '',
     structureTypes.length
       ? [
-          '- `structure/container` — centered max-width wrapper. `maxWidth`: sm 640px, md 768px, lg 1024px, xl 1280px, 2xl 1536px, full 100%; horizontal padding 1.5rem. Optional flex props (`direction`, `justify`, `align`, `gap`, `textAlign`) apply to the element that directly wraps the children.',
-          '- `structure/section` — full-bleed <section> with background `surfaceTone` (surface | low | container | high | primary-container → the matching surface/primary-container color token) and vertical padding `paddingY` (sm 2rem, md 3.5rem, lg 5rem, xl 7rem) containing a Container; flex props apply to the inner container.',
-          '- `structure/grid` — CSS grid: 1 column on mobile; `columns` (1–4) from 768px (4 → 2 columns until 1024px). `gap` tokens: sm 1rem, md 1.5rem, lg 2.5rem, otherwise a raw CSS length. `alignItems` / `justifyItems` map to the same CSS properties.',
+          ...(['structure/container', 'structure/section', 'structure/grid'] as const).map(
+            (t) => `- \`${t}\` — ${getManifest(t)?.description ?? ''} ${behaviourNotes(t).join(' ')}`
+          ),
           '- `structure/slot` — where a page renders inside a shared layout.'
         ]
           .filter((line) => structureTypes.some((t) => line.includes(`\`${t}\``)))
@@ -531,9 +571,13 @@ export function generateBuildSpec(input: ProjectBlueprint, options: BuildSpecOpt
 
   // ---- Responsive contract ---------------------------------------------------
   files['spec/responsive.md'] = [
-    '# Responsive contract',
+    '# Responsive & style contract',
     '',
-    'Style overrides in the page specs are grouped by bucket. Apply them with exactly these media queries:',
+    'Every style override in the page specs belongs to one element (the component root) and is applied exactly as the builder compiles it for its own canvas and SvelteKit export:',
+    '',
+    '- Overrides beat the component\'s own default styling (the builder emits them as `!important` rules keyed by the element).',
+    `- For components whose content area lays out children (${getAllManifests().filter((m) => m.layoutInner).map((m) => `\`${m.type}\``).join(', ')}), the layout keys (${[...LAYOUT_STYLE_KEYS].map((k) => `\`${kebab(k)}\``).join(', ')}) apply to the inner content area, not the outer element (\`display: none\` still hides the whole element).`,
+    '- Buckets are applied in this order (later wins): base → tablet → mobile → desktop → wide → states → motion effects → device visibility → custom CSS.',
     '',
     '| Bucket | Applies when | Notes |',
     '|---|---|---|',
@@ -542,6 +586,10 @@ export function generateBuildSpec(input: ProjectBlueprint, options: BuildSpecOpt
     `| mobile | \`${BREAKPOINT_MEDIA.mobile}\` | wins over tablet |`,
     `| desktop | \`${BREAKPOINT_MEDIA.desktop}\` | |`,
     `| wide | \`${BREAKPOINT_MEDIA.wide}\` | wins over desktop |`,
+    '| :hover | pointer over the element | layout keys target the content area while the element is hovered |',
+    '| :focus-visible | element (or a descendant, `:focus-within`) has keyboard focus | |',
+    '| :active | element is being pressed | |',
+    '| :disabled | element is disabled (or `aria-disabled="true"`) | |',
     '',
     'Device visibility flags are exact ranges (not cascades):',
     '',
@@ -549,7 +597,9 @@ export function generateBuildSpec(input: ProjectBlueprint, options: BuildSpecOpt
     `- hidden on tablet: \`${VISIBILITY_MEDIA.tablet}\``,
     `- hidden on desktop: \`${VISIBILITY_MEDIA.desktop}\``,
     '',
-    'Verify every page at 375px, 768px, 1280px and 1440px wide: no horizontal scrolling, no overlapping text, tap targets ≥ 44px on mobile.',
+    'Entrance animations and hover transforms are disabled under `prefers-reduced-motion: reduce`.',
+    '',
+    `Verify every page at ${CANVAS_DEVICE_WIDTHS.mobile}px, ${CANVAS_DEVICE_WIDTHS.tablet}px, ${CANVAS_DEVICE_WIDTHS.desktop}px and ${CANVAS_DEVICE_WIDTHS.wide}px wide (the builder's device previews): no horizontal scrolling, no overlapping text, tap targets ≥ 44px on mobile.`,
     ''
   ].join('\n');
 
@@ -573,9 +623,9 @@ export function generateBuildSpec(input: ProjectBlueprint, options: BuildSpecOpt
     for (const l of links.filter((l, i, arr) => arr.findIndex((x) => x.href === l.href && x.label === l.label) === i).slice(0, 20)) {
       const internal = l.href.startsWith('/');
       const known = !internal || routePaths.has(l.href.split(/[?#]/)[0]);
-      acceptance.push(`- [ ] “${mdEscape(l.label)}” links to \`${l.href}\`${internal && !known ? ' ⚠️ route not in this project — keep the link and list it in your final report' : ''}`);
+      acceptance.push(`- [ ] “${mdEscape(l.label)}” links to \`${l.href}\`${internal && !known ? ' — **warning:** route not in this project; keep the link and list it in your final report' : ''}`);
     }
-    acceptance.push('- [ ] Matches spec/responsive.md at 375 / 768 / 1280 / 1440px.', '');
+    acceptance.push(`- [ ] Matches spec/responsive.md at ${CANVAS_DEVICE_WIDTHS.mobile} / ${CANVAS_DEVICE_WIDTHS.tablet} / ${CANVAS_DEVICE_WIDTHS.desktop} / ${CANVAS_DEVICE_WIDTHS.wide}px.`, '');
   }
   acceptance.push(
     '## Global',
@@ -592,7 +642,17 @@ export function generateBuildSpec(input: ProjectBlueprint, options: BuildSpecOpt
   // ---- Tokens & machine-readable ----------------------------------------------
   files['spec/tokens.css'] = tokensCss(bp);
   files['spec/design-tokens.json'] = tokensJson(bp);
-  files['spec/blueprint.json'] = stableJson(bp);
+  // Machine-readable source without embedded image data: assets point at their files in spec/static/.
+  const specAssets = bp.assets.map((a) => ({
+    ...a,
+    dataUrl: undefined,
+    svgContent: undefined,
+    file: assetFiles.publicPathFor.get(a.localPath) ? `spec/static${assetFiles.publicPathFor.get(a.localPath)}` : null
+  }));
+  files['spec/blueprint.json'] = stableJson({ ...rewriteAssetReferences({ ...bp, assets: [] }, assetFiles.publicPathFor), assets: specAssets });
+  const binaryFiles: Record<string, Uint8Array> = {};
+  for (const [rel, text] of Object.entries(assetFiles.text)) files[`spec/static/${rel}`] = text;
+  for (const [rel, bytes] of Object.entries(assetFiles.binary)) binaryFiles[`spec/static/${rel}`] = bytes;
 
   // ---- Overview -----------------------------------------------------------------
   files['spec/overview.md'] = [
@@ -613,7 +673,25 @@ export function generateBuildSpec(input: ProjectBlueprint, options: BuildSpecOpt
     '## Page specs',
     '',
     ...pageIndex.map(({ page, slug }) => `- [${page.title}](pages/${slug}.md) — \`${page.path}\``),
-    ''
+    '',
+    ...(assetFiles.manifest.length
+      ? [
+          '## Assets',
+          '',
+          'Copy everything in `spec/static/` into the app\'s static/public directory at the same paths. Props and styles reference these files by path (e.g. `/assets/logo.png`).',
+          '',
+          '| Path | File | Type | Size | Alt text |',
+          '|---|---|---|---|---|',
+          ...assetFiles.manifest.map(
+            (a) =>
+              `| \`${a.path}\` | ${mdEscape(a.filename)} | ${a.mimeType} | ${a.width && a.height ? `${a.width}×${a.height}, ` : ''}${Math.max(1, Math.round(a.bytes / 1024))} KB | ${mdEscape(a.alt || '—')} |`
+          ),
+          ''
+        ]
+      : []),
+    ...(assetFiles.skipped.length
+      ? ['> **Not exported** (no usable image data in the project — ask the owner for these files): ' + assetFiles.skipped.map((n) => `\`${mdEscape(n)}\``).join(', '), '']
+      : [])
   ].join('\n');
 
   // ---- CLAUDE.md -------------------------------------------------------------------
@@ -643,6 +721,12 @@ export function generateBuildSpec(input: ProjectBlueprint, options: BuildSpecOpt
     ...(options.extraInstructions?.trim()
       ? ['', '## Additional requirements from the project owner', '', options.extraInstructions.trim()]
       : []),
+    ...(bp.notes?.project?.trim()
+      ? ['', '## Project notes from the designer', '', ...bp.notes.project.trim().split('\n').map((l) => `> ${mdEscape(l)}`)]
+      : []),
+    ...(noteCount > 0
+      ? ['', `> The designer left ${noteCount} element/page note${noteCount === 1 ? '' : 's'} — they appear as "Designer notes" blocks in spec/pages/*.md and spec/layouts.md and are requirements, not suggestions.`]
+      : []),
     '',
     '## Spec map',
     '',
@@ -660,7 +744,7 @@ export function generateBuildSpec(input: ProjectBlueprint, options: BuildSpecOpt
     '',
     '## Build plan (commit after each step)',
     '',
-    '1. Scaffold the project, pin Node, install the design tokens (`spec/tokens.css` / `spec/design-tokens.json`) as the global theme.',
+    `1. Scaffold the project, pin Node, install the design tokens (\`spec/tokens.css\` / \`spec/design-tokens.json\`) as the global theme${assetFiles.manifest.length ? ', and copy `spec/static/` into the public/static assets folder (paths are referenced verbatim)' : ''}.`,
     `2. Build the layout primitives and the ${componentTypes.length} components in \`spec/components.md\`, typed exactly as specified.`,
     `3. Build shared layout(s) from \`spec/layouts.md\`${layouts.length ? ` (${layouts.map((l) => l.name).join(', ')})` : ''}.`,
     `4. Build each page from \`spec/pages/\` in this order: ${pageIndex.map((p) => `\`${p.page.path}\``).join(', ')}.`,
@@ -702,6 +786,7 @@ export function generateBuildSpec(input: ProjectBlueprint, options: BuildSpecOpt
 
   return {
     files,
+    ...(Object.keys(binaryFiles).length ? { binaryFiles } : {}),
     prompt,
     stats: {
       pages: pages.length,

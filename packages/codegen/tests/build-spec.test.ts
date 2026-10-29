@@ -107,3 +107,45 @@ describe('generateBuildSpec', () => {
     expect(files['CLAUDE.md']).toContain('Use Drizzle with Postgres.');
   });
 });
+
+describe('designer notes, anchors and motion in the build spec', () => {
+  it('emits node, page and project notes, html ids, attributes and scroll motion', async () => {
+    const { createDefaultAcmeSaaSProject } = await import('@app-viz/schema');
+    const { generateBuildSpec } = await import('../src/index.js');
+    const bp = createDefaultAcmeSaaSProject();
+    const home = bp.pages.find((p) => p.path === '/')!;
+    const hero = home.rootNode.children[0];
+    hero.htmlId = 'top';
+    hero.attributes = { 'data-analytics': 'hero' };
+    hero.motionEffects = {
+      entranceAnimation: 'fadeInUp',
+      animationDuration: 'normal',
+      entranceTrigger: 'scroll',
+      scrollEffect: 'parallax',
+      scrollIntensity: 'subtle',
+      hoverTransform: 'none',
+      sticky: 'none',
+      hideOnDesktop: false,
+      hideOnTablet: false,
+      hideOnMobile: false
+    };
+    bp.notes = {
+      ...bp.notes,
+      [`node:${hero.id}`]: 'Primary CTA opens the signup flow.\nTrack clicks.',
+      [`page:${home.id}`]: 'Home must load under 1s on 4G.',
+      project: 'Use the company design system later.'
+    };
+    const r = generateBuildSpec(bp, { stack: 'sveltekit-rust' });
+    const homeSpec = Object.entries(r.files).find(([k]) => k.startsWith('spec/pages/') && r.files[k].includes('(`/`)'))![1];
+    expect(homeSpec).toContain('> Primary CTA opens the signup flow.');
+    expect(homeSpec).toContain('> Track clicks.');
+    expect(homeSpec).toContain('> Home must load under 1s on 4G.');
+    expect(homeSpec).toContain('render `id="top"`');
+    expect(homeSpec).toContain('`data-analytics="hero"`');
+    expect(homeSpec).toContain('scrolls into view');
+    expect(homeSpec).toContain('@keyframes el-scroll-parallax-subtle');
+    expect(r.files['CLAUDE.md']).toContain('Project notes from the designer');
+    expect(r.files['CLAUDE.md']).toContain('left 2 element/page notes');
+    expect(r.files['CLAUDE.md']).toContain('SvelteKit 3 + Rust (Axum, sqlx, PostgreSQL)');
+  });
+});

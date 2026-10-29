@@ -1,33 +1,48 @@
-# Compatibility Matrix (Locked: October 25, 2026)
+# Compatibility matrix (verified 2026-10-28)
 
-This document records the exact chosen package versions, peer dependencies, compatibility proof, maintenance status, reasons for selection, and evaluated alternatives as of October 25, 2026.
+Versions below are the ones actually installed from `pnpm-lock.yaml` on 2026-10-28. Anything not
+listed here is **not** a dependency of the studio or of generated apps.
 
-## 1. Core Ecosystem
+## Toolchain
 
-| Tool / Library | Exact Version | Role | Compatibility Proof & Release Status | Reason for Selection | Alternatives Evaluated |
-|---|---|---|---|---|---|
-| **Node.js** | `24.22.0` | Monorepo and generated app runtime | Node 24 Active LTS. Meets SvelteKit 3 engine requirement (`>=22.17.0`). | Modern ESM, native crypto, native fetch, V8 performance. | Node 20 (EOL soon), Node 22 (supported but Node 24 is active LTS). |
-| **pnpm** | `12.14.0` | Monorepo workspace manager | Fast, deterministic hard-linked node_modules. | Native workspaces, frozen lockfile support. | npm, yarn, bun. |
-| **Svelte** | `5.57.2` | Frontend framework | Official stable release as of 2026-10-25. Svelte 5 Runes API. | Signal-based reactivity (`$state`, `$derived`, `$props`), snippets. | Svelte 4 (legacy, incompatible with SvelteKit 3). |
-| **SvelteKit** | `3.1.0` | Full-stack application framework | SvelteKit 3 stable release. Integrated Vite plugin, `#lib` imports. | Single config in `vite.config.ts`, SSR + CSR routing. | SvelteKit 2.x (legacy, uses svelte.config.js and $lib). |
-| **Vite** | `8.0.12` | Bundler & Dev Server | Official SvelteKit 3 bundler requirement. | Lightning-fast HMR and ESM builds. | Webpack, Turbopack. |
-| **@sveltejs/vite-plugin-svelte** | `7.0.2` | Svelte compiler plugin | Required peer of SvelteKit 3 and Svelte 5.57+. | Official Vite Svelte integration. | None. |
-| **TypeScript** | `6.0.2` (or `^5.9.0`) | Type checker & compiler | TypeScript stable release. Full support for discriminated unions. | Zero runtime overhead, strict typing across packages. | JavaScript with JSDoc. |
-| **Google MD3 (Pure Vanilla CSS)** | `Oct 25, 2026 Spec` | Styling & Design System | Google Material Design 3 design system implemented via native CSS custom properties. Zero Tailwind, zero external runtime. | Maximum portability, zero build tool dependency, native CSS cascade, 100% preview-to-export parity. | Tailwind CSS (explicitly disallowed), CSS Modules, CSS-in-JS. |
-| **@sveltejs/mcp** | `0.1.27` | Svelte AI & Audit Tooling | Official Svelte AI tools CLI (`svelte-mcp svelte-autofixer`) from sveltejs/ai-tools. | Automated codebase audit for Svelte 5 runes, snippets, accessibility, and deprecations. | Manual linting, ESLint alone. |
-| **Zod** | `3.24.2` | Runtime schema validation | TypeScript-first schema declaration. | Serialized Blueprint validation and migration pipelines. | Valibot, ArkType. |
-| **Bits UI** | `2.20.2` | Accessible Headless UI | Headless accessible components rewritten for Svelte 5 runes. | Full ARIA compliance, keyboard focus management, headless styling. | Radix Svelte (Svelte 4 legacy), Skeleton. |
-| **Lucide Svelte** | `1.0.1` | Iconography | Tree-shakable Svelte 5 icons. | Clean SVG icons matching design tokens. | Heroicons, FontAwesome. |
-| **Moveable** | `0.53.0` | Canvas overlay | Vanilla DOM Moveable wrapped in Svelte action. | Resizing, dragging, guidelines, rotation, snap. | svelte-moveable (had legacy Svelte 4 bindings). |
-| **Drizzle ORM** | `0.38.3` | Persistence | Lightweight TypeScript ORM. | Zero-overhead SQL generation, Drizzle Kit migrations. | Prisma (heavy binary, slow serverless cold starts). |
-| **better-sqlite3** | `11.8.1` | Local DB Driver | Fast in-process SQLite driver for Node.js. | Zero-setup, instant local developer onboarding. | Dockerized PostgreSQL (optional for cloud deploy). |
-| **JSZip** / **archiver** | `3.10.1` / `7.0.1` | Archive Generation | Deterministic ZIP file generation. | Normalized file dates (`2026-01-01T00:00:00Z`) for reproducible handoffs. | Native zip CLI. |
-| **Playwright** | `1.50.1` | E2E & Parity Regression | Pixel-perfect screenshot and browser automation. | Multi-viewport testing, iframe message interception. | Cypress. |
-| **Vitest** | `3.0.4` | Unit & Schema Testing | ESM-native test runner. | Ultra-fast unit tests with TypeScript and Vite config reuse. | Jest. |
+| Tool | Version | Notes |
+|---|---|---|
+| Node.js | 26.13.0 | `.nvmrc` / `.node-version`; `engines.node >= 26.13.0` everywhere |
+| pnpm | 12.16.1 | `packageManager` field; workspace = `packages/*`, `apps/*` |
+| TypeScript | 6.0.3 | SvelteKit 3.1 and svelte-check 4.7 peer on TS 6 |
 
-## 2. Peer Dependency Map & Constraints
+## Studio (`apps/studio`) and shared packages
 
-- `svelte@^5.57.2` peer required by `@sveltejs/kit@^3.1.0` and `@sveltejs/vite-plugin-svelte@^7.0.2`.
-- `vite@^8.0.12` peer required by `@sveltejs/kit@^3.1.0`.
-- Subpath import `#lib` declared in `package.json` replaces legacy `$lib`.
-- All config resides in `vite.config.ts`; `svelte.config.js` is deprecated and removed in SvelteKit 3.
+| Package | Version | Role |
+|---|---|---|
+| svelte | 5.57.3 | Runes-only components (studio chrome + canonical site components) |
+| @sveltejs/kit | 3.1.0 | Studio app; config lives in `vite.config.ts` (no `svelte.config.js`), `#lib` subpath import |
+| vite | 8.3.5 | Dev server / bundler |
+| @sveltejs/vite-plugin-svelte | 7.3.1 | Required by SvelteKit 3 |
+| @sveltejs/adapter-auto | 8.0.0 | Studio deployment adapter |
+| svelte-check | 4.7.7 | Type/a11y checks (`pnpm --filter @app-viz/studio check`) |
+| zod | 4.6.7 | Blueprint schema, component prop schemas, postMessage protocol |
+| phosphor-svelte | 3.1.1 | Studio UI icons only — always deep-imported (`phosphor-svelte/lib/<Name>Icon`). Generated sites never depend on it |
+| jszip | 3.10.2 | Deterministic export ZIPs (normalized dates) |
+| vitest | 5.0.5 | Unit tests (`npx vitest run` from the repo root) |
+| @playwright/test | 1.64.1 | Browser checks; driven with the system Chrome (`channel: 'chrome'`), no browser downloads |
+| tsx | 4.23.15 | Repo scripts (`pnpm sync:components`, icon extraction, parity script) |
+
+## Generated SvelteKit app (`generated-app/`)
+
+Declared by `packages/codegen/src/project-files.ts` as caret ranges from these floors: svelte ^5.57.3,
+@sveltejs/kit ^3.1.0, vite ^8.3.5, @sveltejs/vite-plugin-svelte ^7.3.1, @sveltejs/adapter-auto ^8.0.0,
+TypeScript ^6.0.3, svelte-check ^4.7.7. The export does not ship a lockfile. **No runtime dependencies**:
+components, the inline SVG icon set (380 Phosphor-derived icons, MIT) and the site runtime CSS are
+copied as source.
+
+## Build-spec stack presets (`packages/codegen/src/spec/stacks.ts`)
+
+Version pins for other stacks (Next.js, Nuxt, Astro, React Router, SvelteKit + Rust) are guidance for the
+implementing agent and live in that file; the Rust crate versions in the `sveltekit-rust` preset were read
+from crates.io on 2026-10-28 (axum 0.8.9, tokio 1.54.1, sqlx 0.9.0, tower-http 0.7.1, serde 1.0.229).
+
+## Licences
+
+- Phosphor Icons (studio UI via phosphor-svelte; site icon paths extracted into `packages/components/src/svelte/lib/icons.ts`): MIT.
+- Inter, JetBrains Mono and the site fonts are loaded from Google Fonts (SIL OFL). The export loads web fonts only for families on the allowlist in `packages/engine/src/fonts.ts`; this is a third-party request in generated sites.

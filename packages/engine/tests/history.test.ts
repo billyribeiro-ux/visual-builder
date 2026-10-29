@@ -114,3 +114,80 @@ describe('cloneSubtreeWithNewIds', () => {
     expect(copy.interactions[0].id).not.toBe('rule-1');
   });
 });
+
+describe('HistoryManager labels (history panel)', () => {
+  it('keeps labels aligned with undo/redo stacks', () => {
+    const h = new HistoryManager(createDefaultAcmeSaaSProject());
+    h.execute({ type: 'UPDATE_PROPS', nodeId: HERO, props: { title: 'A' } }, { label: 'Edit hero title' });
+    h.execute({ type: 'UPDATE_PROPS', nodeId: HERO, props: { subtitle: 'B' } }, { label: 'Edit hero subtitle' });
+    expect(h.undoLabels).toEqual(['Edit hero title', 'Edit hero subtitle']);
+    h.undo();
+    expect(h.undoLabels).toEqual(['Edit hero title']);
+    expect(h.redoLabels).toEqual(['Edit hero subtitle']);
+    h.redo();
+    expect(h.undoLabels).toEqual(['Edit hero title', 'Edit hero subtitle']);
+    expect(h.redoLabels).toEqual([]);
+  });
+
+  it('uses the latest label for a coalesced run and a generic label when none is given', () => {
+    const h = new HistoryManager(createDefaultAcmeSaaSProject());
+    let t = 1_000;
+    h.execute({ type: 'UPDATE_PROPS', nodeId: HERO, props: { title: 'H' } }, { coalesceKey: 'k', now: (t += 50), label: 'Typing 1' });
+    h.execute({ type: 'UPDATE_PROPS', nodeId: HERO, props: { title: 'He' } }, { coalesceKey: 'k', now: (t += 50), label: 'Typing 2' });
+    expect(h.undoLabels).toEqual(['Typing 2']);
+    h.execute({ type: 'UPDATE_PROPS', nodeId: HERO, props: { badgeText: 'x' } });
+    expect(h.undoLabels[1]).toBe('Edit badgeText');
+  });
+
+  it('labels a transaction once and clears redo labels on new work', () => {
+    const h = new HistoryManager(createDefaultAcmeSaaSProject());
+    h.begin('Align element');
+    h.execute({ type: 'UPDATE_PROPS', nodeId: HERO, props: { title: 'X' } });
+    h.execute({ type: 'UPDATE_PROPS', nodeId: HERO, props: { subtitle: 'Y' } });
+    h.commit();
+    expect(h.undoLabels).toEqual(['Align element']);
+    h.undo();
+    expect(h.redoLabels).toEqual(['Align element']);
+    h.execute({ type: 'UPDATE_PROPS', nodeId: HERO, props: { title: 'Z' } }, { label: 'New edit' });
+    expect(h.redoLabels).toEqual([]);
+    expect(h.undoLabels).toEqual(['New edit']);
+  });
+
+  it('drops the oldest label together with the oldest snapshot at max history', () => {
+    const h = new HistoryManager(createDefaultAcmeSaaSProject(), 2);
+    for (const title of ['1', '2', '3']) {
+      h.execute({ type: 'UPDATE_PROPS', nodeId: HERO, props: { title } }, { label: `Set ${title}` });
+    }
+    expect(h.pastCount).toBe(2);
+    expect(h.undoLabels).toEqual(['Set 2', 'Set 3']);
+  });
+});
+
+describe('SET_NOTE', () => {
+  it('sets, updates and clears designer notes with validated keys', () => {
+    const bp = createDefaultAcmeSaaSProject();
+    const key = `node:${HERO}`;
+    const a = executeCommand(bp, { type: 'SET_NOTE', key, value: 'Hero video must autoplay muted.' });
+    expect(a.notes[key]).toBe('Hero video must autoplay muted.');
+    const b = executeCommand(a, { type: 'SET_NOTE', key, value: '   ' });
+    expect(b.notes[key]).toBeUndefined();
+    const c = executeCommand(bp, { type: 'SET_NOTE', key: '__proto__', value: 'x' });
+    expect(c).toBe(bp);
+    const d = executeCommand(bp, { type: 'SET_NOTE', key: 'node:not-a-uuid', value: 'x' });
+    expect(d).toBe(bp);
+  });
+});
+
+describe('REMOVE_STYLE_KEYS', () => {
+  it('removes keys, drops empty override buckets, and is a no-op for absent keys', () => {
+    const bp = createDefaultAcmeSaaSProject();
+    const a = executeCommand(bp, { type: 'UPDATE_STYLES', nodeId: HERO, breakpoint: 'mobile', styles: { padding: '8px', color: 'red' } });
+    const b = executeCommand(a, { type: 'REMOVE_STYLE_KEYS', nodeId: HERO, breakpoint: 'mobile', keys: ['padding'] });
+    const heroB = b.pages[0].rootNode.children[0];
+    expect(heroB.styles.mobile).toEqual({ color: 'red' });
+    const c = executeCommand(b, { type: 'REMOVE_STYLE_KEYS', nodeId: HERO, breakpoint: 'mobile', keys: ['color'] });
+    expect(c.pages[0].rootNode.children[0].styles.mobile).toBeUndefined();
+    const d = executeCommand(c, { type: 'REMOVE_STYLE_KEYS', nodeId: HERO, breakpoint: 'mobile', keys: ['color'] });
+    expect(d).toBe(c);
+  });
+});

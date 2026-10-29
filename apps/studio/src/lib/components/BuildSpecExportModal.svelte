@@ -1,23 +1,49 @@
 <script lang="ts">
+  import { SvelteSet } from 'svelte/reactivity';
+  import { editor } from '#lib/state/editor.svelte.js';
+  import { pageDisplayName } from '#lib/state/page-name.js';
+  import { generateBuildSpec, createDeterministicZip, STACK_PRESETS, type StackId, type StylingId, type BuildSpecResult } from '@app-viz/codegen';
+  import type { BlueprintNode, ProjectBlueprint } from '@app-viz/schema';
   import Dialog from './ui/Dialog.svelte';
-  import { editor } from '../state/editor.svelte.js';
-  import {
-    generateBuildSpec,
-    createDeterministicZip,
-    STACK_PRESETS,
-    type StackId,
-    type StylingId,
-    type BuildSpecResult
-  } from '@app-viz/codegen';
-  import type { ProjectBlueprint } from '@app-viz/schema';
+  import Segmented from '#lib/ui/Segmented.svelte';
+  import { tooltip } from '#lib/ui/tooltip.js';
+  import CodeBlock from './dialogs/CodeBlock.svelte';
+  import StackGlyph from './dialogs/StackGlyph.svelte';
+  import { langFromFilename } from './dialogs/highlight.js';
+  import { formatBytes, pluralize } from './dialogs/format.js';
+  import ExportIcon from 'phosphor-svelte/lib/ExportIcon';
+  import CopyIcon from 'phosphor-svelte/lib/CopyIcon';
+  import CheckIcon from 'phosphor-svelte/lib/CheckIcon';
+  import DownloadSimpleIcon from 'phosphor-svelte/lib/DownloadSimpleIcon';
+  import FileIcon from 'phosphor-svelte/lib/FileIcon';
+  import FileMdIcon from 'phosphor-svelte/lib/FileMdIcon';
+  import FileCssIcon from 'phosphor-svelte/lib/FileCssIcon';
+  import BracketsCurlyIcon from 'phosphor-svelte/lib/BracketsCurlyIcon';
+  import FolderSimpleIcon from 'phosphor-svelte/lib/FolderSimpleIcon';
+  import CaretRightIcon from 'phosphor-svelte/lib/CaretRightIcon';
+  import WarningCircleIcon from 'phosphor-svelte/lib/WarningCircleIcon';
+  import TerminalWindowIcon from 'phosphor-svelte/lib/TerminalWindowIcon';
 
-  const PREFS_KEY = 'app-viz-export-prefs-v1';
-  const STACK_ORDER: StackId[] = ['nextjs', 'sveltekit', 'nuxt', 'astro', 'react-router', 'html', 'custom'];
+  /** v2: the SvelteKit + Rust preset became the default; older stored choices start fresh once. */
+  const PREFS_KEY = 'app-viz-export-prefs-v2';
+  const DEFAULT_STACK: StackId = 'sveltekit-rust';
+  const STACK_ORDER: StackId[] = ['sveltekit-rust', 'sveltekit', 'nextjs', 'nuxt', 'astro', 'react-router', 'html', 'custom'];
+  const STACK_NAMES: Record<StackId, string> = {
+    'sveltekit-rust': 'SvelteKit + Rust',
+    nextjs: 'Next.js',
+    sveltekit: 'SvelteKit',
+    nuxt: 'Nuxt',
+    astro: 'Astro',
+    'react-router': 'React Router',
+    html: 'HTML + CSS',
+    custom: 'Custom stack'
+  };
   const STYLING_LABELS: Record<StylingId, string> = {
     tailwind: 'Tailwind CSS v4',
     'css-variables': 'CSS custom properties',
     'css-modules': 'CSS Modules'
   };
+  const NODE_FILES = { '.nvmrc': '26.13.0\n', '.node-version': '26.13.0\n' };
 
   interface Prefs {
     stack: StackId;
@@ -27,17 +53,31 @@
     scope: 'project' | 'page';
   }
 
-  function loadPrefs(): Prefs {
-    const fallback: Prefs = { stack: 'nextjs', styling: '', extra: '', custom: '', scope: 'project' };
-    try {
-      const parsed = JSON.parse(localStorage.getItem(PREFS_KEY) ?? 'null');
-      if (parsed && STACK_ORDER.includes(parsed.stack)) return { ...fallback, ...parsed };
-    } catch {
-      // ignore malformed prefs
-    }
-    return fallback;
+  interface TreeNode {
+    name: string;
+    path: string;
+    size?: number;
+    children?: TreeNode[];
   }
 
+  function loadPrefs(): Prefs {
+    const fallback: Prefs = { stack: DEFAULT_STACK, styling: '', extra: '', custom: '', scope: 'project' };
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem(PREFS_KEY);
+    } catch {
+      return fallback; // storage blocked (private mode); defaults are correct behaviour
+    }
+    if (!raw) return fallback;
+    try {
+      const parsed = JSON.parse(raw) as Partial<Prefs>;
+      return parsed && parsed.stack && STACK_ORDER.includes(parsed.stack) ? { ...fallback, ...parsed } : fallback;
+    } catch {
+      return fallback; // malformed prefs from an older build are ignored and overwritten
+    }
+  }
+
+  const uid = $props.id();
   const initial = loadPrefs();
   let stack = $state<StackId>(initial.stack);
   let styling = $state<StylingId | ''>(initial.styling);
@@ -45,16 +85,18 @@
   let custom = $state(initial.custom);
   let scope = $state<'project' | 'page'>(initial.scope);
   let previewFile = $state('CLAUDE.md');
-  let busy = $state(false);
+  let busy = $state<null | 'zip' | 'app'>(null);
   let copied = $state(false);
+  let prefsWarned = false;
+  const collapsed = new SvelteSet<string>();
 
+  const open = $derived(editor.showExportDialog);
   const preset = $derived(STACK_PRESETS[stack]);
-  const effectiveStyling = $derived<StylingId>(
-    styling && preset.supportedStyling.includes(styling) ? styling : preset.defaultStyling
-  );
+  const effectiveStyling = $derived<StylingId>(styling && preset.supportedStyling.includes(styling) ? styling : preset.defaultStyling);
+  const needsCustom = $derived(stack === 'custom' && !custom.trim());
 
   const result = $derived.by<{ ok: true; spec: BuildSpecResult } | { ok: false; error: string }>(() => {
-    if (!editor.showExportDialog) return { ok: false, error: '' };
+    if (!open) return { ok: false, error: '' };
     try {
       const spec = generateBuildSpec($state.snapshot(editor.blueprint) as ProjectBlueprint, {
         stack,
@@ -65,22 +107,93 @@
       });
       return { ok: true, spec };
     } catch (e) {
-      return { ok: false, error: (e as Error).message };
+      return { ok: false, error: (e as Error).message || 'The build spec could not be generated.' };
     }
   });
 
-  const fileList = $derived(result.ok ? Object.keys(result.spec.files).sort((a, b) => (a === 'CLAUDE.md' ? -1 : b === 'CLAUDE.md' ? 1 : a.localeCompare(b))) : []);
-  const previewText = $derived(result.ok ? (result.spec.files[previewFile] ?? result.spec.files['CLAUDE.md']) : '');
-  const needsCustom = $derived(stack === 'custom' && !custom.trim());
-
-  $effect(() => {
-    const prefs: Prefs = { stack, styling, extra, custom, scope };
-    try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
-    } catch {
-      // non-critical
-    }
+  const files = $derived<Record<string, string>>(result.ok ? { ...result.spec.files, ...NODE_FILES } : {});
+  const sizes = $derived.by(() => {
+    const enc = new TextEncoder();
+    return Object.fromEntries(Object.entries(files).map(([p, c]) => [p, enc.encode(c).length])) as Record<string, number>;
   });
+  const totalSize = $derived(Object.values(sizes).reduce((a, b) => a + b, 0));
+  const tree = $derived(buildTree(Object.keys(files)));
+  const activeFile = $derived(files[previewFile] !== undefined ? previewFile : 'CLAUDE.md');
+  const previewText = $derived(files[activeFile] ?? '');
+  const canExport = $derived(result.ok && !needsCustom);
+
+  /** Non-empty notes (`project`, `page:<id>`, `node:<id>`) that fall inside the export scope. */
+  const noteCount = $derived.by(() => {
+    if (!open) return 0;
+    const bp = editor.blueprint;
+    const notes = bp.notes ?? {};
+    const pages = scope === 'page' && editor.activePage ? [editor.activePage] : bp.pages;
+    const layoutIds = pages.map((p) => p.layoutId).filter(Boolean);
+    const nodeIds: Record<string, true> = {};
+    const walk = (n: BlueprintNode) => {
+      nodeIds[n.id] = true;
+      for (const c of n.children ?? []) walk(c);
+    };
+    for (const p of pages) walk(p.rootNode);
+    for (const l of bp.layouts) if (layoutIds.includes(l.id)) walk(l.rootNode);
+    const pageIds = pages.map((p) => p.id);
+    return Object.entries(notes).filter(([key, text]) => {
+      if (!text?.trim()) return false;
+      if (key === 'project') return true;
+      if (key.startsWith('page:')) return pageIds.includes(key.slice(5));
+      if (key.startsWith('node:')) return nodeIds[key.slice(5)] === true;
+      return false;
+    }).length;
+  });
+
+  /** Remembers the options for next time. Called from the option controls' input/change events. */
+  function persist() {
+    queueMicrotask(() => {
+      const prefs: Prefs = { stack, styling, extra, custom, scope };
+      try {
+        localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+      } catch (e) {
+        if (!prefsWarned) {
+          prefsWarned = true;
+          editor.notify('warning', `Export settings will not be remembered (${(e as Error).message}).`);
+        }
+      }
+    });
+  }
+
+  function buildTree(paths: string[]): TreeNode[] {
+    const root: TreeNode = { name: '', path: '', children: [] };
+    for (const path of paths) {
+      const parts = path.split('/');
+      let node = root;
+      parts.forEach((part, i) => {
+        const sub = parts.slice(0, i + 1).join('/');
+        let child = node.children?.find((c) => c.name === part);
+        if (!child) {
+          child = i === parts.length - 1 ? { name: part, path: sub } : { name: part, path: sub, children: [] };
+          node.children?.push(child);
+        }
+        node = child;
+      });
+    }
+    const sort = (nodes: TreeNode[]): TreeNode[] =>
+      nodes
+        .sort((a, b) => {
+          if (a.name === 'CLAUDE.md') return -1;
+          if (b.name === 'CLAUDE.md') return 1;
+          if (Boolean(a.children) !== Boolean(b.children)) return a.children ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        })
+        .map((n) => (n.children ? { ...n, children: sort(n.children) } : n));
+    return sort(root.children ?? []);
+  }
+
+  function fileIcon(name: string) {
+    if (name.endsWith('.md')) return FileMdIcon;
+    if (name.endsWith('.css')) return FileCssIcon;
+    if (name.endsWith('.json')) return BracketsCurlyIcon;
+    return FileIcon;
+  }
 
   function fileBase(): string {
     const page = scope === 'page' && editor.activePage ? `-${editor.activePage.slug || 'page'}` : '';
@@ -97,18 +210,18 @@
   }
 
   async function downloadZip() {
-    if (!result.ok || needsCustom) return;
-    busy = true;
+    if (!result.ok || needsCustom || busy) return;
+    busy = 'zip';
     try {
       await editor.flushSave();
-      const files = { ...result.spec.files, '.nvmrc': '26.13.0\n', '.node-version': '26.13.0\n' };
-      const bytes = await createDeterministicZip({ files });
+      // Uploaded images travel as binary files under spec/static/.
+      const bytes = await createDeterministicZip({ files, binaryFiles: result.ok ? result.spec.binaryFiles : undefined });
       download(new Blob([bytes as BlobPart], { type: 'application/zip' }), `${fileBase()}.zip`);
       editor.notify('success', 'Build spec downloaded. Unzip it into an empty folder and run `claude` there.');
     } catch (e) {
       editor.notify('error', `Export failed: ${(e as Error).message}`);
     } finally {
-      busy = false;
+      busy = null;
     }
   }
 
@@ -122,132 +235,241 @@
     try {
       await navigator.clipboard.writeText(result.spec.prompt);
       copied = true;
-      setTimeout(() => (copied = false), 2000);
-    } catch {
-      editor.notify('error', 'Clipboard access was blocked. Use “Download prompt (.md)” instead.');
+      setTimeout(() => (copied = false), 1800);
+    } catch (e) {
+      editor.notify('error', `Clipboard access was blocked (${(e as Error).message}). Use “Download prompt” instead.`);
     }
   }
 
   async function downloadSvelteKit() {
-    busy = true;
+    if (busy) return;
+    busy = 'app';
     try {
       await editor.exportHandoffPackage();
+      editor.notify('success', 'SvelteKit app downloaded.');
+    } catch (e) {
+      editor.notify('error', `SvelteKit export failed: ${(e as Error).message}`);
     } finally {
-      busy = false;
+      busy = null;
     }
+  }
+
+  function onStackKeydown(event: KeyboardEvent) {
+    const keys = ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'];
+    if (!keys.includes(event.key)) return;
+    event.preventDefault();
+    const idx = STACK_ORDER.indexOf(stack);
+    const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1;
+    stack = STACK_ORDER[(idx + step + STACK_ORDER.length) % STACK_ORDER.length];
+    persist();
+    (event.currentTarget as HTMLElement).querySelector<HTMLElement>(`[data-stack="${stack}"]`)?.focus();
   }
 </script>
 
+{#snippet treeNodes(nodes: TreeNode[], depth: number)}
+  {#each nodes as node (node.path)}
+    {#if node.children}
+      <li>
+        <button
+          type="button"
+          class="tree__row tree__row--dir"
+          style:--depth={depth}
+          aria-expanded={!collapsed.has(node.path)}
+          onclick={() => (collapsed.has(node.path) ? collapsed.delete(node.path) : collapsed.add(node.path))}
+        >
+          <span class={['caret', !collapsed.has(node.path) && 'caret--open']}><CaretRightIcon size={9} weight="bold" /></span>
+          <FolderSimpleIcon size={14} />
+          <span class="tree__name">{node.name}</span>
+        </button>
+        {#if !collapsed.has(node.path)}
+          <ul>{@render treeNodes(node.children, depth + 1)}</ul>
+        {/if}
+      </li>
+    {:else}
+      {@const Icon = fileIcon(node.name)}
+      <li>
+        <button
+          type="button"
+          class={['tree__row', activeFile === node.path && 'tree__row--on']}
+          style:--depth={depth}
+          aria-current={activeFile === node.path ? 'true' : undefined}
+          onclick={() => (previewFile = node.path)}
+        >
+          <span class="caret" aria-hidden="true"></span>
+          <Icon size={14} />
+          <span class="tree__name">{node.name}</span>
+          <span class="tree__size">{formatBytes(sizes[node.path])}</span>
+        </button>
+      </li>
+    {/if}
+  {/each}
+{/snippet}
+
 <Dialog
-  open={editor.showExportDialog}
-  title="Export for Claude Code"
-  description="Generate a precise, stack-agnostic build spec from your saved layout. Claude Code reads CLAUDE.md and builds it in the stack you choose."
-  size="xl"
+  {open}
+  title="Export"
+  subtitle="Generate a precise build spec for Claude Code in the stack you choose, or download the SvelteKit app."
+  size="full"
+  height="min(820px, calc(100vh - 48px))"
+  icon={ExportIcon}
+  flush
   onclose={() => (editor.showExportDialog = false)}
 >
   <div class="xp">
-    <section class="xp__config" aria-label="Export options">
-      <fieldset class="xp__group">
-        <legend class="xp__label">1. Target stack</legend>
-        <div class="xp__stacks">
-          {#each STACK_ORDER as id (id)}
-            {@const p = STACK_PRESETS[id]}
-            <label class="xp__stack {stack === id ? 'xp__stack--active' : ''}">
-              <input type="radio" name="stack" value={id} bind:group={stack} />
-              <span class="xp__stack-name">{p.label}</span>
-              <span class="xp__stack-tag">{p.tagline}</span>
-            </label>
-          {/each}
-        </div>
-      </fieldset>
-
-      {#if stack === 'custom'}
-        <label class="xp__group">
-          <span class="xp__label">Describe your stack <span class="xp__req">required</span></span>
-          <input class="studio-input" bind:value={custom} placeholder="e.g. Hono SSR + htmx + UnoCSS, deployed to Cloudflare Workers" />
-        </label>
-      {/if}
-
-      <div class="xp__row">
-        <label class="xp__group">
-          <span class="xp__label">2. Styling</span>
-          <select class="studio-select" bind:value={styling}>
-            <option value="">Stack default ({STYLING_LABELS[preset.defaultStyling]})</option>
-            {#each preset.supportedStyling as s (s)}
-              <option value={s}>{STYLING_LABELS[s]}</option>
-            {/each}
-          </select>
-        </label>
-        <fieldset class="xp__group">
-          <legend class="xp__label">3. Scope</legend>
-          <div class="xp__seg" role="radiogroup">
-            <label class={scope === 'project' ? 'on' : ''}>
-              <input type="radio" name="scope" value="project" bind:group={scope} />Whole project ({editor.blueprint.pages.length} pages)
-            </label>
-            <label class={scope === 'page' ? 'on' : ''}>
-              <input type="radio" name="scope" value="page" bind:group={scope} />Current page ({editor.activePage?.path})
-            </label>
-          </div>
-        </fieldset>
+    <section class="xp__config" aria-label="Export options" oninput={persist} onchange={persist}>
+      <div class="sx-section-label xp__label" id="{uid}-stack">Target stack</div>
+      <div class="stacks" role="radiogroup" aria-labelledby="{uid}-stack" tabindex="-1" onkeydown={onStackKeydown}>
+        {#each STACK_ORDER as id (id)}
+          {@const p = STACK_PRESETS[id]}
+          {@const on = stack === id}
+          <button
+            type="button"
+            role="radio"
+            aria-checked={on}
+            tabindex={on ? 0 : -1}
+            data-stack={id}
+            class={['stack', on && 'stack--on']}
+            onclick={() => {
+              stack = id;
+              persist();
+            }}
+            {@attach tooltip(p.label)}
+          >
+            <StackGlyph {id} size={30} />
+            <span class="stack__text">
+              <span class="stack__name">{STACK_NAMES[id]}</span>
+              <span class="stack__tag">{p.tagline}</span>
+            </span>
+          </button>
+        {/each}
       </div>
 
-      <label class="xp__group">
-        <span class="xp__label">4. Extra requirements for Claude <span class="xp__opt">optional</span></span>
-        <textarea
-          class="studio-textarea"
-          rows="4"
-          bind:value={extra}
-          placeholder={'e.g.\n- Use shadcn/ui for primitives\n- Drizzle ORM + Postgres for the dashboard data\n- Deploy target: Vercel'}
-        ></textarea>
-      </label>
-
-      {#if result.ok}
-        <dl class="xp__stats">
-          <div><dt>Pages</dt><dd>{result.spec.stats.pages}</dd></div>
-          <div><dt>Elements</dt><dd>{result.spec.stats.sections}</dd></div>
-          <div><dt>Components</dt><dd>{result.spec.stats.components}</dd></div>
-          <div><dt>Interactions</dt><dd>{result.spec.stats.interactions}</dd></div>
-        </dl>
-        {#if result.spec.stats.hiddenOmitted}
-          <p class="xp__note">{result.spec.stats.hiddenOmitted} hidden element(s) are intentionally left out of the spec.</p>
-        {/if}
-      {:else if result.error}
-        <p class="xp__error" role="alert">{result.error}</p>
+      {#if stack === 'custom'}
+        <div class="field">
+          <label class="sx-label" for="{uid}-custom">Describe your stack <span class="req">Required</span></label>
+          <input id="{uid}-custom" class="sx-input" bind:value={custom} placeholder="e.g. Hono SSR + htmx + UnoCSS on Cloudflare Workers" />
+        </div>
       {/if}
 
-      <div class="xp__howto">
-        <strong>How to use with Claude Code</strong>
+      <div class="field">
+        <label class="sx-label" for="{uid}-styling">Styling</label>
+        <select id="{uid}-styling" class="sx-select" bind:value={styling}>
+          <option value="">{STYLING_LABELS[preset.defaultStyling]} (stack default)</option>
+          {#each preset.supportedStyling as s (s)}
+            <option value={s}>{STYLING_LABELS[s]}</option>
+          {/each}
+        </select>
+      </div>
+
+      <div class="field">
+        <span class="sx-label">Scope</span>
+        <Segmented
+          block
+          ariaLabel="Export scope"
+          value={scope}
+          onchange={(v) => {
+            scope = v;
+            persist();
+          }}
+          options={[
+            { value: 'project', label: 'Whole project' },
+            { value: 'page', label: 'Current page' }
+          ]}
+        />
+        <p class="sx-help">
+          {#if scope === 'page' && editor.activePage}
+            {pageDisplayName(editor.activePage)} (<code class="inline-code">{editor.activePage.path}</code>) and its shared layout.
+          {:else}
+            All {pluralize(editor.blueprint.pages.length, 'page')} and {pluralize(editor.blueprint.layouts.length, 'shared layout')}.
+          {/if}
+        </p>
+      </div>
+
+      <div class="field">
+        <label class="sx-label" for="{uid}-extra">Additional instructions <span class="opt">Optional</span></label>
+        <textarea
+          id="{uid}-extra"
+          class="sx-textarea"
+          rows="4"
+          bind:value={extra}
+          placeholder="e.g.&#10;- Use shadcn/ui for primitives&#10;- Drizzle ORM + Postgres for dashboard data&#10;- Deploy to Vercel"
+        ></textarea>
+      </div>
+
+      <div class="howto">
+        <div class="howto__head"><TerminalWindowIcon size={15} /> Use with Claude Code</div>
         <ol>
-          <li>Download the ZIP and unzip it into an empty folder.</li>
+          <li>Download the .zip and unzip it into an empty folder.</li>
           <li>Run <code>claude</code> in that folder.</li>
-          <li>Say: <em>“Read CLAUDE.md and build the project.”</em></li>
+          <li>Say “Read CLAUDE.md and build the project.”</li>
         </ol>
-        <span>Or paste the single-file prompt into any coding agent.</span>
+        <p>Or copy the single-file prompt into any coding agent.</p>
       </div>
     </section>
 
-    <section class="xp__preview" aria-label="Spec preview">
-      <div class="xp__preview-head">
-        <label class="xp__label" for="xp-file">Preview</label>
-        <select id="xp-file" class="studio-select" bind:value={previewFile}>
-          {#each fileList as f (f)}<option value={f}>{f}</option>{/each}
-        </select>
-      </div>
-      <pre class="xp__code" aria-label="Preview of {previewFile}">{previewText}</pre>
+    <section class="xp__out" aria-label="Output">
+      {#if result.ok}
+        <div class="stats">
+          <div class="stat"><span class="stat__num">{result.spec.stats.pages}</span><span class="stat__label">Pages</span></div>
+          <div class="stat"><span class="stat__num">{result.spec.stats.sections}</span><span class="stat__label">Sections</span></div>
+          <div class="stat"><span class="stat__num">{result.spec.stats.components}</span><span class="stat__label">Components</span></div>
+          <div class="stat"><span class="stat__num">{result.spec.stats.interactions}</span><span class="stat__label">Interactions</span></div>
+          <div class="stat" {@attach tooltip('Project, page and element notes included in the spec')}>
+            <span class="stat__num">{noteCount}</span><span class="stat__label">Notes</span>
+          </div>
+        </div>
+        {#if result.spec.stats.hiddenOmitted}
+          <p class="note">{pluralize(result.spec.stats.hiddenOmitted, 'hidden element')} {result.spec.stats.hiddenOmitted === 1 ? 'is' : 'are'} intentionally left out of the spec.</p>
+        {/if}
+
+        <div class="files">
+          <div class="files__tree">
+            <div class="files__head">
+              <span>Files</span>
+              <span class="files__meta">{Object.keys(files).length} · {formatBytes(totalSize)}</span>
+            </div>
+            <ul class="tree" aria-label="Files in the build spec">
+              {@render treeNodes(tree, 0)}
+            </ul>
+          </div>
+          <div class="files__preview">
+            <div class="files__head files__head--preview">
+              <span class="files__path">{activeFile}</span>
+              <span class="files__meta">{formatBytes(sizes[activeFile])}</span>
+            </div>
+            <div class="files__code">
+              <CodeBlock code={previewText} lang={langFromFilename(activeFile)} label="Preview of {activeFile}" />
+            </div>
+          </div>
+        </div>
+      {:else if result.error}
+        <div class="sx-empty xp__error" role="alert">
+          <span class="sx-empty__icon"><WarningCircleIcon size={20} /></span>
+          <span class="sx-empty__title">The build spec could not be generated</span>
+          <code class="xp__error-msg">{result.error}</code>
+        </div>
+      {/if}
     </section>
   </div>
 
   {#snippet footer()}
-    <button type="button" class="studio-btn" onclick={downloadSvelteKit} disabled={busy} title="Runnable SvelteKit reference implementation">
-      SvelteKit reference app (.zip)
+    <button type="button" class="sx-btn" onclick={downloadSvelteKit} disabled={busy !== null} {@attach tooltip('Runnable SvelteKit reference implementation')}>
+      <StackGlyph id="sveltekit-app" size={18} />
+      {busy === 'app' ? 'Preparing…' : 'SvelteKit app (.zip)'}
+    </button>
+    <button type="button" class="sx-btn" onclick={() => editor.downloadBlueprintJson()} {@attach tooltip('Portable project file (.appviz.json)')}>
+      <StackGlyph id="json" size={18} />
+      Blueprint JSON
     </button>
     <span class="xp__spacer"></span>
-    <button type="button" class="studio-btn" onclick={downloadPrompt} disabled={!result.ok || needsCustom}>Download prompt (.md)</button>
-    <button type="button" class="studio-btn" onclick={copyPrompt} disabled={!result.ok || needsCustom}>
-      {copied ? '✓ Copied' : 'Copy single-file prompt'}
+    {#if needsCustom}<span class="xp__hint">Describe your stack to export.</span>{/if}
+    <button type="button" class="sx-btn" onclick={downloadPrompt} disabled={!canExport}>Download prompt (.md)</button>
+    <button type="button" class="sx-btn xp__copy" onclick={copyPrompt} disabled={!canExport} aria-live="polite">
+      {#if copied}<CheckIcon size={14} weight="bold" /> Copied{:else}<CopyIcon size={14} /> Copy prompt{/if}
     </button>
-    <button type="button" class="studio-btn studio-btn--primary" data-autofocus onclick={downloadZip} disabled={!result.ok || needsCustom || busy}>
-      {busy ? 'Preparing…' : 'Download build spec (.zip)'}
+    <button type="button" class="sx-btn sx-btn--primary" data-autofocus onclick={downloadZip} disabled={!canExport || busy !== null}>
+      <DownloadSimpleIcon size={14} weight="bold" />
+      {busy === 'zip' ? 'Preparing…' : 'Download .zip'}
     </button>
   {/snippet}
 </Dialog>
@@ -255,87 +477,309 @@
 <style>
   .xp {
     display: grid;
-    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-    gap: 1.25rem;
+    grid-template-columns: 404px minmax(0, 1fr);
+    flex: 1;
     min-height: 0;
   }
-  @media (max-width: 960px) {
-    .xp { grid-template-columns: 1fr; }
-  }
-  .xp__config { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
-  .xp__group { display: flex; flex-direction: column; gap: 0.4rem; border: 0; padding: 0; margin: 0; min-width: 0; }
-  .xp__label { font-size: 0.75rem; font-weight: 700; color: var(--md-sys-color-on-surface-variant); text-transform: uppercase; letter-spacing: 0.04em; }
-  .xp__req, .xp__opt { font-weight: 600; text-transform: none; letter-spacing: 0; margin-left: 0.25rem; }
-  .xp__req { color: var(--md-sys-color-error); }
-  .xp__opt { color: var(--md-sys-color-outline); }
-  .xp__stacks { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.5rem; }
-  .xp__stack {
-    position: relative;
+  .xp__config {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
-    padding: 0.65rem 0.75rem;
-    border: 1px solid var(--md-sys-color-outline-variant);
-    border-radius: 14px;
-    background: var(--md-sys-color-surface-container-low);
-    cursor: pointer;
-    transition: border-color 120ms ease, background-color 120ms ease;
+    gap: 16px;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 4px 20px 20px;
+    border-right: 1px solid var(--sx-border);
   }
-  .xp__stack:hover { border-color: var(--md-sys-color-primary); }
-  .xp__stack:focus-within { outline: 2px solid var(--md-sys-color-primary); outline-offset: 2px; }
-  .xp__stack input { position: absolute; opacity: 0; pointer-events: none; }
-  .xp__stack--active { border-color: var(--md-sys-color-primary); background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
-  .xp__stack-name { font-size: 0.8125rem; font-weight: 700; }
-  .xp__stack-tag { font-size: 0.6875rem; opacity: 0.8; }
-  .xp__row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 0.75rem; }
-  .xp__seg { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-  .xp__seg label {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.45rem 0.75rem;
-    border-radius: 9999px;
-    border: 1px solid var(--md-sys-color-outline-variant);
-    font-size: 0.75rem;
+  .xp__label {
+    padding: 12px 0 0;
+    margin-bottom: -8px;
+  }
+  .stacks {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    outline: none;
+  }
+  .stack {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+    padding: 8px 10px 8px 8px;
+    text-align: left;
+    border: 1px solid var(--sx-border);
+    border-radius: var(--sx-radius-md);
+    background: var(--sx-panel);
+    transition:
+      border-color var(--sx-dur) var(--sx-ease),
+      box-shadow var(--sx-dur) var(--sx-ease),
+      background-color var(--sx-dur) var(--sx-ease);
+  }
+  .stack:hover {
+    border-color: var(--sx-border-strong);
+  }
+  .stack--on,
+  .stack--on:hover {
+    border-color: var(--sx-accent);
+    box-shadow: 0 0 0 1px var(--sx-accent);
+    background: var(--sx-accent-soft);
+  }
+  .stack--on :global(.glyph) {
+    color: var(--sx-accent-text);
+    border-color: color-mix(in srgb, var(--sx-accent) 35%, var(--sx-border));
+  }
+  .stack__text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+  .stack__name {
     font-weight: 600;
-    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .xp__seg label:focus-within { outline: 2px solid var(--md-sys-color-primary); outline-offset: 2px; }
-  .xp__seg label.on { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); border-color: transparent; }
-  .xp__seg input { position: absolute; opacity: 0; pointer-events: none; }
-  .xp__stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin: 0; }
-  .xp__stats div { background: var(--md-sys-color-surface-container); border-radius: 12px; padding: 0.5rem 0.65rem; }
-  .xp__stats dt { font-size: 0.6875rem; color: var(--md-sys-color-on-surface-variant); }
-  .xp__stats dd { margin: 0; font-size: 1.125rem; font-weight: 700; }
-  .xp__note { margin: 0; font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); }
-  .xp__error { margin: 0; font-size: 0.8125rem; color: var(--md-sys-color-error); }
-  .xp__howto {
-    font-size: 0.75rem;
-    line-height: 1.5;
-    padding: 0.75rem 0.9rem;
-    border-radius: 14px;
-    background: var(--md-sys-color-surface-container-low);
-    border: 1px dashed var(--md-sys-color-outline-variant);
+  .stack__tag {
+    font-size: var(--sx-text-xs);
+    line-height: 1.35;
+    color: var(--sx-text-2);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: calc(2 * 1.35em);
   }
-  .xp__howto ol { margin: 0.35rem 0; padding-left: 1.1rem; }
-  .xp__howto code { font-family: var(--md-sys-font-mono); background: var(--md-sys-color-surface-container-high); padding: 0 0.3rem; border-radius: 4px; }
-  .xp__preview { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; min-height: 0; }
-  .xp__preview-head { display: flex; align-items: center; gap: 0.5rem; }
-  .xp__preview-head .studio-select { flex: 1; }
-  .xp__code {
-    flex: 1;
-    min-height: 420px;
-    max-height: 56vh;
-    margin: 0;
-    overflow: auto;
-    padding: 0.9rem 1rem;
-    border-radius: 14px;
-    background: var(--md-sys-color-surface-container);
-    border: 1px solid var(--md-sys-color-outline-variant);
-    font-family: var(--md-sys-font-mono);
-    font-size: 0.72rem;
+  .inline-code {
+    font-family: var(--sx-font-mono);
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+  .req,
+  .opt {
+    margin-left: 4px;
+    font-weight: 500;
+    font-size: var(--sx-text-xs);
+  }
+  .req {
+    color: var(--sx-danger);
+  }
+  .opt {
+    color: var(--sx-text-3);
+  }
+  .howto {
+    padding: 12px 14px;
+    font-size: var(--sx-text-sm);
     line-height: 1.55;
-    white-space: pre-wrap;
-    word-break: break-word;
+    color: var(--sx-text-2);
+    border: 1px solid var(--sx-border);
+    border-radius: var(--sx-radius-md);
+    background: var(--sx-subtle);
   }
-  .xp__spacer { flex: 1; }
+  .howto__head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    font-weight: 600;
+    color: var(--sx-text);
+  }
+  .howto ol {
+    padding-left: 18px;
+    list-style: decimal;
+  }
+  .howto code {
+    padding: 0 4px;
+    font-family: var(--sx-font-mono);
+    font-size: var(--sx-text-xs);
+    background: var(--sx-panel);
+    border: 1px solid var(--sx-border);
+    border-radius: 3px;
+  }
+  .howto p {
+    margin-top: 6px;
+    color: var(--sx-text-3);
+  }
+  .xp__out {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    min-width: 0;
+    padding: 16px 20px 20px;
+    background: var(--sx-subtle);
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+    border: 1px solid var(--sx-border);
+    border-radius: var(--sx-radius-md);
+    background: var(--sx-panel);
+  }
+  .stat__num {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat__label {
+    font-size: var(--sx-text-sm);
+    color: var(--sx-text-2);
+  }
+  .note {
+    margin-top: -4px;
+    font-size: var(--sx-text-sm);
+    color: var(--sx-text-2);
+  }
+  .files {
+    display: grid;
+    grid-template-columns: 248px minmax(0, 1fr);
+    flex: 1;
+    min-height: 0;
+    border: 1px solid var(--sx-border);
+    border-radius: var(--sx-radius-md);
+    background: var(--sx-panel);
+    overflow: hidden;
+  }
+  .files__tree {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-right: 1px solid var(--sx-border);
+  }
+  .files__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-shrink: 0;
+    height: 36px;
+    padding: 0 12px;
+    font-size: var(--sx-text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--sx-text-3);
+    border-bottom: 1px solid var(--sx-border);
+  }
+  .files__head--preview {
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .files__path {
+    min-width: 0;
+    font-family: var(--sx-font-mono);
+    font-size: var(--sx-text-sm);
+    font-weight: 500;
+    color: var(--sx-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .files__meta {
+    font-size: var(--sx-text-xs);
+    font-weight: 500;
+    color: var(--sx-text-3);
+    text-transform: none;
+    letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .tree {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 6px;
+  }
+  .tree__row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    height: 26px;
+    padding: 0 6px 0 calc(4px + var(--depth) * 14px);
+    font-size: var(--sx-text-sm);
+    color: var(--sx-text-2);
+    text-align: left;
+    border-radius: var(--sx-radius-xs);
+  }
+  .tree__row:hover {
+    background: var(--sx-hover);
+    color: var(--sx-text);
+  }
+  .tree__row--on,
+  .tree__row--on:hover {
+    background: var(--sx-accent-soft);
+    color: var(--sx-accent-text);
+  }
+  .tree__row--dir {
+    color: var(--sx-text);
+    font-weight: 500;
+  }
+  .tree__name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tree__size {
+    font-size: var(--sx-text-xs);
+    color: var(--sx-text-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .caret {
+    display: grid;
+    place-items: center;
+    width: 10px;
+    flex-shrink: 0;
+    color: var(--sx-text-3);
+    transition: transform var(--sx-dur) var(--sx-ease);
+  }
+  .caret--open {
+    transform: rotate(90deg);
+  }
+  .files__preview {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+  }
+  .files__code {
+    flex: 1;
+    min-height: 0;
+  }
+  .xp__error {
+    flex: 1;
+    justify-content: center;
+  }
+  .xp__error-msg {
+    max-width: 520px;
+    font-family: var(--sx-font-mono);
+    font-size: var(--sx-text-sm);
+    color: var(--sx-danger);
+    white-space: pre-wrap;
+  }
+  .xp__spacer {
+    flex: 1;
+  }
+  .xp__hint {
+    font-size: var(--sx-text-sm);
+    color: var(--sx-danger);
+  }
+  .xp__copy {
+    min-width: 112px;
+  }
 </style>

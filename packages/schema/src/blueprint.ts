@@ -2,10 +2,11 @@ import { z } from 'zod';
 import { DesignTokensSchema } from './tokens.js';
 import { ResponsiveStyleSchema, type ResponsiveStyle } from './styles.js';
 import { InteractionRuleSchema, type InteractionRule } from './interactions.js';
+import { HTML_ID_RE, sanitizeNodeAttributes } from './attributes.js';
 
 /** Current on-disk schema version. Bump together with a step in `migration.ts`. */
-export const CURRENT_SCHEMA_VERSION = '1.1.0' as const;
-export const SUPPORTED_SCHEMA_VERSIONS = ['1.0.0', '1.1.0'] as const;
+export const CURRENT_SCHEMA_VERSION = '1.2.0' as const;
+export const SUPPORTED_SCHEMA_VERSIONS = ['1.0.0', '1.1.0', '1.2.0'] as const;
 
 /**
  * Identifier format. `z.guid()` accepts any 8-4-4-4-12 hex identifier, which keeps every
@@ -23,6 +24,11 @@ export const MotionEffectsSchema = z.object({
     .enum(['none', 'fadeIn', 'fadeInUp', 'fadeInDown', 'zoomIn', 'slideInLeft', 'slideInRight'])
     .default('none'),
   animationDuration: z.enum(['fast', 'normal', 'slow']).default('normal'),
+  /** `scroll`: the entrance animation plays as the element enters the viewport (CSS view timeline). */
+  entranceTrigger: z.enum(['load', 'scroll']).default('scroll'),
+  /** Scroll-linked effect driven by the element's position in the viewport (CSS view timeline). */
+  scrollEffect: z.enum(['none', 'parallax', 'fade', 'scale', 'blur', 'rotate']).default('none'),
+  scrollIntensity: z.enum(['subtle', 'medium', 'strong']).default('medium'),
   hoverTransform: z.enum(['none', 'lift', 'scale', 'glow', 'tilt']).default('none'),
   sticky: z.enum(['none', 'top', 'bottom']).default('none'),
   hideOnDesktop: z.boolean().default(false),
@@ -50,6 +56,10 @@ export interface BlueprintNode {
   customClasses: string;
   customCss: string;
   motionEffects?: MotionEffects;
+  /** HTML id on the rendered root ("CSS ID"), e.g. `pricing` so `#pricing` links scroll to it. */
+  htmlId?: string;
+  /** Allow-listed custom attributes on the rendered root (`data-*`, `aria-*`, role, title…). */
+  attributes?: Record<string, string>;
 }
 
 /** Input shape accepted before parsing: every defaulted field is optional. */
@@ -67,6 +77,8 @@ export interface BlueprintNodeInput {
   customClasses?: string;
   customCss?: string;
   motionEffects?: z.input<typeof MotionEffectsSchema>;
+  htmlId?: string;
+  attributes?: Record<string, string>;
 }
 
 export const BlueprintNodeSchema: z.ZodType<BlueprintNode, BlueprintNodeInput> = z.lazy(() =>
@@ -83,7 +95,19 @@ export const BlueprintNodeSchema: z.ZodType<BlueprintNode, BlueprintNodeInput> =
     hidden: z.boolean().default(false),
     customClasses: z.string().default(''),
     customCss: z.string().default(''),
-    motionEffects: MotionEffectsSchema.optional()
+    motionEffects: MotionEffectsSchema.optional(),
+    // Invalid ids / attributes are dropped on load (the inspector rejects them at input time),
+    // so a hand-edited blueprint can never inject markup and old projects always open.
+    htmlId: z.string().regex(HTML_ID_RE).optional().catch(undefined),
+    attributes: z
+      .record(z.string(), z.string())
+      .optional()
+      .catch(undefined)
+      .transform((value) => {
+        if (value === undefined) return undefined;
+        const clean = sanitizeNodeAttributes(value);
+        return Object.keys(clean).length > 0 ? clean : undefined;
+      })
   })
 );
 

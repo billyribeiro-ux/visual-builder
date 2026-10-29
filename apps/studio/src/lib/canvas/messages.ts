@@ -61,7 +61,24 @@ export const KEY_SHORTCUTS = [
   'escape',
   'command-palette',
   'move-up',
-  'move-down'
+  'move-down',
+  'select-parent',
+  'select-child',
+  'select-next',
+  'select-prev',
+  'toggle-preview',
+  'zoom-fit',
+  'zoom-100',
+  'zoom-in',
+  'zoom-out',
+  'show-shortcuts',
+  'save',
+  'export',
+  'panel-elements',
+  'panel-layers',
+  'panel-pages',
+  'panel-assets',
+  'panel-styles'
 ] as const;
 export type KeyShortcut = (typeof KEY_SHORTCUTS)[number];
 
@@ -73,6 +90,9 @@ export type DropPosition = (typeof DROP_POSITIONS)[number];
 /* ------------------------------------------------------------------------------------------ */
 
 const NodeId = z.string().min(1).max(128);
+
+/** Prop-path segments that could reach object prototypes in a nested-path writer. */
+const FORBIDDEN_PATH_SEGMENTS: ReadonlySet<string> = new Set(['__proto__', 'prototype', 'constructor']);
 
 export const ParentToPreviewSchema = z.discriminatedUnion('type', [
   z.object({
@@ -86,7 +106,9 @@ export const ParentToPreviewSchema = z.discriminatedUnion('type', [
     activePageId: z.string(),
     selectedNodeId: z.string().nullable(),
     isInteractiveMode: z.boolean(),
-    activeBreakpoint: z.enum(BREAKPOINTS)
+    activeBreakpoint: z.enum(BREAKPOINTS),
+    /** Optional: node hovered in the studio (e.g. in the layers panel); outlined on the canvas. */
+    hoverNodeId: z.string().nullable().optional()
   })
 ]);
 export type ParentToPreviewMessage = z.infer<typeof ParentToPreviewSchema>;
@@ -102,9 +124,20 @@ export const PreviewToParentSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('INLINE_PROP_EDIT'),
     nodeId: NodeId,
-    propKey: z.string().min(1).max(128),
+    /**
+     * Prop path written by the edit: a top-level key (`title`) or a dot path into array/object
+     * props (`features.0.title`, `columns.1.links.0.label`), exactly as the element's `data-prop`.
+     */
+    propKey: z
+      .string()
+      .min(1)
+      .max(128)
+      .regex(/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)*$/)
+      .refine((path) => !path.split('.').some((segment) => FORBIDDEN_PATH_SEGMENTS.has(segment)), {
+        message: 'Forbidden prop path segment'
+      }),
     value: z.string().max(20_000),
-    /** `true` for the committed value sent on blur. */
+    /** `true` for a committed value (Enter / blur). The canvas only sends committed values. */
     final: z.boolean().optional()
   }),
   z.object({
