@@ -1,0 +1,795 @@
+/* ==========================================================================
+   App Viz SITE runtime — design tokens, scoped reset and shared primitives.
+   Pure vanilla CSS, no framework.
+
+   Shared verbatim by the studio canvas (/preview iframe) and every exported
+   SvelteKit app (inlined into src/app.css). Everything here is scoped under
+   `.site-root` so it can never leak into editor chrome:
+
+   - defaults live on `:where(.site-root)` (zero specificity) so project tokens
+     compiled onto `.site-root` always win, whatever the stylesheet order;
+   - reset + base typography use `:where()` so a component's scoped styles
+     always beat them;
+   - shared primitives (`.md-*`) are single-class selectors under a
+     zero-specificity scope, so scoped component styles win ties;
+   - node styles compiled from the blueprint are `[data-node-id]` rules with
+     `!important` and therefore beat everything below.
+
+   The token defaults below mirror `packages/schema/src/tokens.ts` exactly
+   (a unit test keeps them in sync). Variables marked "runtime" are not
+   project tokens: they derive from tokens and are safe to use everywhere.
+
+   Component-specific CSS lives in each component's scoped <style>.
+   ========================================================================== */
+
+:where(.site-root) {
+  /* Color roles (Neutral light theme; overridden by project tokens) */
+  --md-sys-color-primary: #4F46E5;
+  --md-sys-color-on-primary: #FFFFFF;
+  --md-sys-color-primary-container: #EEF2FF;
+  --md-sys-color-on-primary-container: #3730A3;
+  --md-sys-color-primary-hover: #4338CA;
+  --md-sys-color-secondary: #0F172A;
+  --md-sys-color-on-secondary: #FFFFFF;
+  --md-sys-color-secondary-container: #F1F5F9;
+  --md-sys-color-on-secondary-container: #0F172A;
+  --md-sys-color-secondary-hover: #1E293B;
+  --md-sys-color-tertiary: #0F766E;
+  --md-sys-color-on-tertiary: #FFFFFF;
+  --md-sys-color-tertiary-container: #CCFBF1;
+  --md-sys-color-on-tertiary-container: #134E4A;
+  --md-sys-color-surface: #FFFFFF;
+  --md-sys-color-on-surface: #0F172A;
+  --md-sys-color-surface-dim: #E2E8F0;
+  --md-sys-color-surface-bright: #FFFFFF;
+  --md-sys-color-surface-variant: #F1F5F9;
+  --md-sys-color-on-surface-variant: #475569;
+  --md-sys-color-surface-container-lowest: #FFFFFF;
+  --md-sys-color-surface-container-low: #F8FAFC;
+  --md-sys-color-surface-container: #F1F5F9;
+  --md-sys-color-surface-container-high: #E9EEF5;
+  --md-sys-color-surface-container-highest: #E2E8F0;
+  --md-sys-color-outline: #CBD5E1;
+  --md-sys-color-outline-variant: #E2E8F0;
+  --md-sys-color-outline-strong: #828DA1;
+  --md-sys-color-inverse-surface: #0F172A;
+  --md-sys-color-inverse-on-surface: #F8FAFC;
+  --md-sys-color-inverse-primary: #A5B4FC;
+  --md-sys-color-error: #DC2626;
+  --md-sys-color-on-error: #FFFFFF;
+  --md-sys-color-error-container: #FEF2F2;
+  --md-sys-color-on-error-container: #991B1B;
+  --md-sys-color-success: #15803D;
+  --md-sys-color-on-success: #FFFFFF;
+  --md-sys-color-success-container: #F0FDF4;
+  --md-sys-color-on-success-container: #166534;
+  --md-sys-color-warning: #B45309;
+  --md-sys-color-on-warning: #FFFFFF;
+  --md-sys-color-warning-container: #FFFBEB;
+  --md-sys-color-on-warning-container: #92400E;
+
+  /* Typography families */
+  --md-sys-font-heading: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --md-sys-font-body: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --md-sys-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Shape (corner radius): 6 / 10 / 14 / 20 + full */
+  --md-sys-shape-corner-none: 0px;
+  --md-sys-shape-corner-extra-small: 4px;
+  --md-sys-shape-corner-small: 6px;
+  --md-sys-shape-corner-medium: 10px;
+  --md-sys-shape-corner-large: 14px;
+  --md-sys-shape-corner-extra-large: 20px;
+  --md-sys-shape-corner-full: 9999px;
+  --md-sys-shape-corner-sm: 6px;
+  --md-sys-shape-corner-md: 10px;
+  --md-sys-shape-corner-lg: 14px;
+  --md-sys-shape-corner-xl: 20px;
+
+  /* Elevation: soft, layered, slate-tinted */
+  --md-sys-elevation-level0: none;
+  --md-sys-elevation-level1: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --md-sys-elevation-level2: 0 1px 3px 0 rgba(15, 23, 42, 0.07), 0 1px 2px -1px rgba(15, 23, 42, 0.05);
+  --md-sys-elevation-level3: 0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+  --md-sys-elevation-level4: 0 12px 28px -6px rgba(15, 23, 42, 0.12), 0 4px 8px -4px rgba(15, 23, 42, 0.06);
+  --md-sys-elevation-level5: 0 24px 56px -12px rgba(15, 23, 42, 0.22), 0 8px 16px -8px rgba(15, 23, 42, 0.08);
+
+  /* Spacing scale */
+  --md-sys-spacing-xs: 4px;
+  --md-sys-spacing-sm: 8px;
+  --md-sys-spacing-md: 16px;
+  --md-sys-spacing-lg: 24px;
+  --md-sys-spacing-xl: 32px;
+  --md-sys-spacing-2xl: 48px;
+  --md-sys-spacing-3xl: 64px;
+  --md-sys-spacing-4xl: 96px;
+
+  /* Motion */
+  --md-sys-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --md-sys-motion-duration-short: 150ms;
+  --md-sys-motion-duration-medium: 300ms;
+
+  /* ---- runtime (derived, not project tokens) ---------------------------- */
+  --md-sys-motion-easing-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+  --md-sys-motion-duration-long: 500ms;
+
+  /* Fluid type scale (375px → 1440px viewport) */
+  --md-sys-font-size-display: clamp(2.5rem, 1.75rem + 3.2vw, 4.5rem);
+  --md-sys-font-size-h1: clamp(2.25rem, 1.65rem + 2.4vw, 3.75rem);
+  --md-sys-font-size-h2: clamp(1.875rem, 1.5rem + 1.6vw, 2.75rem);
+  --md-sys-font-size-h3: clamp(1.375rem, 1.2rem + 0.75vw, 1.75rem);
+  --md-sys-font-size-h4: 1.25rem;
+  --md-sys-font-size-h5: 1.125rem;
+  --md-sys-font-size-h6: 1rem;
+  --md-sys-font-size-lead: clamp(1.0625rem, 1rem + 0.3vw, 1.25rem);
+  --md-sys-font-size-body: 1rem;
+  --md-sys-font-size-small: 0.875rem;
+  --md-sys-font-size-caption: 0.75rem;
+  --md-sys-tracking-tighter: -0.035em;
+  --md-sys-tracking-tight: -0.022em;
+  --md-sys-tracking-snug: -0.011em;
+  --md-sys-tracking-wide: 0.06em;
+
+  /* Layout rhythm */
+  --md-sys-container-padding: 1.25rem;
+  --md-sys-section-space: 4rem;
+
+  /* Focus ring (box-shadow form; outlines use the primary color directly) */
+  --md-sys-focus-ring: 0 0 0 3px color-mix(in srgb, var(--md-sys-color-primary) 28%, transparent);
+}
+
+@media (min-width: 640px) {
+  :where(.site-root) {
+    --md-sys-container-padding: 1.5rem;
+  }
+}
+@media (min-width: 768px) {
+  :where(.site-root) {
+    --md-sys-section-space: 5rem;
+  }
+}
+@media (min-width: 1024px) {
+  :where(.site-root) {
+    --md-sys-container-padding: 2rem;
+    --md-sys-section-space: 6rem;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Root surface, reset and base typography (all zero-specificity)
+   -------------------------------------------------------------------------- */
+:where(.site-root) {
+  min-height: 100vh;
+  font-family: var(--md-sys-font-body);
+  font-size: var(--md-sys-font-size-body);
+  background-color: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+:where(.site-root),
+:where(.site-root) *,
+:where(.site-root) *::before,
+:where(.site-root) *::after {
+  box-sizing: border-box;
+}
+
+:where(.site-root) * {
+  margin: 0;
+  padding: 0;
+}
+
+:where(.site-root) :where(h1, h2, h3, h4, h5, h6) {
+  font-family: var(--md-sys-font-heading);
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: var(--md-sys-tracking-tight);
+  text-wrap: balance;
+}
+
+:where(.site-root) :where(p, li, figcaption, blockquote) {
+  text-wrap: pretty;
+}
+
+:where(.site-root) :where(a) {
+  color: inherit;
+  text-decoration: none;
+}
+
+:where(.site-root) :where(button) {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+:where(.site-root) :where(input, textarea, select) {
+  font: inherit;
+  color: inherit;
+}
+
+:where(.site-root) :where(img, svg, video) {
+  display: block;
+  max-width: 100%;
+}
+
+:where(.site-root) :where(code, kbd, samp, pre) {
+  font-family: var(--md-sys-font-mono);
+  font-size: 0.9em;
+}
+
+:where(.site-root) :where(:focus-visible) {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
+:where(.site-root) ::selection {
+  background-color: color-mix(in srgb, var(--md-sys-color-primary) 20%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+   Typography scale
+   New semantic helpers (.md-display, .md-h1 … .md-h6, .md-lead, .md-body,
+   .md-small, .md-caption) plus the legacy role names kept for compatibility.
+   -------------------------------------------------------------------------- */
+:where(.site-root) .md-display { font-family: var(--md-sys-font-heading); font-size: var(--md-sys-font-size-display); line-height: 1.04; font-weight: 700; letter-spacing: var(--md-sys-tracking-tighter); text-wrap: balance; }
+:where(.site-root) .md-h1 { font-family: var(--md-sys-font-heading); font-size: var(--md-sys-font-size-h1); line-height: 1.08; font-weight: 700; letter-spacing: var(--md-sys-tracking-tighter); text-wrap: balance; }
+:where(.site-root) .md-h2 { font-family: var(--md-sys-font-heading); font-size: var(--md-sys-font-size-h2); line-height: 1.12; font-weight: 650; letter-spacing: var(--md-sys-tracking-tight); text-wrap: balance; }
+:where(.site-root) .md-h3 { font-family: var(--md-sys-font-heading); font-size: var(--md-sys-font-size-h3); line-height: 1.25; font-weight: 600; letter-spacing: var(--md-sys-tracking-tight); }
+:where(.site-root) .md-h4 { font-family: var(--md-sys-font-heading); font-size: var(--md-sys-font-size-h4); line-height: 1.35; font-weight: 600; letter-spacing: var(--md-sys-tracking-snug); }
+:where(.site-root) .md-h5 { font-family: var(--md-sys-font-heading); font-size: var(--md-sys-font-size-h5); line-height: 1.4; font-weight: 600; letter-spacing: var(--md-sys-tracking-snug); }
+:where(.site-root) .md-h6 { font-family: var(--md-sys-font-heading); font-size: var(--md-sys-font-size-h6); line-height: 1.5; font-weight: 600; letter-spacing: 0; }
+:where(.site-root) .md-lead { font-family: var(--md-sys-font-body); font-size: var(--md-sys-font-size-lead); line-height: 1.6; font-weight: 400; color: var(--md-sys-color-on-surface-variant); }
+:where(.site-root) .md-body { font-family: var(--md-sys-font-body); font-size: var(--md-sys-font-size-body); line-height: 1.6; font-weight: 400; }
+:where(.site-root) .md-small { font-family: var(--md-sys-font-body); font-size: var(--md-sys-font-size-small); line-height: 1.55; font-weight: 400; }
+:where(.site-root) .md-caption { font-family: var(--md-sys-font-body); font-size: var(--md-sys-font-size-caption); line-height: 1.5; font-weight: 500; }
+:where(.site-root) .md-text-muted { color: var(--md-sys-color-on-surface-variant); }
+:where(.site-root) .md-mono { font-family: var(--md-sys-font-mono); }
+
+:where(.site-root) .md-display-medium { font-family: var(--md-sys-font-heading); font-size: clamp(2.25rem, 1.8rem + 1.6vw, 3rem); line-height: 1.08; font-weight: 700; letter-spacing: var(--md-sys-tracking-tighter); }
+:where(.site-root) .md-headline-large { font-family: var(--md-sys-font-heading); font-size: clamp(1.75rem, 1.45rem + 1.1vw, 2.25rem); line-height: 1.15; font-weight: 650; letter-spacing: var(--md-sys-tracking-tight); }
+:where(.site-root) .md-headline-medium { font-family: var(--md-sys-font-heading); font-size: clamp(1.5rem, 1.35rem + 0.6vw, 1.875rem); line-height: 1.2; font-weight: 650; letter-spacing: var(--md-sys-tracking-tight); }
+:where(.site-root) .md-headline-small { font-family: var(--md-sys-font-heading); font-size: 1.5rem; line-height: 1.25; font-weight: 600; letter-spacing: var(--md-sys-tracking-tight); }
+:where(.site-root) .md-title-large { font-family: var(--md-sys-font-heading); font-size: 1.25rem; line-height: 1.4; font-weight: 600; letter-spacing: var(--md-sys-tracking-snug); }
+:where(.site-root) .md-title-medium { font-family: var(--md-sys-font-heading); font-size: 1rem; line-height: 1.5; font-weight: 600; letter-spacing: -0.006em; }
+:where(.site-root) .md-body-large { font-family: var(--md-sys-font-body); font-size: 1rem; line-height: 1.6; font-weight: 400; }
+:where(.site-root) .md-body-medium { font-family: var(--md-sys-font-body); font-size: 0.875rem; line-height: 1.55; font-weight: 400; }
+:where(.site-root) .md-label-large { font-family: var(--md-sys-font-body); font-size: 0.875rem; line-height: 1.25rem; font-weight: 500; letter-spacing: 0; }
+:where(.site-root) .md-label-medium { font-family: var(--md-sys-font-body); font-size: 0.75rem; line-height: 1rem; font-weight: 500; letter-spacing: 0.01em; }
+
+/* Section eyebrow: short sentence-case label in the primary color above a heading. */
+:where(.site-root) .md-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--md-sys-font-body);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--md-sys-color-primary);
+}
+/* Soft pill variant (hero badges, announcement chips). */
+:where(.site-root) .md-eyebrow--pill {
+  height: 1.75rem;
+  padding: 0 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-primary) 22%, var(--md-sys-color-outline-variant));
+  border-radius: var(--md-sys-shape-corner-full, 9999px);
+  background-color: color-mix(in srgb, var(--md-sys-color-primary-container) 70%, var(--md-sys-color-surface));
+  color: var(--md-sys-color-on-primary-container);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+/* Uppercase overline (dense UIs, footers, table groups). */
+:where(.site-root) .md-overline {
+  font-family: var(--md-sys-font-body);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--md-sys-tracking-wide);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* --------------------------------------------------------------------------
+   Layout primitives
+   -------------------------------------------------------------------------- */
+:where(.site-root) .md-container {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: var(--md-sys-container-padding, 1.5rem);
+  padding-right: var(--md-sys-container-padding, 1.5rem);
+}
+:where(.site-root) .md-container--sm { max-width: 640px; }
+:where(.site-root) .md-container--md { max-width: 768px; }
+:where(.site-root) .md-container--lg { max-width: 1024px; }
+:where(.site-root) .md-container--xl { max-width: 1280px; }
+:where(.site-root) .md-container--2xl { max-width: 1536px; }
+/* Full width: edge to edge with no side padding (page roots, full-bleed bands). */
+:where(.site-root) .md-container--full { max-width: 100%; padding-left: 0; padding-right: 0; }
+
+/* Vertical section rhythm: 64px mobile, 80px tablet, 96px desktop. */
+:where(.site-root) .md-section {
+  padding-top: var(--md-sys-section-space, 6rem);
+  padding-bottom: var(--md-sys-section-space, 6rem);
+}
+
+/* Centered section header: eyebrow + title + description. */
+:where(.site-root) .md-section-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.875rem;
+  max-width: 44rem;
+  margin: 0 auto 3.5rem auto;
+  text-align: center;
+}
+:where(.site-root) .md-section-header--left {
+  align-items: flex-start;
+  margin-left: 0;
+  text-align: left;
+}
+:where(.site-root) .md-section-title {
+  font-family: var(--md-sys-font-heading);
+  font-size: var(--md-sys-font-size-h2);
+  line-height: 1.12;
+  font-weight: 650;
+  letter-spacing: var(--md-sys-tracking-tight);
+  color: var(--md-sys-color-on-surface);
+  text-wrap: balance;
+}
+:where(.site-root) .md-section-description {
+  font-size: var(--md-sys-font-size-lead);
+  line-height: 1.6;
+  color: var(--md-sys-color-on-surface-variant);
+  text-wrap: pretty;
+}
+
+/* Screen-reader-only text. */
+:where(.site-root) .md-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   Buttons: sm 40px / md 44px / lg 48px, 10px radius (theme `medium`).
+   Variants: filled (primary), tonal (neutral), outlined, text (= ghost),
+   on-primary / on-primary-outlined (for primary-colored bands).
+   -------------------------------------------------------------------------- */
+:where(.site-root) .md-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 44px;
+  padding: 0 1.125rem;
+  border: 1px solid transparent;
+  border-radius: var(--md-sys-shape-corner-medium, 10px);
+  font-family: var(--md-sys-font-body);
+  font-size: 0.9375rem;
+  font-weight: 550;
+  line-height: 1;
+  letter-spacing: -0.006em;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard),
+    border-color var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard),
+    color var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard),
+    box-shadow var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard),
+    transform var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard);
+}
+:where(.site-root) .md-btn:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+:where(.site-root) .md-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+:where(.site-root) .md-btn:disabled,
+:where(.site-root) .md-btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+:where(.site-root) .md-btn--sm { height: 40px; padding: 0 0.875rem; font-size: 0.875rem; gap: 0.375rem; }
+:where(.site-root) .md-btn--md { height: 44px; padding: 0 1.125rem; font-size: 0.9375rem; }
+:where(.site-root) .md-btn--lg { height: 48px; padding: 0 1.375rem; font-size: 1rem; }
+:where(.site-root) .md-btn--block { width: 100%; }
+:where(.site-root) .md-btn--icon { padding: 0; aspect-ratio: 1; }
+
+:where(.site-root) .md-btn--filled {
+  background-color: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  border-color: color-mix(in srgb, var(--md-sys-color-primary) 82%, #000000);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 1px 2px rgba(15, 23, 42, 0.14);
+}
+:where(.site-root) .md-btn--filled:hover:not(:disabled) {
+  background-color: var(--md-sys-color-primary-hover, var(--md-sys-color-primary));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 2px 6px -1px color-mix(in srgb, var(--md-sys-color-primary) 40%, transparent);
+}
+:where(.site-root) .md-btn--tonal {
+  background-color: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+:where(.site-root) .md-btn--tonal:hover:not(:disabled) {
+  background-color: var(--md-sys-color-surface-container-high);
+}
+:where(.site-root) .md-btn--outlined {
+  background-color: var(--md-sys-color-surface-container-lowest);
+  color: var(--md-sys-color-on-surface);
+  border-color: var(--md-sys-color-outline);
+  box-shadow: var(--md-sys-elevation-level1);
+}
+:where(.site-root) .md-btn--outlined:hover:not(:disabled) {
+  background-color: var(--md-sys-color-surface-container-low);
+  border-color: var(--md-sys-color-outline-strong, var(--md-sys-color-outline));
+}
+:where(.site-root) .md-btn--text,
+:where(.site-root) .md-btn--ghost {
+  background-color: transparent;
+  color: var(--md-sys-color-on-surface);
+}
+:where(.site-root) .md-btn--text:hover:not(:disabled),
+:where(.site-root) .md-btn--ghost:hover:not(:disabled) {
+  background-color: var(--md-sys-color-surface-container);
+}
+:where(.site-root) .md-btn--on-primary {
+  background-color: var(--md-sys-color-on-primary);
+  color: var(--md-sys-color-primary);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+}
+:where(.site-root) .md-btn--on-primary:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--md-sys-color-on-primary) 90%, var(--md-sys-color-primary));
+}
+:where(.site-root) .md-btn--on-primary:focus-visible,
+:where(.site-root) .md-btn--on-primary-outlined:focus-visible {
+  outline-color: var(--md-sys-color-on-primary);
+}
+:where(.site-root) .md-btn--on-primary-outlined {
+  background-color: transparent;
+  color: var(--md-sys-color-on-primary);
+  border-color: color-mix(in srgb, var(--md-sys-color-on-primary) 40%, transparent);
+}
+:where(.site-root) .md-btn--on-primary-outlined:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--md-sys-color-on-primary) 12%, transparent);
+  border-color: color-mix(in srgb, var(--md-sys-color-on-primary) 65%, transparent);
+}
+
+/* Inline text link. */
+:where(.site-root) .md-link {
+  color: var(--md-sys-color-primary);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--md-sys-color-primary) 35%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard);
+}
+:where(.site-root) .md-link:hover {
+  text-decoration-color: currentColor;
+}
+
+/* --------------------------------------------------------------------------
+   Badges: soft pills. Default is neutral; tone modifiers are additive.
+   -------------------------------------------------------------------------- */
+:where(.site-root) .md-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 1.5rem;
+  padding: 0 0.625rem;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-corner-full, 9999px);
+  font-family: var(--md-sys-font-body);
+  font-size: 0.75rem;
+  line-height: 1;
+  font-weight: 550;
+  white-space: nowrap;
+  background-color: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+:where(.site-root) .md-badge--primary {
+  background-color: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  border-color: color-mix(in srgb, var(--md-sys-color-primary) 20%, transparent);
+}
+:where(.site-root) .md-badge--success {
+  background-color: var(--md-sys-color-success-container);
+  color: var(--md-sys-color-on-success-container);
+  border-color: color-mix(in srgb, var(--md-sys-color-success) 22%, transparent);
+}
+:where(.site-root) .md-badge--warning {
+  background-color: var(--md-sys-color-warning-container);
+  color: var(--md-sys-color-on-warning-container);
+  border-color: color-mix(in srgb, var(--md-sys-color-warning) 24%, transparent);
+}
+:where(.site-root) .md-badge--error {
+  background-color: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
+  border-color: color-mix(in srgb, var(--md-sys-color-error) 22%, transparent);
+}
+/* Status dot inside a badge: <span class="md-badge md-badge--success"><span class="md-dot"></span>Live</span> */
+:where(.site-root) .md-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background-color: currentColor;
+}
+
+/* --------------------------------------------------------------------------
+   Cards: 1px hairline border, 14px radius, optional soft shadow.
+   -------------------------------------------------------------------------- */
+:where(.site-root) .md-card {
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-corner-large, 14px);
+  padding: 1.5rem;
+  background-color: var(--md-sys-color-surface-container-lowest);
+  color: var(--md-sys-color-on-surface);
+}
+:where(.site-root) .md-card--elevated {
+  box-shadow: var(--md-sys-elevation-level2);
+}
+:where(.site-root) .md-card--filled {
+  background-color: var(--md-sys-color-surface-container-low);
+  border-color: transparent;
+}
+:where(.site-root) .md-card--outlined {
+  background-color: var(--md-sys-color-surface-container-lowest);
+  border-color: var(--md-sys-color-outline-variant);
+}
+/* Opt-in hover lift for clickable cards. */
+:where(.site-root) .md-card--interactive {
+  transition:
+    transform var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized),
+    box-shadow var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized),
+    border-color var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
+}
+:where(.site-root) .md-card--interactive:hover {
+  transform: translateY(-2px);
+  border-color: var(--md-sys-color-outline);
+  box-shadow: var(--md-sys-elevation-level3);
+}
+
+/* Icon tile: rounded square holding an <Icon>. */
+:where(.site-root) .md-icon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-primary) 16%, transparent);
+  border-radius: var(--md-sys-shape-corner-medium, 10px);
+  background-color: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-primary);
+}
+:where(.site-root) .md-icon-tile--lg {
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--md-sys-shape-corner-large, 14px);
+}
+
+/* Initials avatar. */
+:where(.site-root) .md-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  background-color: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+/* --------------------------------------------------------------------------
+   Form fields: 44px controls, accessible 3:1 border, clear focus, error state.
+   -------------------------------------------------------------------------- */
+:where(.site-root) .md-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+:where(.site-root) .md-field-label {
+  display: block;
+  margin-bottom: 0.375rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 550;
+  letter-spacing: 0;
+  color: var(--md-sys-color-on-surface);
+}
+:where(.site-root) .md-field .md-field-label {
+  margin-bottom: 0;
+}
+:where(.site-root) .md-field-hint {
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
+:where(.site-root) .md-field-error {
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  color: var(--md-sys-color-error);
+}
+
+:where(.site-root) .md-input {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.625rem 0.875rem;
+  font-family: var(--md-sys-font-body);
+  font-size: 1rem;
+  line-height: 1.5;
+  border-radius: var(--md-sys-shape-corner-medium, 10px);
+  border: 1px solid var(--md-sys-color-outline-strong, var(--md-sys-color-outline));
+  background-color: var(--md-sys-color-surface-container-lowest);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: var(--md-sys-elevation-level1);
+  outline: none;
+  appearance: none;
+  transition:
+    border-color var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard),
+    box-shadow var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard);
+}
+:where(.site-root) .md-input::placeholder {
+  color: color-mix(in srgb, var(--md-sys-color-on-surface-variant) 75%, transparent);
+  opacity: 1;
+}
+:where(.site-root) .md-input:hover:not(:disabled):not(:focus) {
+  border-color: var(--md-sys-color-on-surface-variant);
+}
+:where(.site-root) .md-input:focus,
+:where(.site-root) .md-input:focus-visible {
+  border-color: var(--md-sys-color-primary);
+  box-shadow: var(--md-sys-focus-ring);
+  outline: none;
+}
+:where(.site-root) .md-input:disabled {
+  background-color: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: not-allowed;
+}
+:where(.site-root) .md-input[aria-invalid="true"],
+:where(.site-root) .md-input--error {
+  border-color: var(--md-sys-color-error);
+}
+:where(.site-root) .md-input[aria-invalid="true"]:focus,
+:where(.site-root) .md-input--error:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--md-sys-color-error) 22%, transparent);
+}
+:where(.site-root) textarea.md-input {
+  min-height: 7.5rem;
+  resize: vertical;
+}
+:where(.site-root) .md-select {
+  padding-right: 2.5rem;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 1.125rem) 52%,
+    calc(100% - 0.8125rem) 52%;
+  background-size: 0.3125rem 0.3125rem;
+  background-repeat: no-repeat;
+}
+:where(.site-root) .md-checkbox {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  accent-color: var(--md-sys-color-primary);
+  cursor: pointer;
+}
+@media (min-width: 768px) {
+  :where(.site-root) .md-input {
+    font-size: 0.9375rem;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Tables: clean rows, hairline separators, no zebra striping.
+   -------------------------------------------------------------------------- */
+:where(.site-root) .md-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+:where(.site-root) .md-table th {
+  padding: 0.625rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+  color: var(--md-sys-color-on-surface-variant);
+  background-color: var(--md-sys-color-surface-container-low);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  white-space: nowrap;
+}
+:where(.site-root) .md-table td {
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  color: var(--md-sys-color-on-surface);
+}
+:where(.site-root) .md-table tbody tr:last-child td {
+  border-bottom: none;
+}
+:where(.site-root) .md-table tbody tr:hover td {
+  background-color: var(--md-sys-color-surface-container-low);
+}
+
+/* --------------------------------------------------------------------------
+   Atomic utility classes (node `customClasses`)
+   -------------------------------------------------------------------------- */
+:where(.site-root) .el-glass {
+  background: color-mix(in srgb, var(--md-sys-color-surface, #FFFFFF) 72%, transparent) !important;
+  backdrop-filter: blur(16px);
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-primary, #4F46E5) 16%, transparent) !important;
+}
+:where(.site-root) .el-gradient-border {
+  border: 2px solid var(--md-sys-color-primary, #4F46E5) !important;
+  border-radius: 16px !important;
+}
+:where(.site-root) .el-shadow-float {
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.12) !important;
+}
+:where(.site-root) .el-surface-tint {
+  background-color: var(--md-sys-color-primary-container, #EEF2FF) !important;
+  color: var(--md-sys-color-on-primary-container, #3730A3) !important;
+}
+:where(.site-root) .el-border-glow {
+  box-shadow: 0 0 0 1px var(--md-sys-color-primary, #4F46E5), 0 8px 24px color-mix(in srgb, var(--md-sys-color-primary, #4F46E5) 15%, transparent) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Entrance animations (referenced by compiled node styles: `animation: el-<name> …`)
+   -------------------------------------------------------------------------- */
+@keyframes el-fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes el-fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes el-fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes el-zoomIn { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
+@keyframes el-slideInLeft { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes el-slideInRight { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: translateX(0); } }
+
+/* --------------------------------------------------------------------------
+   Reduced motion: component transitions/animations collapse to ~0ms.
+   (Node-level entrance animations and hover transforms are disabled by the
+   compiled node stylesheet's own prefers-reduced-motion block.)
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  :where(.site-root) *,
+  :where(.site-root) *::before,
+  :where(.site-root) *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  :where(.site-root) .md-card--interactive:hover,
+  :where(.site-root) .md-btn:active:not(:disabled) {
+    transform: none;
+  }
+}

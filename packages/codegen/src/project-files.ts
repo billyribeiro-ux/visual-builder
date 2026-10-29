@@ -1,4 +1,5 @@
 import type { ProjectBlueprint } from '@app-viz/schema';
+import { googleFontsHref } from '@app-viz/engine';
 
 /** npm package names: lowercase, url-safe, max 214 chars. */
 function toPackageName(slug: unknown): string {
@@ -39,7 +40,7 @@ export function generatePackageJson(blueprint: ProjectBlueprint): string {
       '#lib/*': './src/lib/*'
     },
     // The generated app ships zero runtime dependencies: every component is
-    // plain Svelte 5 + vanilla MD3 CSS. Toolchain pinned 2026-10-28.
+    // plain Svelte 5 + vanilla CSS design tokens. Toolchain pinned 2026-10-28.
     dependencies: {},
     devDependencies: {
       '@sveltejs/adapter-auto': '^8.0.0',
@@ -66,7 +67,7 @@ export function generateViteConfig(): string {
 import adapter from '@sveltejs/adapter-auto';
 import { defineConfig } from 'vite';
 
-// SvelteKit 3 configuration with pure Vanilla CSS (Google MD3 Design System)
+// SvelteKit 3 configuration — vanilla CSS with design tokens, no CSS framework
 export default defineConfig({
   plugins: [
     sveltekit({
@@ -103,14 +104,23 @@ export function generateTsConfig(): string {
 }
 
 export function generateAppHtml(blueprint: ProjectBlueprint): string {
+  // Same font URL the studio canvas loads for these tokens (see googleFontsHref), so text renders
+  // identically. Families outside the allowlist fall back to their CSS stack without a request.
+  const fontsHref = googleFontsHref(blueprint.tokens?.fonts);
+  const fontLinks = fontsHref
+    ? `
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link rel="stylesheet" href="${escapeHtml(fontsHref)}" />`
+    : '';
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(blueprint.meta.name)}</title>
-    <meta name="description" content="${escapeHtml(blueprint.meta.description || 'Built with Svelte Visual Studio')}" />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>" />
+    <meta name="description" content="${escapeHtml(blueprint.meta.description || 'Built with Svelte Visual Studio')}" />${fontLinks}
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><rect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%23101828%22/></svg>" />
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">

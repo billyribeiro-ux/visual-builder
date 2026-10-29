@@ -11,9 +11,12 @@
     "test:parity": "tsx tests/e2e-parity-check.ts",
     "test:e2e": "playwright test",
     "typecheck": "pnpm -r run typecheck",
-    "audit:svelte": "tsx scripts/audit-svelte.ts"
+    "audit:svelte": "tsx scripts/audit-svelte.ts",
+    "sync:components": "tsx scripts/sync-component-sources.ts",
+    "test:parity:visual": "tsx scripts/visual-parity.ts"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@sveltejs/mcp": "^0.1.28",
     "@types/node": "^26.6.6",
     "tsx": "^4.23.15",

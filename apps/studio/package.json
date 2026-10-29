@@ -13,10 +13,11 @@
     "#lib/*": "./src/lib/*"
   },
   "dependencies": {
-    "@app-viz/schema": "workspace:*",
-    "@app-viz/engine": "workspace:*",
     "@app-viz/codegen": "workspace:*",
     "@app-viz/components": "workspace:*",
+    "@app-viz/engine": "workspace:*",
+    "@app-viz/schema": "workspace:*",
+    "phosphor-svelte": "3.1.1",
     "svelte": "^5.57.3",
     "zod": "^4.6.7"
   },

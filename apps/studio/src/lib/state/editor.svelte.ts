@@ -9,10 +9,12 @@ import {
   createId,
   validateBlueprintPreflight,
   composeNodesFromPrompt,
-  MD3_THEME_PRESETS
+  MD3_THEME_PRESETS,
+  BlueprintNodeSchema
 } from '@app-viz/schema';
 import {
   HistoryManager,
+  describeCommandType,
   type EditorCommand,
   findNodeById,
   findNodeParent,
@@ -20,7 +22,7 @@ import {
   isBlockedByLock
 } from '@app-viz/engine';
 import { z } from 'zod';
-import { getAllManifests } from '@app-viz/components';
+import { getAllManifests, isContainerType } from '@app-viz/components';
 import { generateFullExport, createDeterministicZip } from '@app-viz/codegen';
 import {
   ProjectStore,
@@ -44,6 +46,19 @@ export interface StudioNotice {
 }
 
 const AUTOSAVE_DEBOUNCE_MS = 400;
+/** Shared clipboard so copy/paste works across tabs and between projects (Elementor-style). */
+const CLIPBOARD_KEY = 'appviz:clipboard:v1';
+
+/** Canvas device widths. The iframe is rendered at exactly this width so real media queries apply. */
+export const DEVICE_WIDTHS: Record<BreakpointKey, number> = {
+  mobile: 375,
+  tablet: 768,
+  desktop: 1280,
+  wide: 1440
+};
+
+/** Horizontal breathing room (px) kept around the device frame when zooming to fit. */
+const FIT_GUTTER = 64;
 const ACTIVE_PROJECT_KEY = 'activeProjectId';
 
 /** Stable coalescing key so continuous edits of the same field collapse into one undo step. */
@@ -59,6 +74,16 @@ function coalesceKeyFor(command: EditorCommand): string | undefined {
   }
   if (command.type === 'UPDATE_PROJECT_META') {
     return `project:${Object.keys(command.meta).sort().join(',')}`;
+  }
+  if (command.type === 'SET_NOTE') {
+    return `note:${command.key}`;
+  }
+  if (command.type === 'UPDATE_TOKENS') {
+    // Merge continuous token edits (dragging a color picker) per group + key set.
+    const parts = Object.entries(command.tokens).map(([group, value]) =>
+      value && typeof value === 'object' ? `${group}.${Object.keys(value).sort().join('|')}` : group
+    );
+    return `tokens:${parts.sort().join(',')}`;
   }
   return undefined;
 }
@@ -84,13 +109,9 @@ function findNodePath(root: BlueprintNode, targetId: string): BlueprintNode[] | 
   return null;
 }
 
+/** True when nodes of this type accept child nodes (manifest `isContainer`). */
 export function isContainerComponent(componentType: string): boolean {
-  return (
-    componentType === 'structure/container' ||
-    componentType === 'structure/section' ||
-    componentType === 'structure/grid' ||
-    componentType === 'app/dashboard-shell'
-  );
+  return isContainerType(componentType);
 }
 
 class EditorState {
@@ -110,6 +131,20 @@ class EditorState {
   activePageId = $state<string>('10000000-0000-0000-0000-000000000001');
   activeBreakpoint = $state<BreakpointKey>('desktop');
   zoom = $state<number>(100);
+  /** `fit` scales the device frame to the available canvas width; `manual` uses `zoom`. */
+  zoomMode = $state<'fit' | 'manual'>('fit');
+  /** Inner size of the canvas stage, measured by the canvas (drives zoom-to-fit). */
+  stageWidth = $state<number>(0);
+  stageHeight = $state<number>(0);
+  deviceWidth = $derived(DEVICE_WIDTHS[this.activeBreakpoint]);
+  /** Scale actually applied to the canvas frame, in percent. */
+  effectiveZoom = $derived(
+    this.zoomMode === 'manual'
+      ? this.zoom
+      : this.stageWidth > 0
+        ? Math.max(10, Math.min(100, Math.floor(((this.stageWidth - FIT_GUTTER) / this.deviceWidth) * 100)))
+        : 100
+  );
   isInteractiveMode = $state<boolean>(false);
   canvasViewMode = $state<'canvas' | 'flow'>('canvas');
   showCommandPalette = $state<boolean>(false);
@@ -117,8 +152,13 @@ class EditorState {
   showNavigator = $state<boolean>(false);
   showExportDialog = $state<boolean>(false);
   showProjectLibrary = $state<boolean>(false);
+  showPreflight = $state<boolean>(false);
+  showCodeView = $state<boolean>(false);
+  showShortcuts = $state<boolean>(false);
   studioTheme = $state<'light' | 'dark'>('light');
   activeLeftTab = $state<'pages' | 'layers' | 'library' | 'assets' | 'tokens'>('library');
+  /** The left panel can be collapsed to the icon rail (click the active rail item again). */
+  leftPanelOpen = $state<boolean>(true);
   /** True once persisted state has been loaded; the UI renders a skeleton until then. */
   ready = $state<boolean>(false);
   saveStatus = $state<SaveStatus>('idle');
@@ -167,6 +207,18 @@ class EditorState {
   redoCount = $derived.by(() => {
     void this.revision;
     return this.historyManager.futureCount;
+  });
+
+  /** Undoable step labels, oldest first. */
+  undoLabels = $derived.by(() => {
+    void this.revision;
+    return this.historyManager.undoLabels;
+  });
+
+  /** Redoable step labels, next first. */
+  redoLabels = $derived.by(() => {
+    void this.revision;
+    return this.historyManager.redoLabels;
   });
 
   activePage = $derived(
@@ -237,6 +289,8 @@ class EditorState {
 
       const favs = await store.getFavorites();
       if (favs) this.favoriteComponents = favs;
+      const theme = await store.getSetting('studioTheme', z.enum(['light', 'dark']));
+      if (theme) this.studioTheme = theme;
       this.customSymbols = await store.getSymbols();
     } catch (e) {
       this.storageDurable = false;
@@ -278,14 +332,14 @@ class EditorState {
    * Applies a command as an undoable step. Rapid edits to the same field (typing, dragging)
    * are coalesced into one undo step automatically. Mutations of locked nodes are refused.
    */
-  dispatch(command: EditorCommand, options: { coalesce?: boolean } = {}): boolean {
+  dispatch(command: EditorCommand, options: { coalesce?: boolean; label?: string } = {}): boolean {
     if (isBlockedByLock(this.historyManager.current, command)) {
       this.notify('warning', 'This element is locked. Unlock it in the Navigator or Advanced tab to edit it.');
       return false;
     }
     const before = this.historyManager.current;
     const coalesceKey = options.coalesce === false ? undefined : coalesceKeyFor(command);
-    const after = this.historyManager.execute(command, { coalesceKey });
+    const after = this.historyManager.execute(command, { coalesceKey, label: options.label ?? this.labelFor(command) });
     if (after === before) return false;
     this.blueprint = after;
     this.revision += 1;
@@ -294,9 +348,71 @@ class EditorState {
     return true;
   }
 
+  /** Human label for the history panel, using node names where possible. */
+  private labelFor(command: EditorCommand): string {
+    const humanize = (key: string) => key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
+    const name = (id: string) => this.findNodeAnywhere(id)?.name;
+    switch (command.type) {
+      case 'UPDATE_PROPS': {
+        const what = Object.keys(command.props).map(humanize).join(', ');
+        const n = name(command.nodeId);
+        return n ? `Edit ${n} · ${what}` : `Edit ${what}`;
+      }
+      case 'UPDATE_STYLES': {
+        const what = Object.keys(command.styles).map(humanize).join(', ');
+        const n = name(command.nodeId);
+        const where = command.breakpoint === 'base' ? '' : ` (${command.breakpoint})`;
+        return `Style ${n ?? 'element'} · ${what}${where}`;
+      }
+      case 'DELETE_NODE':
+        return `Delete ${name(command.nodeId) ?? 'element'}`;
+      case 'DUPLICATE_NODE':
+        return `Duplicate ${name(command.nodeId) ?? 'element'}`;
+      case 'MOVE_NODE':
+        return `Move ${name(command.nodeId) ?? 'element'}`;
+      case 'REORDER_NODE':
+        return `Move ${name(command.nodeId) ?? 'element'} ${command.direction}`;
+      case 'UPDATE_NODE_META': {
+        const n = name(command.nodeId) ?? 'element';
+        if (command.meta.name !== undefined) return `Rename ${n} to ${command.meta.name}`;
+        if (command.meta.hidden !== undefined) return `${command.meta.hidden ? 'Hide' : 'Show'} ${n}`;
+        if (command.meta.locked !== undefined) return `${command.meta.locked ? 'Lock' : 'Unlock'} ${n}`;
+        return `Edit ${n} settings`;
+      }
+      case 'PASTE_NODE_STYLE':
+        return `Paste style on ${name(command.nodeId) ?? 'element'}`;
+      case 'RESET_NODE_STYLE':
+        return `Reset style of ${name(command.nodeId) ?? 'element'}`;
+      case 'UPDATE_PAGE_META': {
+        const page = this.blueprint.pages.find((p) => p.id === command.pageId);
+        return `Edit page ${page?.path ?? ''} · ${Object.keys(command.meta).map(humanize).join(', ')}`.trim();
+      }
+      default:
+        return describeCommandType(command);
+    }
+  }
+
+  /**
+   * Moves through history to a specific point. `offset` < 0 undoes that many steps, > 0 redoes.
+   * Used by the history panel.
+   */
+  travelHistory(offset: number) {
+    const steps = Math.abs(Math.trunc(offset));
+    for (let i = 0; i < steps; i++) {
+      const doc = offset < 0 ? this.historyManager.undo() : this.historyManager.redo();
+      if (!doc) break;
+      this.blueprint = doc;
+    }
+    if (steps > 0) {
+      this.revision += 1;
+      this.reconcileSelection();
+      this.scheduleSave();
+    }
+  }
+
   /** Runs several dispatches as one atomic undo step. */
-  transact<T>(fn: () => T): T {
-    this.historyManager.begin();
+  transact<T>(fn: () => T, label?: string): T {
+    this.historyManager.begin(label);
     try {
       return fn();
     } finally {
@@ -348,6 +464,35 @@ class EditorState {
     this.hoverNodeId = id;
   }
 
+  /** Selects the parent of the current selection (Shift+Enter). Page/layout roots are not selectable targets. */
+  selectParent() {
+    if (!this.selectedNodeId) return;
+    const info = this.findParentAnywhere(this.selectedNodeId);
+    if (!info) return;
+    const isRoot =
+      this.blueprint.pages.some((p) => p.rootNode.id === info.parent.id) ||
+      this.blueprint.layouts.some((l) => l.rootNode.id === info.parent.id);
+    if (!isRoot) this.selectedNodeId = info.parent.id;
+  }
+
+  /** Selects the first visible child of the current selection (Enter). */
+  selectFirstChild() {
+    const node = this.selectedNode;
+    const child = node?.children?.find((c) => !c.hidden);
+    if (child) this.selectedNodeId = child.id;
+  }
+
+  /** Selects the next/previous visible sibling, wrapping around (Tab / Shift+Tab). */
+  selectSibling(direction: 1 | -1) {
+    if (!this.selectedNodeId) return;
+    const info = this.findParentAnywhere(this.selectedNodeId);
+    if (!info) return;
+    const siblings = info.parent.children.filter((c) => !c.hidden && c.componentType !== 'structure/slot');
+    const idx = siblings.findIndex((c) => c.id === this.selectedNodeId);
+    if (idx < 0 || siblings.length < 2) return;
+    this.selectedNodeId = siblings[(idx + direction + siblings.length) % siblings.length].id;
+  }
+
   setActivePage(pageId: string) {
     this.activePageId = pageId;
     this.selectedNodeId = null;
@@ -358,7 +503,64 @@ class EditorState {
   }
 
   setZoom(z: number) {
-    this.zoom = Math.max(25, Math.min(200, z));
+    this.zoomMode = 'manual';
+    this.zoom = Math.max(10, Math.min(200, Math.round(z)));
+  }
+
+  /** Steps zoom from whatever is currently applied (fit or manual). */
+  stepZoom(direction: 1 | -1) {
+    const steps = [10, 25, 33, 50, 67, 75, 90, 100, 110, 125, 150, 175, 200];
+    const current = this.zoomMode === 'fit' ? this.effectiveZoom : this.zoom;
+    const next =
+      direction > 0
+        ? (steps.find((s) => s > current + 0.5) ?? 200)
+        : ([...steps].reverse().find((s) => s < current - 0.5) ?? 10);
+    this.setZoom(next);
+  }
+
+  zoomToFit() {
+    this.zoomMode = 'fit';
+  }
+
+  /** Switches the left panel; clicking the already-active tab collapses/expands the panel. */
+  openLeftTab(tab: EditorState['activeLeftTab']) {
+    if (this.activeLeftTab === tab && this.leftPanelOpen) {
+      this.leftPanelOpen = false;
+    } else {
+      this.activeLeftTab = tab;
+      this.leftPanelOpen = true;
+    }
+    if (this.isInteractiveMode) this.isInteractiveMode = false;
+  }
+
+  /**
+   * Writes a (possibly nested) prop path such as `title` or `features.0.title`, as sent by the
+   * canvas inline editor. Nested writes clone only the touched branch.
+   */
+  setPropPath(nodeId: string, path: string, value: unknown): boolean {
+    const node = this.findNodeAnywhere(nodeId);
+    if (!node) return false;
+    const segments = path.split('.').filter(Boolean);
+    if (segments.length === 0 || segments.some((seg) => seg === '__proto__' || seg === 'constructor' || seg === 'prototype')) {
+      return false;
+    }
+    const [head, ...rest] = segments;
+    if (rest.length === 0) {
+      return this.dispatch({ type: 'UPDATE_PROPS', nodeId, props: { [head]: value } });
+    }
+    const root = structuredClone($state.snapshot(node.props?.[head]));
+    if (root === null || typeof root !== 'object') return false;
+    let cursor: Record<string, unknown> | unknown[] = root as Record<string, unknown>;
+    for (let i = 0; i < rest.length - 1; i++) {
+      const key = rest[i];
+      const next: unknown = (cursor as Record<string, unknown>)[key];
+      if (next === null || typeof next !== 'object') return false;
+      cursor = next as Record<string, unknown>;
+    }
+    const leaf = rest[rest.length - 1];
+    if (!(leaf in (cursor as Record<string, unknown>))) return false;
+    (cursor as Record<string, unknown>)[leaf] = value;
+    return this.dispatch({ type: 'UPDATE_PROPS', nodeId, props: { [head]: root } });
   }
 
   toggleInteractiveMode() {
@@ -370,12 +572,40 @@ class EditorState {
 
   toggleStudioTheme() {
     this.studioTheme = this.studioTheme === 'light' ? 'dark' : 'light';
+    void this.store?.setSetting('studioTheme', this.studioTheme).catch((e: Error) =>
+      this.notify('warning', `Could not remember the theme preference: ${e.message}`)
+    );
   }
 
   // Structural & Clipboard Operations
   copySelectedNode() {
     if (!this.selectedNode) return;
-    this.clipboardNode = structuredClone($state.snapshot(this.selectedNode));
+    const node = structuredClone($state.snapshot(this.selectedNode)) as BlueprintNode;
+    this.clipboardNode = node;
+    try {
+      localStorage.setItem(CLIPBOARD_KEY, JSON.stringify({ node, copiedAt: new Date().toISOString() }));
+      this.notify('info', `Copied “${node.name}”. Paste it on any page or project.`, 2200);
+    } catch (e) {
+      // Quota or privacy mode: in-tab paste still works; tell the user cross-tab paste won't.
+      this.notify('warning', `Copied “${node.name}” for this tab only (${(e as Error).message}).`);
+    }
+  }
+
+  /** Reads a node copied in another tab/project; invalid payloads are rejected, never repaired. */
+  private readSharedClipboard(): BlueprintNode | null {
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem(CLIPBOARD_KEY);
+    } catch {
+      return null;
+    }
+    if (!raw) return null;
+    try {
+      const parsed = BlueprintNodeSchema.safeParse((JSON.parse(raw) as { node?: unknown }).node);
+      return parsed.success ? parsed.data : null;
+    } catch {
+      return null;
+    }
   }
 
   copyNodeStyle(nodeId?: string) {
@@ -417,7 +647,7 @@ class EditorState {
     targetNodeId: string | undefined,
     alignment: 'left' | 'center' | 'right' | 'stretch'
   ) {
-    this.transact(() => this.applyAlignment(targetNodeId, alignment));
+    this.transact(() => this.applyAlignment(targetNodeId, alignment), `Align ${alignment}`);
   }
 
   private applyAlignment(
@@ -752,7 +982,12 @@ class EditorState {
   }
 
   pasteNode(targetNodeId?: string) {
-    if (!this.clipboardNode || !this.activePage) return;
+    const shared = this.readSharedClipboard();
+    if (shared) this.clipboardNode = shared;
+    if (!this.clipboardNode || !this.activePage) {
+      if (!this.clipboardNode) this.notify('info', 'Nothing to paste yet — copy an element first (⌘C).', 2500);
+      return;
+    }
     const cloned = cloneSubtreeWithNewIds(this.clipboardNode);
     const baseTargetId = targetNodeId || this.selectedNodeId || this.activePage.rootNode.id;
     const targetNode = this.findNodeAnywhere(baseTargetId);
@@ -948,7 +1183,9 @@ class EditorState {
     } else {
       this.favoriteComponents = [...this.favoriteComponents, componentType];
     }
-    void this.store?.setSetting('favorites', $state.snapshot(this.favoriteComponents)).catch(() => {});
+    void this.store
+      ?.setSetting('favorites', $state.snapshot(this.favoriteComponents))
+      .catch((e: Error) => this.notify('warning', `Could not save favorites: ${e.message}`));
   }
 
   saveSelectedNodeAsSymbol(customName?: string) {
@@ -1038,7 +1275,8 @@ class EditorState {
   }
 
   applyAssetToSelectedNode(asset: BlueprintAsset) {
-    const urlValue = asset.dataUrl || asset.localPath;
+    // Elements reference assets by path; the canvas resolves it and exports ship the file.
+    const urlValue = asset.localPath || asset.dataUrl || '';
     if (this.selectedNode) {
       const ct = this.selectedNode.componentType;
       if (ct === 'navigation/navbar') {
@@ -1096,7 +1334,11 @@ class EditorState {
     this.revision += 1;
     if (this.store) {
       this.snapshots = await this.store.listSnapshots(bp.meta.id);
-      await this.store.setSetting(ACTIVE_PROJECT_KEY, bp.meta.id).catch(() => {});
+      // Remembering the last-open project is a convenience: a failure must not block opening it,
+      // but it is reported so the user knows the studio may reopen a different project next time.
+      await this.store
+        .setSetting(ACTIVE_PROJECT_KEY, bp.meta.id)
+        .catch((e: Error) => this.notify('warning', `Could not remember the open project: ${e.message}`));
     }
     if (opts.persist) await this.saveNow();
   }
@@ -1124,7 +1366,7 @@ class EditorState {
     const bp =
       template === 'blank'
         ? createBlankProject(name?.trim() || 'Untitled App')
-        : this.withFreshIdentity(createDefaultAcmeSaaSProject(), name?.trim() || 'Acme SaaS');
+        : this.withFreshIdentity(createDefaultAcmeSaaSProject(), name?.trim() || 'Halden');
     await this.adoptBlueprint(bp, { persist: true });
     this.notify('success', `Created "${bp.meta.name}". Your previous project is still in the library.`);
   }

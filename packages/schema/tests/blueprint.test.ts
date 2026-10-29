@@ -58,10 +58,10 @@ describe('@app-viz/schema blueprint & migration', () => {
     };
 
     const report = migrateBlueprintWithReport(legacy);
-    expect(report.appliedSteps.length).toBe(1);
+    expect(report.appliedSteps.length).toBe(2);
     expect(report.fromVersion).toBe('1.0.0');
-    expect(report.toVersion).toBe('1.1.0');
-    expect(report.blueprint.schemaVersion).toBe('1.1.0');
+    expect(report.toVersion).toBe('1.2.0');
+    expect(report.blueprint.schemaVersion).toBe('1.2.0');
     expect(report.blueprint.target.nodeVersion).toBe('26.13.0');
 
     const rootProps = report.blueprint.pages[0].rootNode.props;
@@ -100,6 +100,36 @@ describe('@app-viz/schema blueprint & migration', () => {
     expect(cloned.id).not.toBe(original.id);
     expect(cloned.children[0].id).not.toBe(original.children[0].id);
     expect(cloned.interactions[0].id).not.toBe(original.interactions[0].id);
-    expect(migrateBlueprint(createDefaultAcmeSaaSProject()).schemaVersion).toBe('1.1.0');
+    expect(migrateBlueprint(createDefaultAcmeSaaSProject()).schemaVersion).toBe('1.2.0');
+  });
+});
+
+describe('1.1.0 → 1.2.0 legacy theme upgrade', () => {
+  const legacyTheme = {
+    colors: { primary: '#0B57D0' } as Record<string, string>,
+    fonts: {
+      heading: 'Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      body: 'Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      mono: '"Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
+    }
+  };
+
+  it('replaces token groups that still equal the legacy defaults and keeps edited groups', async () => {
+    const { DEFAULT_MD3_LIGHT_COLORS } = await import('../src/index.js');
+    const base = createDefaultAcmeSaaSProject() as unknown as Record<string, any>;
+    // Legacy project: untouched legacy fonts, but customised colors.
+    const legacy = structuredClone(base);
+    legacy.schemaVersion = '1.1.0';
+    legacy.tokens = { ...legacy.tokens, fonts: legacyTheme.fonts, colors: { ...legacy.tokens.colors, primary: '#FF0066' } };
+    const out = migrateBlueprint(legacy);
+    expect(out.schemaVersion).toBe('1.2.0');
+    expect(out.tokens.fonts.heading.startsWith('Inter')).toBe(true);
+    expect(out.tokens.colors.primary).toBe('#FF0066');
+    expect(DEFAULT_MD3_LIGHT_COLORS).toBeDefined();
+  });
+
+  it('is idempotent on current projects', () => {
+    const current = createDefaultAcmeSaaSProject();
+    expect(migrateBlueprint(migrateBlueprint(current))).toEqual(migrateBlueprint(current));
   });
 });

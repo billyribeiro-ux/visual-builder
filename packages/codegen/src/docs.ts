@@ -1,4 +1,5 @@
 import type { BlueprintNode, ProjectBlueprint } from '@app-viz/schema';
+import { BREAKPOINT_MEDIA, VISIBILITY_MEDIA } from '@app-viz/engine';
 
 export function generateAgentsMarkdown(blueprint: ProjectBlueprint): string {
   const pageList = blueprint.pages
@@ -7,7 +8,7 @@ export function generateAgentsMarkdown(blueprint: ProjectBlueprint): string {
 
   return `# AGENTS.md — Canonical AI Coding Agent Instructions
 
-> **Project Target**: Svelte 5.57.3 + SvelteKit 3.1.0 + Vite 8.3.5 + Google Material Design 3 (MD3)  
+> **Project Target**: Svelte 5.57.3 + SvelteKit 3.1.0 + Vite 8.3.5 + vanilla CSS design tokens  
 > **Schema Version**: ${blueprint.schemaVersion}  
 > **Project Name**: ${blueprint.meta.name}  
 > **Generation Date**: 2026-10-28T12:00:00Z  
@@ -19,7 +20,8 @@ You are an autonomous AI coding agent tasked with implementing, verifying, or ex
   - Svelte 5 runes (\`$state\`, \`$derived\`, \`$derived.by\`, \`$props\`, \`$effect\`) MUST be used exclusively.
   - SvelteKit 3 configuration is located in \`vite.config.ts\` via the \`sveltekit()\` plugin. Do NOT add a legacy \`svelte.config.js\`.
   - Subpath imports map: Use \`#lib/...\` for library imports. Legacy \`$lib\` is superseded.
-  - Pure Vanilla CSS with Google MD3 Design System is used in \`src/app.css\`. No Tailwind CSS.
+  - Pure vanilla CSS: \`src/app.css\` holds the shared site runtime (tokens, scoped reset, primitives) and the project tokens; \`src/lib/styles/nodes.css\` holds the per-element style overrides compiled from the blueprint. No Tailwind CSS.
+  - Components in \`src/lib/components/\` are the exact files the visual builder renders on its canvas. Edit them as normal Svelte components; elements are matched to blueprint nodes through their \`data-node-id\` attribute.
 
 ## 2. Quickstart & Verification Commands
 Inside \`generated-app/\`:
@@ -66,16 +68,18 @@ exported-project/
     ├── vite.config.ts
     ├── tsconfig.json
     └── src/
-        ├── app.css                    # Google MD3 pure Vanilla CSS tokens & components
+        ├── app.css                    # Site runtime (tokens, scoped reset, primitives) + project tokens
         ├── routes/                    # File-based routes (+layout, +page, +error)
-        └── lib/components/            # 25 pure Svelte 5 rune components
+        └── lib/
+            ├── styles/nodes.css       # Per-element style overrides compiled from the blueprint
+            └── components/            # Svelte 5 components shared with the builder canvas (+ lib/ helpers)
 \`\`\`
 
 ## 4. Routes Defined in Blueprint
 ${pageList}
 
 ## 5. What is Implemented vs. What is Intentionally Mocked
-- **Implemented**: Complete responsive page templates, shared layouts, Google MD3 design tokens, 25 interactive Svelte 5 components (Navbar, SplitHero, FeatureGrid, PricingTable, FaqAccordion, Testimonials, CtaBanner, StatsBar, Newsletter, ContactForm, Footer, DashboardShell, KpiGrid, filterable DataTable, SettingsForm, AuthCard, Section, Grid, Divider, Button, Badge, Card, Alert, Tabs, Container).
+- **Implemented**: Responsive pages, shared layouts, design tokens and the interactive Svelte 5 components in \`src/lib/components/\` (for example Navbar, SplitHero, FeatureGrid, PricingTable, FaqAccordion, Testimonials, DashboardShell, KpiGrid and the filterable DataTable) — the same files the builder canvas renders.
 - **Mocked Integrations**:
   - Authentication: Currently simulated in \`AuthCard.svelte\`; replace with Better Auth or verified session provider.
   - Database Persistence: Currently rendered with typed mock datasets; replace with Drizzle ORM queries in \`+page.server.ts\`.
@@ -85,7 +89,7 @@ ${pageList}
 Any change you implement must:
 1. Pass \`pnpm check\` with 0 TypeScript or Svelte errors.
 2. Pass \`pnpm build\` without warnings.
-3. Preserve Google MD3 design token variable usage in \`src/app.css\` without hardcoding arbitrary hex codes or introducing Tailwind.
+3. Preserve design token variable usage (\`--md-sys-*\`) without hardcoding arbitrary hex codes or introducing Tailwind.
 `;
 }
 
@@ -94,7 +98,7 @@ export function generateReadme(blueprint: ProjectBlueprint): string {
 
 > Exported from Svelte Visual App Builder on 2026-10-28.
 
-This is a self-contained, production-ready Svelte 5 and SvelteKit 3 application with an AI Agent handoff package.
+This is a self-contained Svelte 5 and SvelteKit 3 application exported from the visual builder, plus a handoff package (AGENTS.md, specs and the project blueprint) for coding agents. Forms and authentication are mocked — see KNOWN_GAPS.md.
 
 ## Quickstart
 
@@ -117,7 +121,7 @@ export function generateProjectOverview(blueprint: ProjectBlueprint): string {
 
 ## 1. Project Summary
 - **Name**: ${blueprint.meta.name}
-- **Description**: ${blueprint.meta.description || 'Modern responsive web application built with Svelte 5, SvelteKit 3, and Google Material Design 3.'}
+- **Description**: ${blueprint.meta.description || 'Responsive web application built with Svelte 5, SvelteKit 3 and vanilla CSS design tokens.'}
 - **Author**: ${blueprint.meta.author || 'Visual Studio Builder'}
 - **Last Updated**: ${blueprint.meta.updatedAt}
 
@@ -133,7 +137,7 @@ export function generateImplementationSpec(blueprint: ProjectBlueprint): string 
 ## 1. Specification Overview
 - **Project Name**: ${blueprint.meta.name}
 - **Target Platform**: Svelte 5.57.3, SvelteKit 3.1.0, Vite 8.3.5, Node >=26.13.0
-- **Styling**: Google Material Design 3 (MD3) pure Vanilla CSS with CSS Custom Properties
+- **Styling**: vanilla CSS with design tokens exposed as CSS custom properties (\`--md-sys-*\`)
 
 ## 2. State & Reactivity Architecture
 All components use Svelte 5 signals:
@@ -160,14 +164,19 @@ ${rows}
 export function generateInteractions(_blueprint: ProjectBlueprint): string {
   return `# INTERACTIONS.md — Declarative Interaction Graph
 
-## Supported Interactive Behaviors
-1. **FAQ Accordion**: Single-open animated accordion with ARIA expanded states.
-2. **Data Table Search**: Instant client-side filtering across all columns and rows with empty-state feedback.
-3. **Settings & Contact Forms**: Client-side validated form submission with status feedback.
-4. **Tabs**: Keyboard-accessible MD3 tab bar switching content panels.
-5. **Dismissible Alerts**: Interactive close button with ARIA live-region support.
-6. **Mobile Navigation Drawer**: Responsive toggle menu with keyboard escape support.
-7. **CTA Routing**: Internal routing across project pages via SvelteKit standard \`<a>\` links.
+## Built-in component behaviour
+1. **FAQ Accordion**: single-open accordion with aria-expanded / aria-controls.
+2. **Data Table Search**: client-side filtering across all cells with an empty-state row.
+3. **Settings, Contact, Newsletter and Sign-in forms**: native validation and local success feedback (no network requests — integration points).
+4. **Tabs**: WAI-ARIA tabs with Arrow/Home/End keyboard support.
+5. **Dismissible Alerts**: close button removes the alert.
+6. **Navbar mobile menu**: below 768px a menu button toggles the links (Escape closes).
+7. **Links**: plain \`<a href>\` elements; SvelteKit handles internal navigation.
+
+## Declarative click interactions
+Click rules from the blueprint are executed by \`src/lib/components/lib/InteractionLayer.svelte\`
+(navigate, openModal, closeModal, toggleDrawer, showToast, setState, submitForm). Rules on other
+triggers (hover, submit, load) and project-level rules are documented in the blueprint but not executed.
 `;
 }
 
@@ -176,16 +185,17 @@ export function generateDesignSystem(blueprint: ProjectBlueprint): string {
     .map(([k, v]) => `- \`--md-sys-color-${k}\`: \`${v}\``)
     .join('\n');
 
-  return `# DESIGN_SYSTEM.md — Google Material Design 3 Tokens & Specs
+  return `# DESIGN_SYSTEM.md — Design Tokens & Specs
 
 ## Color Palette Tokens
 ${colors}
 
-## Breakpoints
-- **Mobile**: ${blueprint.tokens.breakpoints?.mobile || '640px'}
-- **Tablet**: ${blueprint.tokens.breakpoints?.tablet || '768px'}
-- **Desktop**: ${blueprint.tokens.breakpoints?.desktop || '1024px'}
-- **Wide**: ${blueprint.tokens.breakpoints?.wide || '1280px'}
+## Breakpoints (exactly as compiled into src/lib/styles/nodes.css)
+- **tablet** overrides: \`${BREAKPOINT_MEDIA.tablet}\` (also applies on mobile)
+- **mobile** overrides: \`${BREAKPOINT_MEDIA.mobile}\` (wins over tablet)
+- **desktop** overrides: \`${BREAKPOINT_MEDIA.desktop}\`
+- **wide** overrides: \`${BREAKPOINT_MEDIA.wide}\` (wins over desktop)
+- Device visibility: mobile \`${VISIBILITY_MEDIA.mobile}\`, tablet \`${VISIBILITY_MEDIA.tablet}\`, desktop \`${VISIBILITY_MEDIA.desktop}\`
 `;
 }
 
@@ -209,7 +219,7 @@ export function generateA11yAndTesting(): string {
 ## Accessibility Standards
 - **ARIA**: All interactive controls implement appropriate ARIA roles (\`aria-expanded\`, \`role="region"\`, \`role="tablist"\`, \`role="alert"\`).
 - **Focus Rings**: Visual focus-visible outlines using \`--md-sys-color-primary\`.
-- **Contrast**: Google MD3 color roles verified for WCAG AA (>= 4.5:1 ratio for normal body copy).
+- **Contrast**: the default color roles target WCAG AA (>= 4.5:1 for body copy); re-check contrast after changing tokens.
 
 ## Testing Commands
 \`\`\`bash
@@ -329,7 +339,7 @@ export function generateManifest(blueprint: ProjectBlueprint, fileCount: number)
       projectName: blueprint.meta.name,
       generatedAt: '2026-10-28T12:00:00.000Z',
       framework: 'sveltekit-3',
-      designSystem: 'google-md3-vanilla-css',
+      designSystem: 'vanilla-css-tokens',
       fileCount,
       targetVersions: blueprint.target
     },

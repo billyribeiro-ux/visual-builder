@@ -47,7 +47,7 @@ export type EditorCommand =
       meta: Partial<
         Pick<
           BlueprintNode,
-          'name' | 'locked' | 'hidden' | 'customClasses' | 'customCss' | 'motionEffects'
+          'name' | 'locked' | 'hidden' | 'customClasses' | 'customCss' | 'motionEffects' | 'htmlId' | 'attributes'
         >
       >;
     }
@@ -73,6 +73,13 @@ export type EditorCommand =
       nodeId: string;
       breakpoint: BreakpointKey | 'base' | 'hover' | 'focus' | 'active';
       styles: CSSProperties;
+    }
+  | {
+      /** Removes keys from one style bucket (empty override buckets are dropped entirely). */
+      type: 'REMOVE_STYLE_KEYS';
+      nodeId: string;
+      breakpoint: BreakpointKey | 'base' | 'hover' | 'focus' | 'active';
+      keys: string[];
     }
   | {
       type: 'DELETE_NODE';
@@ -123,6 +130,15 @@ export type EditorCommand =
   | {
       type: 'DELETE_ASSET';
       assetId: string;
+    }
+  | {
+      /**
+       * Sets (or clears, when `value` is empty) a designer note that the build spec hands to the
+       * implementing agent. Keys: `project`, `page:<pageId>`, `node:<nodeId>`.
+       */
+      type: 'SET_NOTE';
+      key: string;
+      value: string;
     }
   | {
       type: 'LOAD_BLUEPRINT';

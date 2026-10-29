@@ -11,8 +11,10 @@ import {
 import { generateFullExport, normalizeRoutePath, normalizeAssetPath, dedupePaths } from '../src/generator.js';
 import { generatePageRoute, sanitizeHref, safeJson } from '../src/routes.js';
 import { generateAppHtml, generatePackageJson } from '../src/project-files.js';
-import { getComponentSources } from '../src/components.js';
-import { generateAppCss } from '../src/tokens.js';
+import { COMPONENT_SOURCES, getComponentSources } from '../src/components.js';
+import { generateNodesCss } from '../src/tokens.js';
+import { compileNodeCss } from '@app-viz/engine';
+import { getAllManifests, isLayoutInnerType } from '@app-viz/components';
 
 /* -------------------------------------------------------------------------- */
 /* Fixtures                                                                   */
@@ -198,7 +200,7 @@ describe('codegen output safety', () => {
     expect(out.match(/<\/script/gi)?.length).toBe(1);
     expect(out).not.toContain('<script>alert');
     const script = out.slice(0, out.indexOf('</script>'));
-    const rulesLine = script.split('\n').find((l) => l.includes('const interactionRules ='));
+    const rulesLine = script.split('\n').find((l) => l.includes('const interactionRules'));
     expect(rulesLine).toBeDefined();
     expect(rulesLine).not.toContain('<');
     expect(rulesLine).toContain('\\u003c/script>');
@@ -209,7 +211,7 @@ describe('codegen output safety', () => {
   it('emits every text prop only inside {"..."} JS string expressions', () => {
     // Exact, escaped forms.
     expect(out).toContain(`title={${JSON.stringify(QUOTES)}}`);
-    expect(out).toContain(`>{${JSON.stringify(BRACES)}}</Button>`);
+    expect(out).toContain(`text={${JSON.stringify(BRACES)}}`);
     expect(out).toContain(`eyebrow={${JSON.stringify(BRACES)}}`);
     expect(out).toContain('body={"\\u003c/script>\\u003cscript>alert(1)\\u003c/script>"}');
 
@@ -222,7 +224,7 @@ describe('codegen output safety', () => {
     // nothing user-controlled may remain.
     const body = out
       .replace(/<svelte:head>[\s\S]*?<\/svelte:head>/, '')
-      .replace(/const interactionRules = .*;/, '')
+      .replace(/const interactionRules.*;/, '')
       .replace(/\{"(?:[^"\\]|\\.)*"\}/g, '{STR}')
       .replace(/=\{\[.*\]\}/g, '={JSON}');
     expect(body).not.toContain('alert(1)');
@@ -239,20 +241,39 @@ describe('codegen output safety', () => {
   it('sanitizes class, style, enums and numbers', () => {
     expect(out).toContain('class="safe-class x onclickalert1"');
     expect(out).not.toContain('onclick="');
-    // dangerous style values dropped, safe ones kept, emitted as an expression
-    expect(out).toContain('style={"color: red;"}');
-    expect(out).not.toContain('expression(');
-    expect(out).not.toContain('</style>');
-    // unsafe gap dropped entirely
+    // No inline styles at all: node styles live in the compiled stylesheet (nodes.css),
+    // where dangerous values are dropped and safe ones kept.
+    expect(out).not.toMatch(/\sstyle=/);
+    const nodesCss = compileNodeCss([page.rootNode], { layoutInner: isLayoutInnerType });
+    expect(nodesCss).toContain('color: red !important;');
+    for (const bad of ['expression(', '</style>', 'javascript:', '<script', '1px}']) {
+      expect(nodesCss).not.toContain(bad);
+    }
+    for (const bad of ['expression(', '</style>', 'javascript:', '<script>alert', '1px}']) {
+      expect(out).not.toContain(bad);
+    }
+    // unsafe gap fails schema validation → falls back to the (safe) default
     expect(out).not.toMatch(/gap=\{"1rem;/);
     // enum fallback
     expect(out).toContain('variant={"primary"}');
-    // numeric clamp / coercion
-    expect(out).toContain('columns={3}'); // NaN → default
-    expect(out).toContain('columns={4}'); // 99 → clamped
+    // numbers are validated by the manifest schema: invalid → schema default, never the raw value
+    expect(out).toContain('columns={2}'); // Grid: '9); alert(1); (' → default 2
+    expect(out).toContain('columns={3}'); // FeatureGrid: 99 is out of range → default 3
+    expect(out).not.toMatch(/columns=\{(99|"9)/);
     // U+2028/2029 escaped
     expect(out).not.toMatch(/[\u2028\u2029]/);
     expect(out).toContain('\\u2028line\\u2029sep');
+  });
+
+  it('app.html loads the same web-font URL as the canvas and has no emoji favicon', () => {
+    const p = createDefaultAcmeSaaSProject();
+    const html = generateAppHtml(p);
+    expect(html).toContain(
+      '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" />'
+    );
+    expect(html).not.toMatch(/\p{Extended_Pictographic}/u);
+    const noFonts = generateAppHtml({ ...p, tokens: { ...p.tokens, fonts: { heading: 'Georgia, serif', body: 'Georgia, serif', mono: 'monospace' } } });
+    expect(noFonts).not.toContain('fonts.googleapis.com');
   });
 
   it('HTML-escapes app.html metadata', () => {
@@ -274,6 +295,12 @@ describe('codegen output safety', () => {
     const componentAttrs = attrs.filter((a) => /^[A-Z]/.test(a.element));
     expect(componentAttrs.length).toBeGreaterThan(10);
     for (const a of componentAttrs) {
+      if (a.name === 'data-node-id' || a.name === 'class') {
+        // The only static attributes: node ids and class lists, sanitized to safe charsets.
+        expect(a.kind, a.raw).toBe('static');
+        expect(a.raw).toMatch(a.name === 'class' ? /^class="[A-Za-z0-9_\- ]*"$/ : /^data-node-id="[A-Za-z0-9_-]+"$/);
+        continue;
+      }
       expect(a.kind, `${a.element}.${a.name} must be an expression: ${a.raw}`).toBe('expression');
     }
     for (const a of attrs.filter((x) => x.kind === 'static')) {
@@ -288,8 +315,11 @@ describe('codegen output safety', () => {
   });
 
   it.skipIf(!svelteCompiler)('every generated library component compiles', () => {
-    for (const [file, source] of Object.entries(getComponentSources())) {
+    const svelteFiles = Object.entries(getComponentSources()).filter(([file]) => file.endsWith('.svelte'));
+    expect(svelteFiles.length).toBeGreaterThanOrEqual(28);
+    for (const [file, source] of svelteFiles) {
       expect(() => svelteCompiler.compile(source, { generate: 'client', filename: file }), file).not.toThrow();
+      expect(() => svelteCompiler.compile(source, { generate: 'server', filename: file }), file).not.toThrow();
     }
   });
 });
@@ -513,8 +543,11 @@ describe('canonical prop round-trip into generated markup', () => {
     expect(out).toContain('align={"center"}');
     expect(out).toContain('textAlign={"center"}');
     expect(out).toContain('gap={"2rem"}');
-    expect(out).toContain('contentStyle={"display: grid; grid-template-columns: 1fr 1fr;"}');
-    expect(out).toContain('style={"display: grid; grid-template-columns: 1fr 1fr; padding-top: 10px;"}');
+    // Layout styles of a Section target its inner content area; the rest its root.
+    const css = generateNodesCss(withPages([page]));
+    expect(css).toContain(`[data-layout-of="${root.id}"] { display: grid !important; grid-template-columns: 1fr 1fr !important; }`);
+    expect(css).toContain(`[data-node-id="${root.id}"] { padding-top: 10px !important; }`);
+    expect(out).not.toMatch(/\sstyle=|contentStyle=/);
   });
 
   it('Card ctaText/ctaHref/align (and legacy actionText alias)', () => {
@@ -546,42 +579,28 @@ describe('canonical prop round-trip into generated markup', () => {
     expect(out).toContain('eyebrow={"Limited offer"}');
     expect(out).toContain('align={"center"}');
     expect(out).toMatch(/<Grid[\s\S]*?columns=\{2\}[\s\S]*?gap=\{"lg"\}/);
-    expect(out).toMatch(/<DashboardShell[\s\S]*?style=\{"min-height: 50vh;"\}/);
+    const shell = root.children.find((c) => c.componentType === 'app/dashboard-shell')!;
+    expect(out).toMatch(new RegExp(`<DashboardShell\\s+data-node-id="${shell.id}"`));
+    expect(generateNodesCss(withPages([page]))).toContain(`[data-node-id="${shell.id}"] { min-height: 50vh !important; }`);
   });
 
-  it('generated components accept the canonical props', () => {
-    const c = getComponentSources();
-    const section = c['src/lib/components/Section.svelte'];
-    expect(section).toContain('surfaceTone');
-    expect(section).toContain('contentStyle');
-    const card = c['src/lib/components/Card.svelte'];
-    expect(card).toContain('ctaText');
-    expect(card).toContain('actionText');
-    expect(card).toContain("align === 'center'");
-    const divider = c['src/lib/components/Divider.svelte'];
-    expect(divider).toContain("spacing?: 'sm' | 'md' | 'lg'");
-    expect(divider).toContain('{label}');
-    const contact = c['src/lib/components/ContactForm.svelte'];
-    for (const prop of ['sectionEyebrow', 'sectionTitle', 'sectionSubtitle', 'submitText']) {
-      expect(contact).toContain(`{${prop}}`);
+  it('generated components accept the canonical props (every manifest prop is typed in its component)', () => {
+    for (const manifest of getAllManifests()) {
+      const source = COMPONENT_SOURCES[`${manifest.component}.svelte`];
+      expect(source, manifest.component).toBeDefined();
+      const shape = (manifest.propsSchema as unknown as { shape: Record<string, unknown> }).shape;
+      for (const prop of Object.keys(shape)) {
+        expect(source, `${manifest.component}.${prop}`).toMatch(new RegExp(`\\b${prop}\\?:`));
+      }
+      expect(source, `${manifest.component} spreads rest attributes on its root`).toContain('{...rest}');
     }
-    const auth = c['src/lib/components/AuthCard.svelte'];
-    expect(auth).toContain("mode?: 'signin' | 'signup'");
-    expect(auth).toContain('{brandName}');
-    const alert = c['src/lib/components/Alert.svelte'];
-    expect(alert).toContain('warning:');
-    expect(alert).toContain('{#if dismissible}');
-    const grid = c['src/lib/components/Grid.svelte'];
-    expect(grid).toContain('md-grid-cols-{cols}');
-    expect(grid).toContain("lg: '2.5rem'");
-    expect(c['src/lib/components/CtaBanner.svelte']).toContain('{#if eyebrow}');
-    expect(c['src/lib/components/SplitHero.svelte']).toContain("align === 'center'");
-    expect(c['src/lib/components/DashboardShell.svelte']).toContain('class="md-dashboard" {style}');
+    // Legacy aliases are mapped before render (Card actionText → ctaText), so components only use canonical names.
+    expect(COMPONENT_SOURCES['Card.svelte']).not.toContain('actionText');
   });
 
-  it('app.css contains every md-grid-cols-* class the Grid can emit', () => {
-    const css = generateAppCss(createDefaultAcmeSaaSProject().tokens);
-    for (let n = 1; n <= 4; n++) expect(css).toContain(`.md-grid-cols-${n}`);
+  it('Grid styles every column count it can emit', () => {
+    const grid = COMPONENT_SOURCES['Grid.svelte'];
+    for (let n = 1; n <= 4; n++) expect(grid).toContain(`.cols-${n}`);
   });
 });
 

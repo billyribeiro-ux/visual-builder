@@ -1,8 +1,21 @@
 <script lang="ts">
   import { editor } from '../state/editor.svelte.js';
-  import type { BlueprintNode, PageRoute } from '@app-viz/schema';
   import { findNodeInBlueprint } from '@app-viz/engine';
+  import { getManifest } from '@app-viz/components';
   import { onMount, untrack } from 'svelte';
+  import FlowMap from './FlowMap.svelte';
+  import { pageDisplayName } from '../state/page-name.js';
+  import { resolveWidgetIcon } from '../ui/widget-icons.js';
+  import MonitorIcon from 'phosphor-svelte/lib/MonitorIcon';
+  import DesktopIcon from 'phosphor-svelte/lib/DesktopIcon';
+  import DeviceTabletIcon from 'phosphor-svelte/lib/DeviceTabletIcon';
+  import DeviceMobileIcon from 'phosphor-svelte/lib/DeviceMobileIcon';
+  import CaretRightIcon from 'phosphor-svelte/lib/CaretRightIcon';
+  import WarningCircleIcon from 'phosphor-svelte/lib/WarningCircleIcon';
+  import ArrowClockwiseIcon from 'phosphor-svelte/lib/ArrowClockwiseIcon';
+  import CursorClickIcon from 'phosphor-svelte/lib/CursorClickIcon';
+  import PlayIcon from 'phosphor-svelte/lib/PlayIcon';
+  import ArrowsClockwiseIcon from 'phosphor-svelte/lib/ArrowsClockwiseIcon';
   import {
     NON_MUTATING_NODE_ACTIONS,
     parsePreviewMessage,
@@ -14,104 +27,6 @@
   } from '../canvas/messages.js';
 
   let iframeElement: HTMLIFrameElement | null = null;
-
-  const breakpointWidths = {
-    mobile: '375px',
-    tablet: '768px',
-    desktop: '1280px',
-    wide: '1440px'
-  };
-
-  const canvasWidth = $derived(breakpointWidths[editor.activeBreakpoint] || '1280px');
-
-  interface RouteFlowSummary {
-    page: PageRoute;
-    layoutName: string | null;
-    componentCount: number;
-    topSections: { id: string; name: string; type: string }[];
-    outgoingRoutes: string[];
-    interactiveActions: string[];
-  }
-
-  function countNodes(node: BlueprintNode): number {
-    let total = 1;
-    for (const c of node.children || []) {
-      total += countNodes(c);
-    }
-    return total;
-  }
-
-  function collectRouteConnections(
-    node: BlueprintNode,
-    routes: Set<string>,
-    actions: string[]
-  ) {
-    const props = node.props || {};
-    for (const [k, v] of Object.entries(props)) {
-      if ((k.toLowerCase().includes('href') || k === 'path') && typeof v === 'string') {
-        if (v.startsWith('/') && !v.startsWith('//')) {
-          routes.add(v.split('#')[0] || '/');
-        }
-      }
-      if (k === 'links' && Array.isArray(v)) {
-        for (const item of v) {
-          if (item && typeof item === 'object' && typeof (item as Record<string, unknown>).href === 'string') {
-            const href = (item as Record<string, string>).href;
-            if (href.startsWith('/')) routes.add(href.split('#')[0] || '/');
-          }
-        }
-      }
-    }
-
-    for (const rule of node.interactions || []) {
-      const act = rule.actionType || rule.action?.type;
-      const p = (rule.payload || rule.action?.payload || {}) as Record<string, string>;
-      if (act === 'navigate' && (p.path || p.targetPath)) {
-        routes.add(p.path || p.targetPath);
-        actions.push(`${node.name} → Navigate (${p.path || p.targetPath})`);
-      } else if (act === 'openModal' || act === 'open_modal') {
-        actions.push(`${node.name} → Modal (${p.modalTitle || 'Dialog'})`);
-      } else if (act === 'toggleDrawer') {
-        actions.push(`${node.name} → Drawer (${p.drawerTitle || 'Sheet'})`);
-      } else if (act === 'showToast' || act === 'show_toast') {
-        actions.push(`${node.name} → Toast`);
-      } else if (act === 'setState' || act === 'toggle_state') {
-        actions.push(`${node.name} → State (${p.stateKey || 'status'})`);
-      }
-    }
-
-    for (const c of node.children || []) {
-      collectRouteConnections(c, routes, actions);
-    }
-  }
-
-  const routeFlowSummaries = $derived.by<RouteFlowSummary[]>(() => {
-    return editor.blueprint.pages.map((page) => {
-      const layout = page.layoutId
-        ? editor.blueprint.layouts.find((l) => l.id === page.layoutId)
-        : undefined;
-      const routes = new Set<string>();
-      const actions: string[] = [];
-      collectRouteConnections(page.rootNode, routes, actions);
-      if (layout) {
-        collectRouteConnections(layout.rootNode, routes, actions);
-      }
-      routes.delete(page.path);
-
-      return {
-        page,
-        layoutName: layout ? layout.name : null,
-        componentCount: countNodes(page.rootNode),
-        topSections: (page.rootNode.children || []).map((c) => ({
-          id: c.id,
-          name: c.name,
-          type: c.componentType
-        })),
-        outgoingRoutes: Array.from(routes),
-        interactiveActions: actions
-      };
-    });
-  });
 
   /* ---------------------------------------------------------------------------------------- */
   /* Iframe handshake                                                                         */
@@ -201,8 +116,9 @@
       activePageId: editor.activePageId,
       selectedNodeId: editor.selectedNodeId,
       isInteractiveMode: editor.isInteractiveMode,
-      activeBreakpoint: editor.activeBreakpoint
-    };
+      activeBreakpoint: editor.activeBreakpoint,
+      hoverNodeId: editor.hoverNodeId
+    } as ParentToPreviewMessage;
   }
 
   // Synchronize blueprint state with the iframe once (and whenever) the handshake completes.
@@ -239,11 +155,10 @@
       }
       case 'INLINE_PROP_EDIT': {
         if (isLockedNode(message.nodeId)) break;
-        editor.dispatch({
-          type: 'UPDATE_PROPS',
-          nodeId: message.nodeId,
-          props: { [message.propKey]: message.value }
-        });
+        if (!editor.setPropPath(message.nodeId, message.propKey, message.value)) {
+          editor.notify('warning', `Could not apply the inline edit to “${message.propKey}”.`);
+        }
+        if (message.final) editor.endContinuousEdit();
         break;
       }
       case 'RESIZE_NODE_STYLE': {
@@ -389,6 +304,57 @@
       case 'move-down':
         if (!selectedLocked) editor.reorderSelectedNode('down');
         break;
+      case 'select-parent':
+        editor.selectParent();
+        break;
+      case 'select-child':
+        editor.selectFirstChild();
+        break;
+      case 'select-next':
+        editor.selectSibling(1);
+        break;
+      case 'select-prev':
+        editor.selectSibling(-1);
+        break;
+      case 'toggle-preview':
+        editor.toggleInteractiveMode();
+        break;
+      case 'zoom-fit':
+        editor.zoomToFit();
+        break;
+      case 'zoom-100':
+        editor.setZoom(100);
+        break;
+      case 'zoom-in':
+        editor.stepZoom(1);
+        break;
+      case 'zoom-out':
+        editor.stepZoom(-1);
+        break;
+      case 'show-shortcuts':
+        editor.showShortcuts = true;
+        break;
+      case 'save':
+        void editor.saveNow().then(() => editor.saveStatus === 'saved' && editor.notify('success', 'Saved.', 1500));
+        break;
+      case 'export':
+        editor.showExportDialog = true;
+        break;
+      case 'panel-elements':
+        editor.openLeftTab('library');
+        break;
+      case 'panel-layers':
+        editor.openLeftTab('layers');
+        break;
+      case 'panel-pages':
+        editor.openLeftTab('pages');
+        break;
+      case 'panel-assets':
+        editor.openLeftTab('assets');
+        break;
+      case 'panel-styles':
+        editor.openLeftTab('tokens');
+        break;
     }
   }
 
@@ -409,414 +375,379 @@
       stopPinging();
     };
   });
+
+  /* ---------------------------------------------------------------------------------------- */
+  /* Stage measurement → zoom to fit                                                          */
+  /* ---------------------------------------------------------------------------------------- */
+
+  const FRAME_TOP = 36; // device label row above the frame
+  const FRAME_BOTTOM = 20;
+
+  function measureStage(el: HTMLElement) {
+    const ro = new ResizeObserver(([entry]) => {
+      const box = entry.contentRect;
+      editor.stageWidth = Math.floor(box.width);
+      editor.stageHeight = Math.floor(box.height);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }
+
+  const DEVICE_META = {
+    wide: { label: 'Wide', icon: MonitorIcon, range: '≥ 1440px' },
+    desktop: { label: 'Desktop', icon: DesktopIcon, range: '1024 – 1439px' },
+    tablet: { label: 'Tablet', icon: DeviceTabletIcon, range: '768 – 1023px' },
+    mobile: { label: 'Mobile', icon: DeviceMobileIcon, range: '≤ 767px' }
+  } as const;
+
+  const device = $derived(DEVICE_META[editor.activeBreakpoint]);
+  const scale = $derived(editor.effectiveZoom / 100);
+  const frameWidth = $derived(Math.round(editor.deviceWidth * scale));
+  const frameHeight = $derived(Math.max(320, editor.stageHeight - FRAME_TOP - FRAME_BOTTOM));
+  const iframeHeight = $derived(Math.round(frameHeight / scale));
+  const pageNodeCount = $derived.by(() => {
+    const count = (n: { children?: unknown[] } | undefined): number =>
+      n ? 1 + ((n.children ?? []) as { children?: unknown[] }[]).reduce((t, c) => t + count(c), 0) : 0;
+    return count(editor.activePage?.rootNode) - 1;
+  });
 </script>
 
-<main class="studio-canvas-area">
-  <!-- Viewport Rulers, Breadcrumb Bar & Mode Indicator -->
-  <div class="canvas-badge-bar">
-    <span class="viewport-badge">
-      {editor.canvasViewMode === 'flow'
-        ? `APP FLOW MAP • ${editor.blueprint.pages.length} ROUTES`
-        : `${editor.activeBreakpoint.toUpperCase()} • ${canvasWidth}`}
-    </span>
-    <span class="dot-separator">•</span>
-    <span class="mode-text">
-      {#if editor.canvasViewMode === 'flow'}
-        Visual Route Architecture, Shared Layouts &amp; Declarative Navigation Graph
-      {:else if editor.isInteractiveMode}
-        Interactive Preview (Live App — Click Links, Modals, Drawers &amp; Forms)
-      {:else}
-        Design Mode (Click to Select • Double-Click Text to Edit Inline • Drag Handles to Resize)
-      {/if}
-    </span>
+<main class="cv" aria-label="Canvas">
+  {#if editor.externalChange}
+    <div class="cv__banner" role="status">
+      <ArrowsClockwiseIcon size={14} />
+      <span>This project was changed in another tab.</span>
+      <button type="button" class="sx-btn sx-btn--sm" onclick={() => editor.reloadFromStorage()}>Load latest</button>
+      <button
+        type="button"
+        class="sx-btn sx-btn--sm sx-btn--ghost"
+        onclick={() => {
+          editor.externalChange = false;
+          void editor.saveNow();
+        }}>Keep mine</button
+      >
+    </div>
+  {/if}
 
-    {#if editor.selectedNodeBreadcrumb.length > 0 && !editor.isInteractiveMode && editor.canvasViewMode === 'canvas'}
-      <span class="dot-separator">•</span>
-      <nav aria-label="Selected element path" class="breadcrumb-nav">
-        {#each editor.selectedNodeBreadcrumb as crumb, idx (crumb.id)}
-          {#if idx > 0}
-            <span class="breadcrumb-sep">›</span>
+  {#if editor.canvasViewMode === 'flow'}
+    <div class="cv__flow">
+      <FlowMap />
+    </div>
+  {:else}
+    <div class={['cv__stage', editor.zoomMode === 'manual' && scale > 1 && 'cv__stage--overflow']} {@attach measureStage}>
+      <div class="cv__frame-wrap" style:width="{frameWidth}px">
+        <div class="cv__frame-label">
+          <span class="cv__device">
+            <device.icon size={13} />
+            {device.label}
+            <span class="cv__muted">{editor.deviceWidth}px</span>
+          </span>
+          <span class="cv__url">
+            {#if editor.isInteractiveMode}<PlayIcon size={10} weight="fill" />{/if}
+            {editor.activePage?.path ?? '/'}
+          </span>
+          <span class="cv__muted cv__zoom">{editor.effectiveZoom}%</span>
+        </div>
+        <div class={['cv__frame', editor.isInteractiveMode && 'cv__frame--live']} style:height="{frameHeight}px">
+          <iframe
+            {@attach previewFrame}
+            src="/preview"
+            title="Page canvas"
+            class="cv__iframe"
+            style:width="{editor.deviceWidth}px"
+            style:height="{iframeHeight}px"
+            style:transform="scale({scale})"
+          ></iframe>
+          {#if !isPreviewReady}
+            <div class="cv__overlay" role="status" aria-live="polite">
+              {#if handshakeFailed}
+                <div class="cv__error">
+                  <WarningCircleIcon size={22} />
+                  <strong>The canvas didn't respond</strong>
+                  <span>The preview frame failed to start. Reloading usually fixes it.</span>
+                  <button type="button" class="sx-btn sx-btn--primary sx-btn--sm" onclick={retryHandshake}>
+                    <ArrowClockwiseIcon size={13} />Reload canvas
+                  </button>
+                </div>
+              {:else}
+                <div class="cv__skeleton" aria-label="Loading canvas">
+                  <span class="cv__sk cv__sk--nav"></span>
+                  <span class="cv__sk cv__sk--hero"></span>
+                  <span class="cv__sk-row"><span class="cv__sk"></span><span class="cv__sk"></span><span class="cv__sk"></span></span>
+                </div>
+              {/if}
+            </div>
           {/if}
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <footer class="cv__status">
+    {#if editor.canvasViewMode === 'flow'}
+      <span class="cv__muted">Routes & flows</span>
+    {:else if editor.isInteractiveMode}
+      <span class="cv__mode cv__mode--live"><PlayIcon size={10} weight="fill" />Preview — links, forms and interactions are live</span>
+    {:else if editor.selectedNodeBreadcrumb.length > 0}
+      <nav class="cv__crumbs" aria-label="Selected element path">
+        {#each editor.selectedNodeBreadcrumb as crumb, idx (crumb.id)}
+          {@const m = getManifest(crumb.componentType) as { icon?: string; category?: string } | undefined}
+          {@const Icon = resolveWidgetIcon(m?.icon, m?.category)}
+          {#if idx > 0}<CaretRightIcon size={9} weight="bold" />{/if}
           <button
             type="button"
+            class={['cv__crumb', crumb.id === editor.selectedNodeId && 'cv__crumb--on']}
             onclick={() => editor.selectNode(crumb.id)}
-            class="breadcrumb-btn {crumb.id === editor.selectedNodeId ? 'breadcrumb-btn--active' : ''}"
+            onpointerenter={() => editor.hoverNode(crumb.id)}
+            onpointerleave={() => editor.hoverNode(null)}
           >
-            {crumb.name}
+            {#if idx > 0}<Icon size={12} />{/if}
+            {idx === 0 ? (editor.activePage ? pageDisplayName(editor.activePage) : 'Page') : crumb.name}
           </button>
         {/each}
       </nav>
+    {:else}
+      <span class="cv__mode"><CursorClickIcon size={12} />Click to select · double-click text to edit · drag to reorder</span>
     {/if}
-  </div>
-
-  {#if editor.canvasViewMode === 'flow'}
-    <!-- Interactive App Route & Architecture Flow Map -->
-    <div class="flow-map-container">
-      <!-- Shared Layouts Banner -->
-      <div class="flow-layouts-row">
-        {#each editor.blueprint.layouts as layout (layout.id)}
-          <div class="flow-layout-card">
-            <div class="flow-layout-header">
-              <span class="flow-badge flow-badge--layout">SHARED LAYOUT</span>
-              <span class="flow-layout-title">{layout.name}</span>
-            </div>
-            <p class="flow-layout-sub">
-              Wraps public routes automatically via <code>&lt;Slot name="children" /&gt;</code>
-            </p>
-            <div class="flow-section-pills">
-              {#each layout.rootNode.children || [] as lChild (lChild.id)}
-                <button
-                  type="button"
-                  onclick={() => {
-                    editor.selectNode(lChild.id);
-                    editor.canvasViewMode = 'canvas';
-                  }}
-                  class="flow-node-pill"
-                >
-                  {lChild.name} (<code>{lChild.componentType}</code>)
-                </button>
-              {/each}
-            </div>
-          </div>
-        {/each}
-      </div>
-
-      <!-- Page Routes Graph Grid -->
-      <div class="flow-routes-grid">
-        {#each routeFlowSummaries as item (item.page.id)}
-          {@const isActive = item.page.id === editor.activePageId}
-          <div class="flow-route-card {isActive ? 'flow-route-card--active' : ''}">
-            <div class="flow-route-top">
-              <div>
-                <span class="flow-route-path">{item.page.path}</span>
-                <h3 class="flow-route-title">{item.page.title}</h3>
-              </div>
-              <button
-                type="button"
-                onclick={() => {
-                  editor.setActivePage(item.page.id);
-                  editor.canvasViewMode = 'canvas';
-                }}
-                class="studio-btn studio-btn--primary flow-open-btn"
-              >
-                Edit Canvas →
-              </button>
-            </div>
-
-            <div class="flow-meta-row">
-              <span class="flow-badge">
-                {item.layoutName ? `Layout: ${item.layoutName}` : 'Standalone App Shell'}
-              </span>
-              <span class="flow-badge">{item.componentCount} nodes</span>
-            </div>
-
-            <div class="flow-subsection">
-              <div class="flow-subtitle">Page Sections ({item.topSections.length})</div>
-              <div class="flow-section-pills">
-                {#each item.topSections as sec (sec.id)}
-                  <button
-                    type="button"
-                    onclick={() => {
-                      editor.setActivePage(item.page.id);
-                      editor.selectNode(sec.id);
-                      editor.canvasViewMode = 'canvas';
-                    }}
-                    class="flow-node-pill"
-                  >
-                    {sec.name}
-                  </button>
-                {/each}
-              </div>
-            </div>
-
-            <div class="flow-subsection">
-              <div class="flow-subtitle">Outgoing Route Links ({item.outgoingRoutes.length})</div>
-              <div class="flow-edge-list">
-                {#each item.outgoingRoutes as targetPath (targetPath)}
-                  <button
-                    type="button"
-                    onclick={() => {
-                      const targetPage = editor.blueprint.pages.find((p) => p.path === targetPath);
-                      if (targetPage) {
-                        editor.setActivePage(targetPage.id);
-                      }
-                    }}
-                    class="flow-edge-chip"
-                  >
-                    ↪ {targetPath}
-                  </button>
-                {:else}
-                  <span class="flow-empty-text">Terminal route</span>
-                {/each}
-              </div>
-            </div>
-
-            {#if item.interactiveActions.length > 0}
-              <div class="flow-subsection">
-                <div class="flow-subtitle">Declarative Interactions</div>
-                <div class="flow-edge-list">
-                  {#each item.interactiveActions as act, aIdx (aIdx)}
-                    <span class="flow-action-chip">⚡ {act}</span>
-                  {/each}
-                </div>
-              </div>
-            {/if}
-          </div>
-        {/each}
-      </div>
-    </div>
-  {:else}
-    <!-- Resizable Responsive Frame -->
-    <div
-      class="studio-canvas-frame"
-      style="width: {canvasWidth}; min-height: 85vh; transform: scale({editor.zoom / 100}); transform-origin: top center;"
-    >
-      <iframe
-        {@attach previewFrame}
-        src="/preview"
-        title="Live Svelte 5 Preview Canvas"
-        class="canvas-iframe"
-      ></iframe>
-      {#if !isPreviewReady}
-        <div class="canvas-connecting" role="status" aria-live="polite">
-          {#if handshakeFailed}
-            <span>Preview canvas did not respond.</span>
-            <button type="button" class="studio-btn studio-btn--primary" onclick={retryHandshake}>
-              Reload preview
-            </button>
-          {:else}
-            <span>Connecting to preview canvas…</span>
-          {/if}
-        </div>
-      {/if}
-    </div>
-  {/if}
+    <span class="cv__status-right">
+      <span>{pageNodeCount} elements</span>
+      <span class="cv__dot"></span>
+      <span>{device.label} {device.range}</span>
+    </span>
+  </footer>
 </main>
 
 <style>
-  .canvas-badge-bar {
-    margin-bottom: 0.75rem;
+  .cv {
+    position: relative;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) var(--sx-statusbar-h);
+    min-width: 0;
+    min-height: 0;
+    background-color: var(--sx-canvas-bg);
+    background-image: radial-gradient(var(--sx-canvas-dot) 1px, transparent 1px);
+    background-size: 16px 16px;
+  }
+  .cv__stage {
+    position: relative;
+    min-height: 0;
+    overflow: hidden;
     display: flex;
-    flex-wrap: wrap;
+    justify-content: center;
+    padding: 0 0 20px;
+  }
+  .cv__stage--overflow {
+    overflow: auto;
+    justify-content: flex-start;
+  }
+  .cv__flow {
+    min-height: 0;
+    overflow: auto;
+  }
+  .cv__frame-wrap {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    margin: 0 auto;
+  }
+  .cv__frame-label {
+    display: flex;
     align-items: center;
-    gap: 0.625rem;
-    font-size: 0.75rem;
-    color: var(--md-sys-color-on-surface-variant);
+    gap: 10px;
+    height: 36px;
+    padding: 0 2px;
+    font-size: var(--sx-text-sm);
+    color: var(--sx-text-2);
     user-select: none;
   }
-  .viewport-badge {
-    font-family: var(--md-sys-font-mono);
-    background-color: var(--md-sys-color-surface-container);
-    border: 1px solid var(--md-sys-color-outline-variant);
-    padding: 0.125rem 0.5rem;
-    border-radius: 4px;
-    color: var(--md-sys-color-on-surface);
-  }
-  .dot-separator {
-    color: var(--md-sys-color-outline);
-  }
-  .mode-text {
-    color: var(--md-sys-color-on-surface-variant);
-  }
-  .breadcrumb-nav {
-    display: flex;
+  .cv__device {
+    display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
-    background-color: var(--md-sys-color-surface-container);
-    border: 1px solid var(--md-sys-color-outline-variant);
-    padding: 0.125rem 0.5rem;
+    gap: 6px;
+    font-weight: 500;
+    color: var(--sx-text);
+  }
+  .cv__url {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0 auto;
+    padding: 0 10px;
+    height: 22px;
+    max-width: 50%;
+    border-radius: 999px;
+    font-family: var(--sx-font-mono);
+    font-size: var(--sx-text-xs);
+    color: var(--sx-text-2);
+    background: var(--sx-panel);
+    border: 1px solid var(--sx-border);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cv__muted {
+    color: var(--sx-text-3);
+    font-weight: 400;
+  }
+  .cv__zoom {
+    font-variant-numeric: tabular-nums;
+  }
+  .cv__frame {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    background: #fff;
     border-radius: 6px;
+    box-shadow: var(--sx-shadow-frame);
+    transition: box-shadow 200ms var(--sx-ease);
   }
-  .breadcrumb-sep {
-    color: var(--md-sys-color-outline);
-    font-size: 0.75rem;
+  .cv__frame--live {
+    box-shadow:
+      0 0 0 2px var(--sx-accent),
+      var(--sx-shadow-frame);
   }
-  .breadcrumb-btn {
-    background: transparent;
-    border: none;
-    padding: 0.125rem 0.375rem;
-    border-radius: 4px;
-    font-size: 0.6875rem;
-    color: var(--md-sys-color-on-surface-variant);
-    cursor: pointer;
+  .cv__iframe {
+    display: block;
+    border: 0;
+    transform-origin: 0 0;
+    background: #fff;
   }
-  .breadcrumb-btn:hover {
-    color: var(--md-sys-color-on-surface);
-    background-color: var(--md-sys-color-surface-container-high);
+  .cv__overlay {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: #fff;
   }
-  .breadcrumb-btn--active {
-    color: var(--md-sys-color-on-primary-container);
-    background-color: var(--md-sys-color-primary-container);
-    font-weight: 600;
+  .cv__error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    max-width: 320px;
+    text-align: center;
+    font-size: var(--sx-text-md);
+    color: #475467;
   }
-  .canvas-connecting {
+  .cv__error :global(svg:first-child) {
+    color: #d92d20;
+  }
+  .cv__error strong {
+    color: #101828;
+    font-size: 14px;
+  }
+  .cv__skeleton {
     position: absolute;
     inset: 0;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-    font-size: 0.8125rem;
-    color: var(--md-sys-color-on-surface-variant);
-    background-color: color-mix(in srgb, var(--md-sys-color-surface) 85%, transparent);
-    pointer-events: auto;
+    gap: 18px;
+    padding: 18px 24px;
   }
-  .canvas-iframe {
-    width: 100%;
-    height: 85vh;
-    border: 0;
+  .cv__sk {
     display: block;
+    border-radius: 6px;
+    background: linear-gradient(90deg, #f2f4f7 0%, #e9ecf1 40%, #f2f4f7 80%);
+    background-size: 200% 100%;
+    animation: cv-shimmer 1.2s linear infinite;
   }
-  .flow-map-container {
-    width: 100%;
-    max-width: 1240px;
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
-    padding-bottom: 2rem;
+  .cv__sk--nav {
+    height: 36px;
   }
-  .flow-layouts-row {
+  .cv__sk--hero {
+    height: 42%;
+  }
+  .cv__sk-row {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: 1rem;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    height: 22%;
   }
-  .flow-layout-card {
-    background: var(--md-sys-color-surface-container);
-    border: 1px dashed var(--md-sys-color-primary);
-    border-radius: 14px;
-    padding: 1rem 1.25rem;
+  @keyframes cv-shimmer {
+    to {
+      background-position: -200% 0;
+    }
   }
-  .flow-layout-header {
+  .cv__banner {
+    position: absolute;
+    top: 44px;
+    left: 50%;
+    z-index: 5;
+    transform: translateX(-50%);
     display: flex;
     align-items: center;
-    gap: 0.625rem;
-    margin-bottom: 0.25rem;
+    gap: 8px;
+    padding: 6px 6px 6px 12px;
+    font-size: var(--sx-text-md);
+    background: var(--sx-panel-raised);
+    border: 1px solid var(--sx-border);
+    border-radius: var(--sx-radius-md);
+    box-shadow: var(--sx-shadow-lg);
   }
-  .flow-layout-title {
-    font-size: 0.9375rem;
-    font-weight: 700;
-    color: var(--md-sys-color-on-surface);
+  .cv__banner > :global(svg) {
+    color: var(--sx-warning);
   }
-  .flow-layout-sub {
-    margin: 0 0 0.75rem 0;
-    font-size: 0.75rem;
-    color: var(--md-sys-color-on-surface-variant);
-  }
-  .flow-routes-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-    gap: 1rem;
-  }
-  .flow-route-card {
-    background: var(--md-sys-color-surface-container);
-    border: 1px solid var(--md-sys-color-outline-variant);
-    border-radius: 16px;
-    padding: 1.125rem;
+  .cv__status {
     display: flex;
-    flex-direction: column;
-    gap: 0.875rem;
-    box-shadow: var(--md-sys-elevation-level1);
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 0 10px;
+    font-size: var(--sx-text-sm);
+    color: var(--sx-text-2);
+    background: var(--sx-panel);
+    border-top: 1px solid var(--sx-border);
+    user-select: none;
   }
-  .flow-route-card--active {
-    border-color: var(--md-sys-color-primary);
-    box-shadow: 0 0 0 2px var(--md-sys-color-primary-container);
+  .cv__mode {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--sx-text-3);
   }
-  .flow-route-top {
+  .cv__mode--live {
+    color: var(--sx-accent-text);
+    font-weight: 500;
+  }
+  .cv__crumbs {
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 0.75rem;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--sx-text-3);
   }
-  .flow-route-path {
-    display: inline-block;
-    font-family: var(--md-sys-font-mono);
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: var(--md-sys-color-primary);
-    background: var(--md-sys-color-surface-container-highest);
-    padding: 0.125rem 0.5rem;
-    border-radius: 6px;
-    margin-bottom: 0.25rem;
+  .cv__crumb {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 4px;
+    color: var(--sx-text-2);
+    white-space: nowrap;
   }
-  .flow-route-title {
-    margin: 0;
-    font-size: 0.9375rem;
-    font-weight: 700;
-    color: var(--md-sys-color-on-surface);
+  .cv__crumb:hover {
+    background: var(--sx-hover);
+    color: var(--sx-text);
   }
-  .flow-open-btn {
-    padding: 0.375rem 0.75rem;
-    font-size: 0.75rem;
-    flex-shrink: 0;
+  .cv__crumb--on {
+    color: var(--sx-accent-text);
+    background: var(--sx-accent-soft);
+    font-weight: 500;
   }
-  .flow-meta-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.375rem;
+  .cv__status-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    color: var(--sx-text-3);
+    white-space: nowrap;
   }
-  .flow-badge {
-    font-size: 0.6875rem;
-    font-weight: 600;
-    padding: 0.125rem 0.5rem;
-    border-radius: 9999px;
-    background: var(--md-sys-color-surface-container-high);
-    color: var(--md-sys-color-on-surface-variant);
-  }
-  .flow-badge--layout {
-    background: var(--md-sys-color-primary-container);
-    color: var(--md-sys-color-on-primary-container);
-  }
-  .flow-subsection {
-    display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
-  }
-  .flow-subtitle {
-    font-size: 0.6875rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--md-sys-color-on-surface-variant);
-  }
-  .flow-section-pills,
-  .flow-edge-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.375rem;
-  }
-  .flow-node-pill {
-    font-size: 0.75rem;
-    padding: 0.25rem 0.5rem;
-    border-radius: 6px;
-    border: 1px solid var(--md-sys-color-outline-variant);
-    background: var(--md-sys-color-surface-container-low);
-    color: var(--md-sys-color-on-surface);
-    cursor: pointer;
-  }
-  .flow-node-pill:hover {
-    border-color: var(--md-sys-color-primary);
-  }
-  .flow-edge-chip {
-    font-size: 0.75rem;
-    font-family: var(--md-sys-font-mono);
-    padding: 0.2rem 0.5rem;
-    border-radius: 6px;
-    border: 1px solid var(--md-sys-color-primary);
-    background: var(--md-sys-color-primary-container);
-    color: var(--md-sys-color-on-primary-container);
-    cursor: pointer;
-  }
-  .flow-action-chip {
-    font-size: 0.6875rem;
-    padding: 0.2rem 0.5rem;
-    border-radius: 6px;
-    background: var(--md-sys-color-tertiary-container);
-    color: var(--md-sys-color-on-tertiary-container);
-  }
-  .flow-empty-text {
-    font-size: 0.75rem;
-    color: var(--md-sys-color-outline);
-    font-style: italic;
+  .cv__dot {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--sx-text-3);
   }
 </style>

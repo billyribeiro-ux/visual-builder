@@ -9,6 +9,7 @@
 export type StackId =
   | 'nextjs'
   | 'sveltekit'
+  | 'sveltekit-rust'
   | 'nuxt'
   | 'astro'
   | 'react-router'
@@ -82,6 +83,47 @@ export const STACK_PRESETS: Record<StackId, StackPreset> = {
       'TypeScript is pinned to 6.x because @sveltejs/kit 3.1 and svelte-check 4.7 peer on ^6 (TS 7 is published but not yet supported).'
     ],
     verifyCommands: ['pnpm check', 'pnpm build']
+  },
+  'sveltekit-rust': {
+    id: 'sveltekit-rust',
+    label: 'SvelteKit 3 + Rust (Axum, sqlx, PostgreSQL)',
+    tagline: 'Svelte 5 runes frontend; typed Rust API service with Postgres',
+    scaffold:
+      'Monorepo: `apps/web` via `pnpm dlx sv create web --template minimal --types ts` (SvelteKit 3, config in vite.config.ts, `#lib` subpath imports) and `services/api` via `cargo new api` (Axum + Tokio + sqlx with the postgres, runtime-tokio and macros features).',
+    versions: {
+      svelte: '5.57.3',
+      '@sveltejs/kit': '3.1.0',
+      vite: '8.3.5',
+      typescript: '6.0.3',
+      rust: '1.99.1',
+      axum: '0.8.9',
+      tokio: '1.54.1',
+      sqlx: '0.9.0',
+      'tower-http': '0.7.1',
+      serde: '1.0.229'
+    },
+    defaultStyling: 'css-variables',
+    supportedStyling: ['css-variables', 'tailwind'],
+    routeFile: (p) => (segs(p) ? `apps/web/src/routes/(site)/${segs(p)}/+page.svelte` : 'apps/web/src/routes/(site)/+page.svelte'),
+    layoutFile: (slug) => `apps/web/src/routes/(site)/+layout.svelte   // layout: ${slug}`,
+    componentFile: (name) => `apps/web/src/lib/components/${name}.svelte`,
+    interactivity:
+      'UI state lives in Svelte 5 runes ($state, $derived, $props, snippets with {@render}); no legacy `export let`, stores for local state, or `on:` directives. Anything that persists or needs a server (form submissions, auth, data tables, settings) goes through typed JSON endpoints on the Axum service — never fake persistence in the browser.',
+    conventions: [
+      'Set <svelte:head> title and meta description per page from the spec.',
+      'Every `*_cents` money value is i64 in Rust, BIGINT in Postgres and number in TS — never i32.',
+      'Database changes are forward-only, idempotent sqlx migrations (`CREATE INDEX IF NOT EXISTS`).',
+      'Conditional updates are a single atomic `UPDATE … WHERE … RETURNING` (no select-then-update races).',
+      'Password hashing (argon2) runs in `tokio::task::spawn_blocking`; every outbound HTTP client sets both `.timeout()` and `.connect_timeout()`.',
+      'Where the spec says a form or flow is a mock, implement the UI exactly and expose a clearly named Axum endpoint stub that returns a typed response; list each stub in the final report.'
+    ],
+    verifyCommands: [
+      'pnpm --dir apps/web check',
+      'pnpm --dir apps/web build',
+      'cargo fmt --check --manifest-path services/api/Cargo.toml',
+      'cargo clippy --manifest-path services/api/Cargo.toml --all-targets -- -D warnings',
+      'cargo test --manifest-path services/api/Cargo.toml'
+    ]
   },
   nuxt: {
     id: 'nuxt',

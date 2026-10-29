@@ -1,686 +1,663 @@
 <script lang="ts">
-  import { editor } from '../state/editor.svelte.js';
   import type { BreakpointKey } from '@app-viz/schema';
-  import {
-    generatePageRoute,
-    generateAppCss,
-    generateAgentsMarkdown
-  } from '@app-viz/codegen';
+  import { editor } from '../state/editor.svelte.js';
+  import { pageDisplayName } from '../state/page-name.js';
+  import IconButton from '../ui/IconButton.svelte';
+  import Popover from '../ui/Popover.svelte';
+  import { tooltip } from '../ui/tooltip.js';
+  import CaretDownIcon from 'phosphor-svelte/lib/CaretDownIcon';
+  import FileIcon from 'phosphor-svelte/lib/FileIcon';
+  import HouseSimpleIcon from 'phosphor-svelte/lib/HouseSimpleIcon';
+  import PlusIcon from 'phosphor-svelte/lib/PlusIcon';
+  import MinusIcon from 'phosphor-svelte/lib/MinusIcon';
+  import MonitorIcon from 'phosphor-svelte/lib/MonitorIcon';
+  import DesktopIcon from 'phosphor-svelte/lib/DesktopIcon';
+  import DeviceTabletIcon from 'phosphor-svelte/lib/DeviceTabletIcon';
+  import DeviceMobileIcon from 'phosphor-svelte/lib/DeviceMobileIcon';
+  import ArrowCounterClockwiseIcon from 'phosphor-svelte/lib/ArrowCounterClockwiseIcon';
+  import ArrowClockwiseIcon from 'phosphor-svelte/lib/ArrowClockwiseIcon';
+  import ShieldCheckIcon from 'phosphor-svelte/lib/ShieldCheckIcon';
+  import ShieldWarningIcon from 'phosphor-svelte/lib/ShieldWarningIcon';
+  import CodeIcon from 'phosphor-svelte/lib/CodeIcon';
+  import SparkleIcon from 'phosphor-svelte/lib/SparkleIcon';
+  import MoonIcon from 'phosphor-svelte/lib/MoonIcon';
+  import SunIcon from 'phosphor-svelte/lib/SunIcon';
+  import PlayIcon from 'phosphor-svelte/lib/PlayIcon';
+  import PencilSimpleIcon from 'phosphor-svelte/lib/PencilSimpleIcon';
+  import ExportIcon from 'phosphor-svelte/lib/ExportIcon';
+  import TreeStructureIcon from 'phosphor-svelte/lib/TreeStructureIcon';
+  import FolderOpenIcon from 'phosphor-svelte/lib/FolderOpenIcon';
+  import FolderSimplePlusIcon from 'phosphor-svelte/lib/FolderSimplePlusIcon';
+  import CopyIcon from 'phosphor-svelte/lib/CopyIcon';
+  import DownloadSimpleIcon from 'phosphor-svelte/lib/DownloadSimpleIcon';
+  import ClockCounterClockwiseIcon from 'phosphor-svelte/lib/ClockCounterClockwiseIcon';
+  import KeyboardIcon from 'phosphor-svelte/lib/KeyboardIcon';
+  import CheckIcon from 'phosphor-svelte/lib/CheckIcon';
+  import GearSixIcon from 'phosphor-svelte/lib/GearSixIcon';
 
-  const breakpoints: { key: BreakpointKey; label: string; icon: string; width: string }[] = [
-    { key: 'mobile', label: 'Mobile', icon: '📱', width: '375px' },
-    { key: 'tablet', label: 'Tablet', icon: '💻', width: '768px' },
-    { key: 'desktop', label: 'Desktop', icon: '🖥️', width: '1280px' },
-    { key: 'wide', label: 'Wide', icon: '🖵', width: '1440px' }
+  const devices: { key: BreakpointKey; label: string; width: number; icon: typeof DesktopIcon }[] = [
+    { key: 'wide', label: 'Wide', width: 1440, icon: MonitorIcon },
+    { key: 'desktop', label: 'Desktop', width: 1280, icon: DesktopIcon },
+    { key: 'tablet', label: 'Tablet', width: 768, icon: DeviceTabletIcon },
+    { key: 'mobile', label: 'Mobile', width: 375, icon: DeviceMobileIcon }
   ];
 
-  let showPreflightModal = $state(false);
-  let showCodeModal = $state(false);
-  let activeCodeTab = $state<'page' | 'css' | 'agents' | 'blueprint'>('page');
-  let copySuccess = $state(false);
+  let menuAnchor = $state<HTMLElement | null>(null);
+  let pageAnchor = $state<HTMLElement | null>(null);
+  let zoomAnchor = $state<HTMLElement | null>(null);
+  let exportAnchor = $state<HTMLElement | null>(null);
+  let historyAnchor = $state<HTMLElement | null>(null);
+  let openMenu = $state<'main' | 'page' | 'zoom' | 'export' | 'history' | null>(null);
 
-  const saveLabel = $derived.by(() => {
+  /** Newest first, as shown in the history panel. */
+  const undoSteps = $derived([...editor.undoLabels].reverse());
+  /** Furthest redo step first, so the list reads top (future) → bottom (oldest). */
+  const redoSteps = $derived([...editor.redoLabels].reverse());
+
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+  const mod = isMac ? '⌘' : 'Ctrl+';
+
+  const zoomLabel = $derived(`${Math.round(editor.zoomMode === 'fit' ? editor.effectiveZoom : editor.zoom)}%`);
+  const issueCount = $derived(editor.preflightReport.issues.length);
+  const preflightClean = $derived(editor.preflightReport.valid && issueCount === 0);
+
+  const save = $derived.by(() => {
     switch (editor.saveStatus) {
       case 'saving':
-        return 'Saving…';
+        return { tone: 'busy', text: 'Saving…' };
       case 'dirty':
-        return 'Unsaved changes';
+        return { tone: 'busy', text: 'Unsaved' };
       case 'error':
-        return 'Not saved — click for details';
+        return { tone: 'error', text: 'Not saved' };
       case 'saved':
-        return editor.lastSavedAt
-          ? `Saved ${new Date(editor.lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-          : 'Saved';
+        return { tone: 'ok', text: 'Saved' };
       default:
-        return editor.ready ? 'All changes saved' : 'Loading…';
+        return { tone: 'ok', text: editor.ready ? 'Saved' : 'Loading…' };
     }
   });
 
-  const liveCodeOutput = $derived.by(() => {
-    if (!showCodeModal) return '';
-    if (activeCodeTab === 'page' && editor.activePage) {
-      return generatePageRoute(editor.activePage, editor.blueprint);
-    }
-    if (activeCodeTab === 'css') {
-      return generateAppCss(editor.blueprint.tokens, editor.blueprint);
-    }
-    if (activeCodeTab === 'agents') {
-      return generateAgentsMarkdown(editor.blueprint);
-    }
-    return JSON.stringify(editor.blueprint, null, 2);
-  });
+  const saveTitle = $derived(
+    editor.saveStatus === 'error'
+      ? `Save failed: ${editor.saveError ?? 'unknown error'} — click to retry`
+      : editor.lastSavedAt
+        ? `Autosaved to this browser at ${new Date(editor.lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+        : 'Autosaved to this browser'
+  );
 
-  function closeAllModals() {
-    showPreflightModal = false;
-    showCodeModal = false;
+  function anchorTo(setter: (el: HTMLElement) => void) {
+    return (el: HTMLElement) => {
+      setter(el);
+    };
   }
 
-  async function handleCopyCode() {
-    if (!liveCodeOutput || typeof navigator === 'undefined') return;
-    await navigator.clipboard.writeText(liveCodeOutput);
-    copySuccess = true;
-    setTimeout(() => (copySuccess = false), 2000);
+  function toggle(menu: NonNullable<typeof openMenu>) {
+    openMenu = openMenu === menu ? null : menu;
+  }
+
+  function run(fn: () => void) {
+    openMenu = null;
+    fn();
   }
 
 </script>
 
-<header class="studio-topbar">
-  <!-- Left: Brand, Editable Project Name, Templates, Save Status & History -->
-  <div class="studio-topbar__left">
-    <div class="brand">
-      <div class="brand-icon" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <rect x="2" y="2" width="9" height="9" rx="3" fill="#4285F4" />
-          <rect x="13" y="2" width="9" height="9" rx="4.5" fill="#EA4335" />
-          <rect x="2" y="13" width="9" height="9" rx="4.5" fill="#FBBC04" />
-          <rect x="13" y="13" width="9" height="9" rx="3" fill="#34A853" />
-        </svg>
-      </div>
-      <span class="google-md3-pill">MD3</span>
+<header class="tb">
+  <!-- Left: workspace menu, project, page -->
+  <div class="tb__group tb__group--left">
+    <button
+      type="button"
+      class="tb__logo"
+      aria-label="Studio menu"
+      aria-haspopup="menu"
+      aria-expanded={openMenu === 'main'}
+      {@attach anchorTo((el) => (menuAnchor = el))}
+      onclick={() => toggle('main')}
+    >
+      <svg width="16" height="16" viewBox="0 0 32 32" aria-hidden="true">
+        <path d="M5 5h9v9H5zM18 5h9v9h-9zM5 18h9v9H5z" fill="currentColor" />
+        <path d="M18 18h9v9h-9z" fill="var(--sx-accent)" />
+      </svg>
+      <CaretDownIcon size={10} weight="bold" />
+    </button>
+
+    <div class="tb__project">
       <input
+        class="tb__project-name"
         type="text"
         aria-label="Project name"
+        spellcheck="false"
         value={editor.blueprint.meta.name}
-        onchange={(e) => editor.renameProject((e.target as HTMLInputElement).value)}
-        class="brand-name-input"
+        onchange={(e) => editor.renameProject((e.currentTarget as HTMLInputElement).value)}
+        onkeydown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
       />
-    </div>
-
-    <button
-      type="button"
-      onclick={() => {
-        closeAllModals();
-        editor.showBlockLibraryModal = true;
-      }}
-      class="studio-btn top-pill-btn"
-      title="Open Elementor Pro Block & Page Library"
-    >
-      📁 Library
-    </button>
-
-    <button
-      type="button"
-      onclick={() => {
-        editor.showNavigator = !editor.showNavigator;
-      }}
-      class="studio-btn {editor.showNavigator ? 'studio-btn--active' : 'top-pill-btn'}"
-      title="Toggle Floating Structure Navigator (⌘I)"
-    >
-      📑 Structure
-    </button>
-
-    <button
-      type="button"
-      onclick={() => {
-        editor.isInteractiveMode = false;
-        editor.activeLeftTab = 'tokens';
-      }}
-      class="studio-btn {editor.activeLeftTab === 'tokens' && !editor.isInteractiveMode ? 'studio-btn--active' : 'top-pill-btn'}"
-      title="Global Colors, Fonts & MD3 Design System (Site Settings)"
-    >
-      🎨 Site Settings
-    </button>
-
-    <button
-      type="button"
-      onclick={() => {
-        closeAllModals();
-        editor.showProjectLibrary = true;
-      }}
-      class="studio-btn top-pill-btn"
-      title="Open, create, duplicate, import or export projects"
-    >
-      🗂 Projects
-    </button>
-
-    <div class="divider"></div>
-
-    <button
-      type="button"
-      class="status-indicator status-btn"
-      aria-live="polite"
-      title={editor.saveError ?? 'Autosaved to this browser'}
-      onclick={() => (editor.saveStatus === 'error' ? editor.saveNow() : (editor.showProjectLibrary = true))}
-    >
-      <span class="status {editor.saveStatus === 'error' ? 'status--error' : editor.saveStatus === 'saving' || editor.saveStatus === 'dirty' ? 'status--saving' : 'status--saved'}">
-        <span class="status-dot {editor.saveStatus === 'saving' ? 'status-dot--pulse' : ''}"></span>
-        {saveLabel}
-      </span>
-    </button>
-
-    <!-- Undo / Redo + Snapshots -->
-    <div class="studio-btn-group">
       <button
         type="button"
-        onclick={() => editor.undo()}
-        disabled={!editor.canUndo}
-        title="Undo ({editor.undoCount} steps)"
-        class="studio-btn"
+        class={['tb__save', `tb__save--${save.tone}`]}
+        aria-live="polite"
+        {@attach tooltip(saveTitle)}
+        onclick={() => (editor.saveStatus === 'error' ? void editor.saveNow() : (editor.showProjectLibrary = true))}
       >
-        ↺
-      </button>
-      <button
-        type="button"
-        onclick={() => editor.redo()}
-        disabled={!editor.canRedo}
-        title="Redo ({editor.redoCount} steps)"
-        class="studio-btn"
-      >
-        ↻
-      </button>
-      <button
-        type="button"
-        onclick={() => {
-          closeAllModals();
-          editor.showProjectLibrary = true;
-        }}
-        title="Version history"
-        aria-label="Version history ({editor.snapshots.length} saved versions)"
-        class="studio-btn"
-      >
-        🕒 {editor.snapshots.length}
+        <span class="tb__save-dot"></span>{save.text}
       </button>
     </div>
+
+    <span class="sx-divider-v"></span>
+
+    <button
+      type="button"
+      class="tb__page"
+      aria-haspopup="menu"
+      aria-expanded={openMenu === 'page'}
+      {@attach anchorTo((el) => (pageAnchor = el))}
+      {@attach tooltip('Switch page')}
+      onclick={() => toggle('page')}
+    >
+      {#if editor.activePage?.path === '/'}
+        <HouseSimpleIcon size={14} />
+      {:else}
+        <FileIcon size={14} />
+      {/if}
+      <span class="tb__page-title">{editor.activePage ? pageDisplayName(editor.activePage) : 'No page'}</span>
+      <span class="tb__page-path">{editor.activePage?.path}</span>
+      <CaretDownIcon size={10} weight="bold" />
+    </button>
   </div>
 
-  <!-- Center: Viewport Breakpoint Switcher & Zoom -->
-  <div class="studio-topbar__center">
-    <div class="studio-btn-group">
-      {#each breakpoints as bp (bp.key)}
+  <!-- Center: devices, zoom, view -->
+  <div class="tb__group tb__group--center">
+    <div class="sx-seg" role="group" aria-label="Canvas device">
+      {#each devices as d (d.key)}
+        {@const Icon = d.icon}
         <button
           type="button"
-          onclick={() => editor.setBreakpoint(bp.key)}
-          class="studio-btn {editor.activeBreakpoint === bp.key ? 'studio-btn--active' : ''}"
+          class="sx-seg__item tb__device"
+          aria-pressed={editor.activeBreakpoint === d.key}
+          aria-label="{d.label} {d.width}px"
+          {@attach tooltip(`${d.label} · ${d.width}px`)}
+          onclick={() => editor.setBreakpoint(d.key)}
         >
-          <span>{bp.icon}</span>
-          <span>{bp.label}</span>
-          <span class="bp-width">({bp.width})</span>
+          <Icon size={15} />
         </button>
       {/each}
     </div>
 
-    <div class="studio-btn-group zoom-group">
+    <div class="tb__zoom">
+      <IconButton label="Zoom out" icon={MinusIcon} iconSize={12} size="sm" kbd="{mod}−" onclick={() => editor.stepZoom(-1)} />
       <button
         type="button"
-        onclick={() => editor.setZoom(editor.zoom - 10)}
-        aria-label="Zoom out"
-        class="studio-btn"
+        class="tb__zoom-value"
+        aria-label="Zoom options, current {zoomLabel}"
+        aria-haspopup="menu"
+        aria-expanded={openMenu === 'zoom'}
+        {@attach anchorTo((el) => (zoomAnchor = el))}
+        onclick={() => toggle('zoom')}
       >
-        -
+        {zoomLabel}
       </button>
-      <span class="zoom-level">{editor.zoom}%</span>
-      <button
-        type="button"
-        onclick={() => editor.setZoom(editor.zoom + 10)}
-        aria-label="Zoom in"
-        class="studio-btn"
-      >
-        +
-      </button>
+      <IconButton label="Zoom in" icon={PlusIcon} iconSize={12} size="sm" kbd="{mod}+" onclick={() => editor.stepZoom(1)} />
     </div>
+
+    <IconButton
+      label={editor.canvasViewMode === 'flow' ? 'Back to canvas' : 'Route & flow map'}
+      icon={TreeStructureIcon}
+      active={editor.canvasViewMode === 'flow'}
+      aria-pressed={editor.canvasViewMode === 'flow'}
+      onclick={() => (editor.canvasViewMode = editor.canvasViewMode === 'flow' ? 'canvas' : 'flow')}
+    />
   </div>
 
-  <!-- Right: Page Switcher, Preflight Badge, Code View, Mode Toggle & AI Export -->
-  <div class="studio-topbar__right">
-    <select
-      aria-label="Active page route"
-      value={editor.activePageId}
-      onchange={(e) => editor.setActivePage((e.target as HTMLSelectElement).value)}
-      class="studio-select page-select"
-    >
-      {#each editor.blueprint.pages as page (page.id)}
-        <option value={page.id}>{page.path} — {page.title}</option>
-      {/each}
-    </select>
+  <!-- Right: history, checks, tools, preview, export -->
+  <div class="tb__group tb__group--right">
+    <IconButton label="Undo" icon={ArrowCounterClockwiseIcon} kbd="{mod}Z" disabled={!editor.canUndo} onclick={() => editor.undo()} />
+    <IconButton label="Redo" icon={ArrowClockwiseIcon} kbd={isMac ? '⇧⌘Z' : 'Ctrl+Y'} disabled={!editor.canRedo} onclick={() => editor.redo()} />
+    <span class="tb__history-anchor" {@attach anchorTo((el) => (historyAnchor = el))}>
+      <IconButton
+        label="History"
+        icon={ClockCounterClockwiseIcon}
+        active={openMenu === 'history'}
+        aria-haspopup="menu"
+        aria-expanded={openMenu === 'history'}
+        onclick={() => toggle('history')}
+      />
+    </span>
 
-    <!-- Preflight Check Badge -->
-    <button
-      type="button"
-      onclick={() => {
-        closeAllModals();
-        editor.showCommandPalette = !editor.showCommandPalette;
-      }}
-      title="Open AI Section Composer & Quick Commands (Cmd/Ctrl+K)"
-      class="studio-btn json-btn"
-    >
-      ✨ ⌘K AI
-    </button>
-
-    <!-- Route & Interaction Flow Map Toggle -->
-    <button
-      type="button"
-      onclick={() => {
-        editor.canvasViewMode = editor.canvasViewMode === 'flow' ? 'canvas' : 'flow';
-      }}
-      title="Toggle App Route & Interaction Flow Map"
-      class="studio-btn {editor.canvasViewMode === 'flow' ? 'studio-btn--active' : 'json-btn'}"
-    >
-      🗺️ {editor.canvasViewMode === 'flow' ? 'Canvas' : 'Flow Map'}
-    </button>
+    <span class="sx-divider-v"></span>
 
     <button
       type="button"
-      onclick={() => {
-        const next = !showPreflightModal;
-        closeAllModals();
-        showPreflightModal = next;
-      }}
-      class="studio-btn preflight-btn {editor.preflightReport.valid && editor.preflightReport.issues.length === 0 ? 'preflight-btn--ok' : 'preflight-btn--warn'}"
-      title="Inspect Preflight & Export Readiness"
+      class={['tb__check', preflightClean ? 'tb__check--ok' : 'tb__check--warn']}
+      aria-label={preflightClean ? 'Export checks passed' : `${issueCount} export issues`}
+      {@attach tooltip(preflightClean ? `Export checks passed · ${editor.preflightReport.score}%` : `${issueCount} export ${issueCount === 1 ? 'issue' : 'issues'} — review before export`)}
+      onclick={() => (editor.showPreflight = true)}
     >
-      {#if editor.preflightReport.valid && editor.preflightReport.issues.length === 0}
-        ✓ MD3 ({editor.preflightReport.score}%)
+      {#if preflightClean}
+        <ShieldCheckIcon size={15} />
       {:else}
-        ⚠ {editor.preflightReport.issues.length} Notice(s)
+        <ShieldWarningIcon size={15} />
+        <span>{issueCount}</span>
+      {/if}
+    </button>
+    <IconButton label="View generated code" icon={CodeIcon} onclick={() => (editor.showCodeView = true)} />
+    <IconButton label="Command menu & compose" icon={SparkleIcon} kbd="{mod}K" onclick={() => (editor.showCommandPalette = true)} />
+    <IconButton
+      label={editor.studioTheme === 'light' ? 'Dark interface' : 'Light interface'}
+      icon={editor.studioTheme === 'light' ? MoonIcon : SunIcon}
+      onclick={() => editor.toggleStudioTheme()}
+    />
+
+    <span class="sx-divider-v"></span>
+
+    <button
+      type="button"
+      class={['sx-btn', editor.isInteractiveMode ? 'sx-btn--primary' : '']}
+      aria-pressed={editor.isInteractiveMode}
+      {@attach tooltip(editor.isInteractiveMode ? 'Return to the editor' : 'Use the site like a visitor', { kbd: 'P' })}
+      onclick={() => editor.toggleInteractiveMode()}
+    >
+      {#if editor.isInteractiveMode}
+        <PencilSimpleIcon size={14} />Edit
+      {:else}
+        <PlayIcon size={13} weight="fill" />Preview
       {/if}
     </button>
 
-    <!-- Live Svelte 5 Code Inspector -->
-    <button
-      type="button"
-      onclick={() => {
-        const next = !showCodeModal;
-        closeAllModals();
-        showCodeModal = next;
-      }}
-      title="Inspect Live Generated Svelte 5 & MD3 CSS Code"
-      class="studio-btn json-btn"
-    >
-      &lt;/&gt; Code
-    </button>
-
-    <!-- Google MD3 Light / Dark Studio Theme Toggle -->
-    <button
-      type="button"
-      onclick={() => editor.toggleStudioTheme()}
-      title="Switch Google MD3 Studio Chrome ({editor.studioTheme === 'light' ? 'Dark' : 'Light'} Mode)"
-      class="studio-btn json-btn"
-      aria-label="Toggle Studio Light or Dark Theme"
-    >
-      {editor.studioTheme === 'light' ? '🌙' : '☀️'}
-    </button>
-
-    <!-- Interactive Mode Toggle (Full-Screen Preview like Elementor Eye Icon) -->
-    <button
-      type="button"
-      onclick={() => editor.toggleInteractiveMode()}
-      class="studio-btn mode-btn {editor.isInteractiveMode ? 'mode-btn--interactive' : ''}"
-    >
-      <span>{editor.isInteractiveMode ? '✏️ Back to Editor' : '👁 Preview'}</span>
-    </button>
-
-    <!-- Export build spec for Claude Code (any stack) -->
-    <button
-      type="button"
-      onclick={() => {
-        closeAllModals();
-        editor.showExportDialog = true;
-      }}
-      class="studio-btn studio-btn--primary export-btn"
-      title="Export a build spec for Claude Code (⌘E)"
-    >
-      <span>⚡</span>
-      <span>Export for Claude Code</span>
-    </button>
+    <div class="tb__export">
+      <button
+        type="button"
+        class="sx-btn sx-btn--primary tb__export-main"
+        {@attach tooltip('Export a build spec for Claude Code', { kbd: `${mod}E` })}
+        onclick={() => (editor.showExportDialog = true)}
+      >
+        <ExportIcon size={14} />Export
+      </button>
+      <button
+        type="button"
+        class="sx-btn sx-btn--primary tb__export-more"
+        aria-label="More export options"
+        aria-haspopup="menu"
+        aria-expanded={openMenu === 'export'}
+        {@attach anchorTo((el) => (exportAnchor = el))}
+        onclick={() => toggle('export')}
+      >
+        <CaretDownIcon size={11} weight="bold" />
+      </button>
+    </div>
   </div>
 </header>
 
-{#if showPreflightModal}
-  <div class="topbar-modal" role="dialog" aria-label="Preflight Audit Report">
-    <div class="topbar-modal__header">
-      <span class="topbar-modal__title">Export Preflight & Google MD3 Audit ({editor.preflightReport.score}%)</span>
-      <button type="button" class="studio-btn" onclick={() => (showPreflightModal = false)}>✕</button>
-    </div>
-    <div class="topbar-modal__body">
-      <div class="preflight-summary">
-        <span>Routes: <strong>{editor.blueprint.pages.length}</strong></span>
-        <span>Layouts: <strong>{editor.blueprint.layouts.length}</strong></span>
-        <span>Target: <strong>Svelte {editor.blueprint.target.svelteVersion} / Kit {editor.blueprint.target.sveltekitVersion}</strong></span>
-        <span>CSS Policy: <strong>Pure Vanilla MD3</strong></span>
-      </div>
-      <div class="snapshot-list">
-        {#each editor.preflightReport.checks as check (check.id)}
-          <div class="snapshot-row">
-            <div>
-              <span class="issue-badge issue-badge--{check.status}">{check.status.toUpperCase()}</span>
-              <span style="font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;">{check.label}</span>
-              <div style="font-size: 0.6875rem; color: var(--md-sys-color-on-surface-variant); margin-top: 0.2rem;">
-                {check.detail}
-              </div>
-            </div>
-          </div>
-        {/each}
-      </div>
-    </div>
-  </div>
-{/if}
+<!-- Studio menu -->
+<Popover open={openMenu === 'main'} anchor={menuAnchor} onclose={() => (openMenu = null)} width={248} label="Studio menu">
+  <button type="button" role="menuitem" class="sx-menu-item" onclick={() => run(() => (editor.showProjectLibrary = true))}>
+    <FolderOpenIcon size={16} /><span class="sx-menu-item__label">Projects…</span>
+  </button>
+  <button type="button" role="menuitem" class="sx-menu-item" onclick={() => run(() => void editor.newProject('blank'))}>
+    <FolderSimplePlusIcon size={16} /><span class="sx-menu-item__label">New blank project</span>
+  </button>
+  <button type="button" role="menuitem" class="sx-menu-item" onclick={() => run(() => void editor.duplicateProject())}>
+    <CopyIcon size={16} /><span class="sx-menu-item__label">Duplicate project</span>
+  </button>
+  <button type="button" role="menuitem" class="sx-menu-item" onclick={() => run(() => editor.exportProjectFile())}>
+    <DownloadSimpleIcon size={16} /><span class="sx-menu-item__label">Download project file</span>
+  </button>
+  <div class="sx-menu-sep"></div>
+  <button type="button" role="menuitem" class="sx-menu-item" onclick={() => run(() => void editor.createSnapshot())}>
+    <ClockCounterClockwiseIcon size={16} /><span class="sx-menu-item__label">Save version</span>
+    <span class="sx-menu-item__hint">{editor.snapshots.length}</span>
+  </button>
+  <button type="button" role="menuitem" class="sx-menu-item" onclick={() => run(() => editor.openLeftTab('tokens'))}>
+    <GearSixIcon size={16} /><span class="sx-menu-item__label">Global styles</span>
+  </button>
+  <button type="button" role="menuitem" class="sx-menu-item" onclick={() => run(() => (editor.showShortcuts = true))}>
+    <KeyboardIcon size={16} /><span class="sx-menu-item__label">Keyboard shortcuts</span>
+    <span class="sx-menu-item__hint">?</span>
+  </button>
+</Popover>
 
-{#if showCodeModal}
-  <div class="topbar-modal topbar-modal--wide" role="dialog" aria-label="Live Generated Svelte 5 Code">
-    <div class="topbar-modal__header">
-      <div style="display: flex; align-items: center; gap: 0.5rem;">
-        <span class="topbar-modal__title">Live Code & AI Handoff Preview</span>
-        <div class="studio-btn-group">
-          <button
-            type="button"
-            onclick={() => (activeCodeTab = 'page')}
-            class="studio-btn {activeCodeTab === 'page' ? 'studio-btn--active' : ''}"
-          >
-            +page.svelte ({editor.activePage?.path})
-          </button>
-          <button
-            type="button"
-            onclick={() => (activeCodeTab = 'css')}
-            class="studio-btn {activeCodeTab === 'css' ? 'studio-btn--active' : ''}"
-          >
-            src/app.css (MD3)
-          </button>
-          <button
-            type="button"
-            onclick={() => (activeCodeTab = 'agents')}
-            class="studio-btn {activeCodeTab === 'agents' ? 'studio-btn--active' : ''}"
-          >
-            AGENTS.md
-          </button>
-          <button
-            type="button"
-            onclick={() => (activeCodeTab = 'blueprint')}
-            class="studio-btn {activeCodeTab === 'blueprint' ? 'studio-btn--active' : ''}"
-          >
-            project.blueprint.json
-          </button>
-        </div>
-      </div>
-      <div style="display: flex; align-items: center; gap: 0.5rem;">
-        <button type="button" class="studio-btn studio-btn--primary" onclick={handleCopyCode}>
-          {copySuccess ? '✓ Copied!' : '📋 Copy Code'}
-        </button>
-        <button type="button" class="studio-btn" onclick={() => (showCodeModal = false)}>✕</button>
-      </div>
-    </div>
-    <div class="topbar-modal__body">
-      <pre class="code-preview-block"><code>{liveCodeOutput}</code></pre>
-    </div>
+<!-- Page switcher -->
+<Popover open={openMenu === 'page'} anchor={pageAnchor} onclose={() => (openMenu = null)} width={300} label="Pages">
+  <div class="sx-menu-heading">Pages</div>
+  {#each editor.blueprint.pages as page (page.id)}
+    <button
+      type="button"
+      role="menuitemradio"
+      aria-checked={page.id === editor.activePageId}
+      class="sx-menu-item"
+      onclick={() => run(() => editor.setActivePage(page.id))}
+    >
+      {#if page.path === '/'}<HouseSimpleIcon size={16} />{:else}<FileIcon size={16} />{/if}
+      <span class="sx-menu-item__label">{pageDisplayName(page)}</span>
+      <span class="sx-menu-item__hint tb__mono">{page.path}</span>
+      {#if page.id === editor.activePageId}<CheckIcon size={14} />{/if}
+    </button>
+  {/each}
+  <div class="sx-menu-sep"></div>
+  <button type="button" role="menuitem" class="sx-menu-item" onclick={() => run(() => editor.openLeftTab('pages'))}>
+    <PlusIcon size={16} /><span class="sx-menu-item__label">Manage pages…</span>
+  </button>
+</Popover>
+
+<!-- Zoom -->
+<Popover open={openMenu === 'zoom'} anchor={zoomAnchor} onclose={() => (openMenu = null)} width={180} placement="bottom" label="Zoom">
+  <button type="button" role="menuitemradio" aria-checked={editor.zoomMode === 'fit'} class="sx-menu-item" onclick={() => run(() => editor.zoomToFit())}>
+    <span class="sx-menu-item__label">Zoom to fit</span><span class="sx-menu-item__hint">{isMac ? '⇧1' : 'Shift+1'}</span>
+  </button>
+  <div class="sx-menu-sep"></div>
+  {#each [50, 75, 100, 125, 150] as z (z)}
+    <button
+      type="button"
+      role="menuitemradio"
+      aria-checked={editor.zoomMode === 'manual' && editor.zoom === z}
+      class="sx-menu-item"
+      onclick={() => run(() => editor.setZoom(z))}
+    >
+      <span class="sx-menu-item__label">{z}%</span>
+      {#if z === 100}<span class="sx-menu-item__hint">{isMac ? '⇧0' : 'Shift+0'}</span>{/if}
+    </button>
+  {/each}
+</Popover>
+
+<!-- History -->
+<Popover open={openMenu === 'history'} anchor={historyAnchor} onclose={() => (openMenu = null)} width={320} placement="bottom-end" label="History">
+  <div class="sx-menu-heading tb__hist-head">
+    <span>History</span>
+    <span class="tb__hist-count">{editor.undoCount} {editor.undoCount === 1 ? 'step' : 'steps'}</span>
   </div>
-{/if}
+  <div class="tb__hist-list">
+    {#each redoSteps as label, i (`r${i}`)}
+      {@const offset = redoSteps.length - i}
+      <button type="button" role="menuitem" class="sx-menu-item tb__hist-item tb__hist-item--future" onclick={() => run(() => editor.travelHistory(offset))}>
+        <span class="tb__hist-dot"></span><span class="sx-menu-item__label">{label}</span><span class="sx-menu-item__hint">Redo</span>
+      </button>
+    {/each}
+    {#each undoSteps as label, i (`u${i}`)}
+      <button
+        type="button"
+        role="menuitem"
+        class={['sx-menu-item tb__hist-item', i === 0 && 'tb__hist-item--current']}
+        onclick={() => run(() => editor.travelHistory(-i))}
+      >
+        <span class="tb__hist-dot"></span><span class="sx-menu-item__label">{label}</span>
+        {#if i === 0}<span class="sx-menu-item__hint">Current</span>{/if}
+      </button>
+    {/each}
+    <button
+      type="button"
+      role="menuitem"
+      class={['sx-menu-item tb__hist-item', undoSteps.length === 0 && 'tb__hist-item--current']}
+      onclick={() => run(() => editor.travelHistory(-undoSteps.length))}
+    >
+      <span class="tb__hist-dot"></span><span class="sx-menu-item__label">Opened project</span>
+      {#if undoSteps.length === 0}<span class="sx-menu-item__hint">Current</span>{/if}
+    </button>
+  </div>
+  <div class="sx-menu-sep"></div>
+  <button type="button" role="menuitem" class="sx-menu-item" onclick={() => run(() => void editor.createSnapshot())}>
+    <ClockCounterClockwiseIcon size={16} /><span class="sx-menu-item__label">Save named version</span>
+  </button>
+  <button type="button" role="menuitem" class="sx-menu-item" onclick={() => run(() => (editor.showProjectLibrary = true))}>
+    <FolderOpenIcon size={16} /><span class="sx-menu-item__label">Versions & projects…</span>
+    <span class="sx-menu-item__hint">{editor.snapshots.length}</span>
+  </button>
+</Popover>
+
+<!-- Export options -->
+<Popover open={openMenu === 'export'} anchor={exportAnchor} onclose={() => (openMenu = null)} width={280} placement="bottom-end" label="Export options">
+  <button type="button" role="menuitem" class="sx-menu-item" onclick={() => run(() => (editor.showExportDialog = true))}>
+    <ExportIcon size={16} /><span class="sx-menu-item__label">Build spec for Claude Code…</span><span class="sx-menu-item__hint">{mod}E</span>
+  </button>
+  <button type="button" role="menuitem" class="sx-menu-item" onclick={() => run(() => void editor.exportHandoffPackage())}>
+    <DownloadSimpleIcon size={16} /><span class="sx-menu-item__label">SvelteKit app (.zip)</span>
+  </button>
+  <button type="button" role="menuitem" class="sx-menu-item" onclick={() => run(() => editor.downloadBlueprintJson())}>
+    <CodeIcon size={16} /><span class="sx-menu-item__label">Blueprint JSON</span>
+  </button>
+</Popover>
 
 <style>
-  .brand {
-    display: flex;
+  .tb {
+    position: relative;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
-    gap: 0.45rem;
+    gap: 12px;
+    height: var(--sx-topbar-h);
+    padding: 0 10px 0 8px;
+    background: var(--sx-panel);
+    border-bottom: 1px solid var(--sx-border);
+    user-select: none;
   }
-  .brand-icon {
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
-    background-color: var(--md-sys-color-surface-container-lowest);
-    border: 1px solid var(--md-sys-color-outline-variant);
-    box-shadow: var(--md-sys-elevation-level1);
+  .tb__group {
     display: flex;
     align-items: center;
+    gap: 4px;
+    min-width: 0;
+  }
+  .tb__group--center {
+    gap: 10px;
+  }
+  .tb__group--right {
+    justify-content: flex-end;
+  }
+  .tb__logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 32px;
+    padding: 0 6px 0 8px;
+    border-radius: var(--sx-radius-sm);
+    color: var(--sx-text);
+  }
+  .tb__logo:hover,
+  .tb__logo[aria-expanded='true'] {
+    background: var(--sx-hover);
+  }
+  .tb__logo :global(svg:last-child) {
+    color: var(--sx-text-3);
+  }
+  .tb__project {
+    display: flex;
+    flex-direction: column;
     justify-content: center;
+    min-width: 0;
+    margin-left: 2px;
   }
-  .google-md3-pill {
-    font-family: var(--md-sys-font-heading);
-    font-size: 0.65rem;
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    padding: 0.15rem 0.45rem;
-    border-radius: var(--md-sys-shape-corner-full);
-    background-color: var(--md-sys-color-primary-container);
-    color: var(--md-sys-color-on-primary-container);
-  }
-  .brand-name-input {
-    font-family: var(--md-sys-font-heading);
-    font-weight: 700;
-    font-size: 0.875rem;
-    letter-spacing: -0.01em;
-    color: var(--md-sys-color-on-surface);
+  .tb__project-name {
+    width: 180px;
+    max-width: 22vw;
+    height: 20px;
+    padding: 0 4px;
+    margin-left: -4px;
+    font-size: var(--sx-text-md);
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    color: var(--sx-text);
     background: transparent;
     border: 1px solid transparent;
-    border-radius: 8px;
-    padding: 0.2rem 0.45rem;
-    width: 9rem;
-  }
-  .brand-name-input:hover,
-  .brand-name-input:focus {
-    border-color: var(--md-sys-color-outline-variant);
-    background-color: var(--md-sys-color-surface-container-lowest);
+    border-radius: var(--sx-radius-xs);
     outline: none;
+    text-overflow: ellipsis;
   }
-  .top-pill-btn {
-    border: 1px solid var(--md-sys-color-outline-variant);
-    background-color: var(--md-sys-color-surface-container-lowest);
-    font-size: 0.75rem;
+  .tb__project-name:hover {
+    border-color: var(--sx-border);
   }
-  .divider {
-    width: 1px;
-    height: 18px;
-    background-color: var(--md-sys-color-outline-variant);
+  .tb__project-name:focus {
+    border-color: var(--sx-accent);
+    box-shadow: var(--sx-focus);
+    background: var(--sx-panel);
   }
-  .status-indicator {
-    display: flex;
+  .tb__save {
+    display: inline-flex;
     align-items: center;
-    font-size: 0.75rem;
-    font-weight: 600;
+    gap: 5px;
+    width: fit-content;
+    height: 14px;
+    font-size: var(--sx-text-xs);
+    color: var(--sx-text-3);
   }
-  .status {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
+  .tb__save:hover {
+    color: var(--sx-text-2);
   }
-  .status-btn {
-    background: transparent;
-    border: 0;
-    padding: 0;
-    cursor: pointer;
-  }
-  .status--error {
-    color: var(--md-sys-color-error);
-    font-weight: 700;
-  }
-  .status--error .status-dot {
-    background-color: var(--md-sys-color-error);
-  }
-  .status--saved {
-    color: var(--md-sys-color-success);
-  }
-  .status--saving {
-    color: var(--md-sys-color-primary);
-  }
-  .status-dot {
+  .tb__save-dot {
     width: 6px;
     height: 6px;
-    border-radius: var(--md-sys-shape-corner-full, 9999px);
-    background-color: currentColor;
+    border-radius: 50%;
+    background: var(--sx-success);
   }
-  .status-dot--pulse {
-    animation: status-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  .tb__save--busy .tb__save-dot {
+    background: var(--sx-warning);
+    animation: tb-pulse 1s ease-in-out infinite;
   }
-  @keyframes status-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: .4; }
-  }
-  .bp-width {
-    font-size: 0.625rem;
-    opacity: 0.65;
-  }
-  .zoom-group {
-    padding: 0 4px;
-  }
-  .zoom-level {
-    font-family: var(--md-sys-font-mono);
-    font-size: 0.75rem;
-    padding: 0 0.5rem;
-    color: var(--md-sys-color-on-surface-variant);
-  }
-  .page-select {
-    width: auto;
-    min-width: 135px;
-    max-width: 180px;
-    border-radius: var(--md-sys-shape-corner-full);
-    background-color: var(--md-sys-color-surface-container-lowest);
-  }
-  .preflight-btn {
-    font-size: 0.6875rem;
-    border: 1px solid var(--md-sys-color-outline-variant);
-    background-color: var(--md-sys-color-surface-container-lowest);
-  }
-  .preflight-btn--ok {
-    color: var(--md-sys-color-success);
-  }
-  .preflight-btn--warn {
-    color: var(--md-sys-color-error);
-  }
-  .mode-btn {
-    border: 1px solid var(--md-sys-color-outline-variant);
-    background-color: var(--md-sys-color-surface-container-lowest);
-  }
-  .mode-btn--interactive {
-    background-color: var(--md-sys-color-success-container) !important;
-    color: var(--md-sys-color-on-success-container) !important;
-    border-color: var(--md-sys-color-success) !important;
-  }
-  .json-btn {
-    border: 1px solid var(--md-sys-color-outline-variant);
-    background-color: var(--md-sys-color-surface-container-lowest);
-  }
-  .export-btn {
-    font-size: 0.8125rem;
-    letter-spacing: 0.01em;
-  }
-  .topbar-modal {
-    position: fixed;
-    top: 64px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 560px;
-    max-width: 94vw;
-    background-color: var(--md-sys-color-surface-container-lowest);
-    border: 1px solid var(--md-sys-color-outline-variant);
-    border-radius: var(--md-sys-shape-corner-extra-large, 28px);
-    box-shadow: var(--md-sys-elevation-level4);
-    z-index: 100;
-    overflow: hidden;
-  }
-  .topbar-modal--wide {
-    width: 820px;
-  }
-  .topbar-modal__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--md-sys-color-outline-variant);
-  }
-  .topbar-modal__title {
-    font-size: 0.8125rem;
-    font-weight: 700;
-    color: var(--md-sys-color-on-surface);
-  }
-  .topbar-modal__body {
-    padding: 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-  .code-preview-block {
-    background-color: #0C0E12;
-    color: #D5E3FF;
-    font-family: var(--md-sys-font-mono);
-    font-size: 0.75rem;
-    line-height: 1.5;
-    padding: 1rem;
-    border-radius: 8px;
-    border: 1px solid var(--md-sys-color-outline-variant);
-    max-height: 68vh;
-    overflow: auto;
-    margin: 0;
-  }
-  .template-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.75rem;
-  }
-  .template-card {
-    background-color: var(--md-sys-color-surface-container);
-    border: 1px solid var(--md-sys-color-outline-variant);
-    border-radius: var(--md-sys-shape-corner-small);
-    padding: 0.875rem;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    gap: 0.625rem;
-  }
-  .template-card__title {
-    font-size: 0.8125rem;
-    font-weight: 700;
-  }
-  .template-card__desc {
-    font-size: 0.6875rem;
-    color: var(--md-sys-color-on-surface-variant);
-    margin: 0;
-    line-height: 1.4;
-  }
-  .import-box {
-    display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
-    border-top: 1px solid var(--md-sys-color-outline-variant);
-    padding-top: 0.75rem;
-  }
-  .import-label {
-    font-size: 0.6875rem;
+  .tb__save--error {
+    color: var(--sx-danger);
     font-weight: 600;
-    color: var(--md-sys-color-on-surface-variant);
   }
-  .import-error {
-    font-size: 0.6875rem;
-    color: var(--md-sys-color-error);
+  .tb__save--error .tb__save-dot {
+    background: var(--sx-danger);
   }
-  .snapshot-list {
+  @keyframes tb-pulse {
+    50% {
+      opacity: 0.35;
+    }
+  }
+  .tb__page {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 280px;
+    height: 30px;
+    padding: 0 8px;
+    border-radius: var(--sx-radius-sm);
+    color: var(--sx-text);
+    font-weight: 500;
+  }
+  .tb__page:hover,
+  .tb__page[aria-expanded='true'] {
+    background: var(--sx-hover);
+  }
+  .tb__page > :global(svg:first-child) {
+    color: var(--sx-text-2);
+    flex-shrink: 0;
+  }
+  .tb__page > :global(svg:last-child) {
+    color: var(--sx-text-3);
+    flex-shrink: 0;
+  }
+  .tb__page-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tb__page-path,
+  .tb__mono {
+    font-family: var(--sx-font-mono);
+    font-size: var(--sx-text-xs);
+    color: var(--sx-text-3);
+    white-space: nowrap;
+  }
+  .tb__device {
+    width: 32px;
+    padding: 0;
+  }
+  .tb__zoom {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+  }
+  .tb__zoom-value {
+    min-width: 46px;
+    height: 24px;
+    padding: 0 4px;
+    border-radius: var(--sx-radius-xs);
+    font-size: var(--sx-text-sm);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: var(--sx-text);
+  }
+  .tb__zoom-value:hover,
+  .tb__zoom-value[aria-expanded='true'] {
+    background: var(--sx-hover);
+  }
+  .tb__check {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    min-width: 28px;
+    padding: 0 6px;
+    border-radius: var(--sx-radius-sm);
+    font-size: var(--sx-text-sm);
+    font-weight: 600;
+    justify-content: center;
+  }
+  .tb__check--ok {
+    color: var(--sx-success);
+  }
+  .tb__check--warn {
+    color: var(--sx-warning);
+    background: var(--sx-warning-soft);
+  }
+  .tb__check:hover {
+    filter: brightness(0.95);
+    background: var(--sx-hover);
+  }
+  .tb__history-anchor {
+    display: inline-flex;
+  }
+  .tb__hist-head {
     display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    max-height: 260px;
+    justify-content: space-between;
+  }
+  .tb__hist-count {
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 500;
+  }
+  .tb__hist-list {
+    max-height: 360px;
     overflow-y: auto;
   }
-  .snapshot-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.5rem 0.75rem;
-    border-radius: var(--md-sys-shape-corner-extra-small);
-    background-color: var(--md-sys-color-surface-container);
-    border: 1px solid var(--md-sys-color-outline-variant);
+  .tb__hist-item {
+    position: relative;
   }
-  .preflight-summary {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-    font-size: 0.75rem;
-    color: var(--md-sys-color-on-surface-variant);
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  .tb__hist-dot {
+    width: 7px;
+    height: 7px;
+    margin: 0 4px 0 3px;
+    border-radius: 50%;
+    border: 1.5px solid var(--sx-text-3);
+    flex-shrink: 0;
   }
-  .issue-badge {
-    font-size: 0.625rem;
-    font-family: var(--md-sys-font-mono);
-    padding: 0.125rem 0.375rem;
-    border-radius: 4px;
-    font-weight: 700;
+  .tb__hist-item--current {
+    color: var(--sx-accent-text);
+    font-weight: 500;
   }
-  .issue-badge--pass {
-    background-color: var(--md-sys-color-success-container);
-    color: var(--md-sys-color-on-success-container);
+  .tb__hist-item--current .tb__hist-dot {
+    border-color: var(--sx-accent);
+    background: var(--sx-accent);
   }
-  .issue-badge--fail, .issue-badge--error {
-    background-color: var(--md-sys-color-error);
-    color: #fff;
+  .tb__hist-item--future {
+    color: var(--sx-text-3);
   }
-  .issue-badge--warn, .issue-badge--warning {
-    background-color: #FBBF24;
-    color: #1B1B1F;
+  .tb__export {
+    display: inline-flex;
+    margin-left: 2px;
+  }
+  .tb__export-main {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+  .tb__export-more {
+    width: 26px;
+    padding: 0;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.22);
+  }
+  @media (max-width: 1280px) {
+    .tb__page-path {
+      display: none;
+    }
   }
 </style>
